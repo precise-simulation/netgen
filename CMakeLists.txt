@@ -38,6 +38,7 @@ option( DEBUG_LOG "Enable more debug output (may increase computation time) - on
 option( CHECK_RANGE "Check array range access, automatically enabled if built in debug mode" OFF)
 option( BUILD_STUB_FILES "Build stub files for better autocompletion" ON)
 option( BUILD_FOR_CONDA "Link python libraries only to executables" OFF)
+option( NETGEN_NATIVE_SDK "Install a relocatable native ngcore/nglib SDK" OFF)
 
 option( USE_SUPERBUILD       "build dependencies automatically" ON)
 option( TRACE_MEMORY     "Enable memory tracing" OFF)
@@ -47,6 +48,31 @@ set(NG_COMPILE_FLAGS "" CACHE STRING "Additional compile flags")
 set(NGLIB_LIBRARY_TYPE SHARED CACHE STRING "nglib library type")
 set(NGCORE_LIBRARY_TYPE SHARED CACHE STRING "ngcore library type")
 set(NGGUI_LIBRARY_TYPE SHARED CACHE STRING "nggui library type")
+
+if(NETGEN_NATIVE_SDK)
+  if(USE_SUPERBUILD)
+    message(FATAL_ERROR "NETGEN_NATIVE_SDK requires USE_SUPERBUILD=OFF")
+  endif()
+
+  foreach(option USE_GUI USE_PYTHON USE_MPI USE_CGNS USE_JPEG USE_MPEG USE_NATIVE_ARCH)
+    if(${option})
+      message(FATAL_ERROR "NETGEN_NATIVE_SDK requires ${option}=OFF")
+    endif()
+  endforeach()
+
+  foreach(option USE_OCC USE_STLGEOM USE_INTERFACE USE_CSG USE_GEOM2D)
+    if(NOT ${option})
+      message(FATAL_ERROR "NETGEN_NATIVE_SDK requires ${option}=ON")
+    endif()
+  endforeach()
+
+  if(NOT NGLIB_LIBRARY_TYPE STREQUAL "SHARED")
+    message(FATAL_ERROR "NETGEN_NATIVE_SDK requires NGLIB_LIBRARY_TYPE=SHARED")
+  endif()
+  if(NOT NGCORE_LIBRARY_TYPE STREQUAL "SHARED")
+    message(FATAL_ERROR "NETGEN_NATIVE_SDK requires NGCORE_LIBRARY_TYPE=SHARED")
+  endif()
+endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_modules")
 
@@ -709,8 +735,13 @@ add_custom_target(uninstall
 # Generate package config file
 set(NETGEN_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY})
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/NetgenConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/NetgenConfig.cmake @ONLY ESCAPE_QUOTES)
+if(NETGEN_NATIVE_SDK)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/NetgenNativeConfig.cmake.in
+      ${CMAKE_CURRENT_BINARY_DIR}/NetgenConfig.cmake @ONLY ESCAPE_QUOTES)
+else()
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/NetgenConfig.cmake.in
+      ${CMAKE_CURRENT_BINARY_DIR}/NetgenConfig.cmake @ONLY ESCAPE_QUOTES)
+endif()
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/NetgenConfig.cmake DESTINATION ${NG_INSTALL_DIR_CMAKE} COMPONENT netgen_devel)
 
@@ -767,4 +798,3 @@ message("
 if (ADDITIONAL_PATHS)
   message(WARNING "The use of ADDITIONAL_PATHS is deprecated, use CMAKE_PREFIX_PATH instead")
 endif (ADDITIONAL_PATHS)
-

@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.16)
+project(NetgenNativeSdkSmoke LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(NETGEN_SDK_DIR "" CACHE PATH "Root of the extracted Netgen native SDK")
+set(OCCT_INCLUDE_DIR "" CACHE PATH "Include directory of the pinned OCCT SDK")
+
+if(NOT EXISTS "${NETGEN_SDK_DIR}/cmake/NetgenConfig.cmake")
+  message(FATAL_ERROR "NETGEN_SDK_DIR does not contain cmake/NetgenConfig.cmake")
+endif()
+if(NOT EXISTS "${OCCT_INCLUDE_DIR}/Standard.hxx")
+  message(FATAL_ERROR "OCCT_INCLUDE_DIR does not contain Standard.hxx")
+endif()
+
+find_package(Netgen CONFIG REQUIRED
+  PATHS "${NETGEN_SDK_DIR}/cmake"
+  NO_DEFAULT_PATH)
+
+file(TO_CMAKE_PATH "${NETGEN_SDK_DIR}" _netgen_sdk_root)
+string(TOLOWER "${_netgen_sdk_root}/" _netgen_sdk_prefix)
+foreach(_target ngcore nglib)
+  foreach(_property IMPORTED_LOCATION_RELEASE IMPORTED_IMPLIB_RELEASE)
+    get_target_property(_artifact ${_target} ${_property})
+    if(NOT _artifact OR NOT EXISTS "${_artifact}")
+      message(FATAL_ERROR "${_target} has no usable ${_property}: ${_artifact}")
+    endif()
+    file(TO_CMAKE_PATH "${_artifact}" _artifact_path)
+    string(TOLOWER "${_artifact_path}" _artifact_path_lower)
+    string(FIND "${_artifact_path_lower}" "${_netgen_sdk_prefix}" _artifact_prefix)
+    if(NOT _artifact_prefix EQUAL 0)
+      message(FATAL_ERROR "${_target} ${_property} resolves outside NETGEN_SDK_DIR: ${_artifact}")
+    endif()
+  endforeach()
+endforeach()
+
+add_executable(netgen_native_sdk_smoke main.cpp headers.cpp)
+set_source_files_properties(headers.cpp PROPERTIES COMPILE_DEFINITIONS OCCGEOMETRY)
+target_include_directories(netgen_native_sdk_smoke PRIVATE "${OCCT_INCLUDE_DIR}")
+target_link_libraries(netgen_native_sdk_smoke PRIVATE nglib)

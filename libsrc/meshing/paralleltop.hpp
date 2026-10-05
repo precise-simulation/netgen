@@ -4,6 +4,14 @@
 namespace netgen
 {
 
+  struct RefinementTriangleCenter
+  {
+    INDEX_3 parents;
+    int occurrence;
+    SurfaceElementIndex surface_element;
+    PointIndex center;
+  };
+
 
   class ParallelMeshTopology
   {
@@ -39,6 +47,7 @@ namespace netgen
     // [[deprecated("should not need it anymore")]]                    
     // void UpdateCoarseGridGlobal();
     void IdentifyVerticesAfterRefinement();
+    void IdentifyTriangleCentersAfterRefinement(const Array<RefinementTriangleCenter> & centers);
     void EnumeratePointsGlobally ();
         
     void AddDistantProc    (PointIndex pi, int proc) { loc2distvert.AddUnique (pi-IndexBASE<PointIndex>(), proc); }

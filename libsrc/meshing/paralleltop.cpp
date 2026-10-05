@@ -1,4 +1,6 @@
 #include <meshing.hpp>
+#include <map>
+#include <tuple>
 #include "paralleltop.hpp"
 
 
@@ -494,9 +496,9 @@ namespace netgen
                           {
                             send_verts.Add (dest, loc2exchange[v1]);
                             send_verts.Add (dest, loc2exchange[v2]);
-                          }
-                      }
-		}
+      }
+  }
+			}
 
 	    DynamicTable<int> recv_verts(ntasks);
             comm.ExchangeTable (send_verts, recv_verts, NG_MPI_TAG_MESH+9);
@@ -554,10 +556,105 @@ namespace netgen
     DynamicTable<int> dest2vert(cnt_send);    
     for (PointIndex pi : mesh.Points().Range())
       for (int dist : GetDistantProcs(pi))
-	dest2vert.Add (dist, pi);
+		dest2vert.Add (dist, pi);
     
     // NG_MPI_Group_free(&NG_MPI_LocalGroup);
     // NG_MPI_Comm_free(&NG_MPI_LocalComm);
+  }
+
+
+  void ParallelMeshTopology :: IdentifyTriangleCentersAfterRefinement
+    (const Array<RefinementTriangleCenter> & centers)
+  {
+    NgMPI_Comm comm = mesh.GetCommunicator();
+    int id = comm.Rank();
+    int ntasks = comm.Size();
+
+    if (ntasks == 1)
+      return;
+
+    DynamicTable<int> send_centers(ntasks);
+    for (int dest = 0; dest < ntasks; dest++)
+      if (dest != id)
+        {
+          NgArray<int, PointIndex::BASE> loc2exchange(mesh.GetNV());
+          loc2exchange = -1;
+          int cnt = 0;
+          for (PointIndex pi : mesh.Points().Range())
+            if (GetDistantProcs(pi).Contains(dest))
+              loc2exchange[pi] = cnt++;
+
+          for (const auto & info : centers)
+            {
+              int local_surface_element = int(info.surface_element);
+              if (local_surface_element < 0 ||
+                  local_surface_element >= glob_surfel.Size() ||
+                  glob_surfel[local_surface_element] < 0)
+                continue;
+
+              const auto & parents = info.parents;
+              PointIndex p0(parents[0]);
+              PointIndex p1(parents[1]);
+              PointIndex p2(parents[2]);
+              if (!GetDistantProcs(p0).Contains(dest) ||
+                  !GetDistantProcs(p1).Contains(dest) ||
+                  !GetDistantProcs(p2).Contains(dest))
+                continue;
+
+              auto key = INDEX_3::Sort(loc2exchange[p0], loc2exchange[p1], loc2exchange[p2]);
+              send_centers.Add(dest, key[0]);
+              send_centers.Add(dest, key[1]);
+              send_centers.Add(dest, key[2]);
+              send_centers.Add(dest, glob_surfel[local_surface_element]);
+            }
+        }
+
+    DynamicTable<int> recv_centers(ntasks);
+    comm.ExchangeTable(send_centers, recv_centers, NG_MPI_TAG_MESH+10);
+
+    for (int dest = 0; dest < ntasks; dest++)
+      if (dest != id)
+        {
+          NgArray<int, PointIndex::BASE> loc2exchange(mesh.GetNV());
+          loc2exchange = -1;
+          int cnt = 0;
+          for (PointIndex pi : mesh.Points().Range())
+            if (GetDistantProcs(pi).Contains(dest))
+              loc2exchange[pi] = cnt++;
+
+          std::map<std::tuple<int,int,int,int>, PointIndex> center_by_exchange;
+          for (const auto & info : centers)
+            {
+              int local_surface_element = int(info.surface_element);
+              if (local_surface_element < 0 ||
+                  local_surface_element >= glob_surfel.Size() ||
+                  glob_surfel[local_surface_element] < 0)
+                continue;
+
+              const auto & parents = info.parents;
+              PointIndex p0(parents[0]);
+              PointIndex p1(parents[1]);
+              PointIndex p2(parents[2]);
+              if (!GetDistantProcs(p0).Contains(dest) ||
+                  !GetDistantProcs(p1).Contains(dest) ||
+                  !GetDistantProcs(p2).Contains(dest))
+                continue;
+
+              auto key = INDEX_3::Sort(loc2exchange[p0], loc2exchange[p1], loc2exchange[p2]);
+              center_by_exchange[std::make_tuple(key[0], key[1], key[2],
+                                                 glob_surfel[local_surface_element])] = info.center;
+            }
+
+          auto received = recv_centers[dest];
+          for (int i = 0; i+3 < received.Size(); i += 4)
+            {
+              auto key = INDEX_3::Sort(received[i], received[i+1], received[i+2]);
+              auto center = center_by_exchange.find
+                (std::make_tuple(key[0], key[1], key[2], received[i+3]));
+              if (center != center_by_exchange.end())
+                AddDistantProc(center->second, dest);
+            }
+        }
   }
 
 
@@ -833,5 +930,3 @@ namespace netgen
     // NG_MPI_Comm_free(&NG_MPI_LocalComm);
   }
 }
-
-

@@ -1,4 +1,6 @@
 #include <mystdlib.h>
+#include <map>
+#include <tuple>
 #include "meshclass.hpp"
 #include "bisect.hpp"
 #include "paralleltop.hpp"
@@ -15,9 +17,31 @@ namespace netgen
 
   void Refinement :: Refine (Mesh & mesh)
   {
+    Refine(mesh, false);
+  }
+
+
+  void Refinement :: Refine (Mesh & mesh, const bool tri2quad) const
+  {
+    const_cast<Refinement&> (*this).Refine(mesh, tri2quad);
+  }
+
+
+  void Refinement :: Refine (Mesh & mesh, const bool tri2quad)
+  {
     if (mesh.GetCommunicator().Rank()==0)
       PrintMessage (3, "Refine mesh");
     Timer t("Refine mesh"); RegionTimer reg(t);
+
+    if (tri2quad)
+      {
+        bool has_volume_elements = mesh.GetNE() != 0;
+        if (mesh.GetCommunicator().Size() > 1)
+          has_volume_elements =
+            mesh.GetCommunicator().AllReduce(has_volume_elements, NG_MPI_LOR);
+        if (has_volume_elements)
+          throw NgException ("Triangle-to-quad refinement requires a surface mesh without volume elements");
+      }
 
     
     mesh.SetNextMajorTimeStamp();
@@ -39,8 +63,13 @@ namespace netgen
     if (mesh.level_nv.Size() == 0)
       mesh.level_nv.Append (mesh.GetNV());
     
-    
-    INDEX_2_HASHTABLE<PointIndex> between(mesh.GetNP() + 5);
+
+    const int n0 = mesh.GetNP();
+    INDEX_2_HASHTABLE<PointIndex> between(n0 + 5);
+    INDEX_3_HASHTABLE<int> tri2quad_center_counts(n0 + 5);
+    Array<RefinementTriangleCenter> tri2quad_centers;
+    Array<PointIndex, SurfaceElementIndex> tri2quad_center_for_surface(mesh.GetNSE());
+    tri2quad_center_for_surface = PointIndex::INVALID;
 
 
     // new version with consistent ordering across sub-domains
@@ -61,14 +90,14 @@ namespace netgen
 	const Element2d & el = mesh[sei];
 	switch (el.GetType())
 	  {
-	  case TRIG:
-	  case TRIG6:
-	    {
-              static int betw[3][3] =
-		{ { 1, 2, 3 },
-		  { 0, 2, 4 },
-		  { 0, 1, 5 } };
-              for (int j = 0; j < 3; j++)
+		  case TRIG:
+		  case TRIG6:
+			    {
+		              static int betw[3][3] =
+				{ { 1, 2, 3 },
+				  { 0, 2, 4 },
+				  { 0, 1, 5 } };
+		              for (int j = 0; j < 3; j++)
                 {
                   auto i2 = PointIndices<2>::Sort(el[betw[j][0]],el[betw[j][1]]);
                   if (!between.Used(i2))
@@ -76,6 +105,15 @@ namespace netgen
                       between.Set (i2, 0);          
                       parents.Append(i2);
                     }
+                }
+              if (tri2quad)
+                {
+                  auto i3 = INDEX_3::Sort(el[0], el[1], el[2]);
+                  int occurrence = tri2quad_center_counts.Used(i3)
+                    ? tri2quad_center_counts.Get(i3) : 0;
+                  tri2quad_center_counts.Set(i3, occurrence+1);
+                  tri2quad_centers.Append
+                    (RefinementTriangleCenter { i3, occurrence, sei, PointIndex::INVALID });
                 }
               break;
             }
@@ -147,14 +185,31 @@ namespace netgen
     for (int i = 0; i < par_nr.Size(); i++)
       par_nr[i] = i;
     QuickSort (parents, par_nr);
-    mesh.mlbetweennodes.SetSize(mesh.GetNV()+parents.Size());
+    const int n_tri2quad_centers = tri2quad_centers.Size();
+    mesh.mlbetweennodes.SetSize(mesh.GetNV()+parents.Size()+n_tri2quad_centers);
     for (int i = 0; i < parents.Size(); i++)
       {
-        between.Set (parents[i], mesh.GetNV()+i+PointIndex::BASE);
-        mesh.mlbetweennodes[mesh.GetNV()+i+PointIndex::BASE] = parents[i];
+        PointIndex pinew = mesh.GetNV()+i+PointIndex::BASE;
+        between.Set (parents[i], pinew);
+        mesh.mlbetweennodes[pinew] = parents[i];
       }
 
-    mesh.SetNP(mesh.GetNV() + parents.Size());
+    for (int i = 0; i < n_tri2quad_centers; i++)
+      {
+        PointIndex pinew = mesh.GetNV()+parents.Size()+i+PointIndex::BASE;
+        tri2quad_centers[i].center = pinew;
+        mesh.mlbetweennodes[pinew] = PointIndices<2>(PointIndex::INVALID, PointIndex::INVALID);
+      }
+
+    int tri2quad_center_nr = 0;
+    for (SurfaceElementIndex sei = 0; sei < mesh.GetNSE(); sei++)
+      {
+        const Element2d & el = mesh[sei];
+        if (tri2quad && (el.GetType() == TRIG || el.GetType() == TRIG6))
+          tri2quad_center_for_surface[sei] = tri2quad_centers[tri2quad_center_nr++].center;
+      }
+
+    mesh.SetNP(mesh.GetNV() + parents.Size() + n_tri2quad_centers);
     NgArray<bool, PointIndex::BASE> pointset(mesh.GetNP());
     pointset = false;
     
@@ -214,8 +269,6 @@ namespace netgen
     for (int i = PointIndex::BASE;
 	 i < surfgi.Size()+PointIndex::BASE; i++)
       surfgi[i].trignum = -1;
-
-
     int oldnf = mesh.GetNSE();
     for (SurfaceElementIndex sei = 0; sei < oldnf; sei++)
       {
@@ -223,16 +276,16 @@ namespace netgen
 
 	switch (el.GetType())
 	  {
-	  case TRIG:
-	  case TRIG6:
-	    {
-	      NgArrayMem<PointIndex,6> pnums(6);
-	      NgArrayMem<PointGeomInfo,6> pgis(6);
+		  case TRIG:
+		  case TRIG6:
+			    {
+			      NgArrayMem<PointIndex,7> pnums(7);
+			      NgArrayMem<PointGeomInfo,7> pgis(7);
 
-	      static int betw[3][3] =
-		{ { 2, 3, 4 },
-		  { 1, 3, 5 },
-		  { 1, 2, 6 } };
+			      static int betw[3][3] =
+				{ { 2, 3, 4 },
+				  { 1, 3, 5 },
+				  { 1, 2, 6 } };
 
 	      for (int j = 1; j <= 3; j++)
 		{
@@ -240,62 +293,87 @@ namespace netgen
 		  pgis.Elem(j) = el.GeomInfoPi(j);
 		}
 
-	      for (int j = 0; j < 3; j++)
-		{
-		  PointIndex pi1 = pnums.Elem(betw[j][0]);
-		  PointIndex pi2 = pnums.Elem(betw[j][1]);
+			      for (int j = 0; j < 3; j++)
+				{
+				  PointIndex pi1 = pnums.Elem(betw[j][0]);
+				  PointIndex pi2 = pnums.Elem(betw[j][1]);
 
-		  INDEX_2 i2 (pi1, pi2);
-		  i2.Sort();
+				  INDEX_2 i2 (pi1, pi2);
+				  i2.Sort();
 
-		  Point<3> pb;
-		  PointGeomInfo pgi;
-		  geo.PointBetween(mesh.Point (pi1),
-                                   mesh.Point (pi2), 0.5,
-                                   mesh.GetFaceDescriptor(el.GetIndex ()).SurfNr(),
-                                   el.GeomInfoPi (betw[j][0]),
-                                   el.GeomInfoPi (betw[j][1]),
-                                   pb, pgi);
+				  Point<3> pb;
+				  PointGeomInfo pgi;
+				  geo.PointBetween(mesh.Point (pi1),
+	                                       mesh.Point (pi2), 0.5,
+	                                       mesh.GetFaceDescriptor(el.GetIndex ()).SurfNr(),
+	                                       el.GeomInfoPi (betw[j][0]),
+	                                       el.GeomInfoPi (betw[j][1]),
+	                                       pb, pgi);
 
-
-		  pgis.Elem(4+j) = pgi;
-                  PointIndex pinew = between.Get(i2); 
+			  pgis.Elem(4+j) = pgi;
+                  PointIndex pinew = between.Get(i2);
                   pnums.Elem(4+j) = pinew;
                   if (!pointset[pinew])
                     {
                       pointset[pinew] = true;
-                      mesh.Point(pinew) = pb;                      
+                      mesh.Point(pinew) = pb;
                     }
-                  /*
-		  if (between.Used(i2))
-		    pnums.Elem(4+j) = between.Get(i2);
-		  else
-		    {
-		      pnums.Elem(4+j) = mesh.AddPoint (pb);
-		      between.Set (i2, pnums.Get(4+j));
-		    }
-                  */
-		  if (surfgi.Size() < pnums.Elem(4+j)-IndexBASE<PointIndex>()+1)
-		    surfgi.SetSize (pnums.Elem(4+j)-IndexBASE<PointIndex>()+1);
-		  surfgi[pnums.Elem(4+j)] = pgis.Elem(4+j);
-		}
+			  if (surfgi.Size() < pnums.Elem(4+j)-IndexBASE<PointIndex>()+1)
+			    surfgi.SetSize (pnums.Elem(4+j)-IndexBASE<PointIndex>()+1);
+			  surfgi[pnums.Elem(4+j)] = pgis.Elem(4+j);
+			}
+
+              if (tri2quad)
+                {
+                  Point<3> pb = 0.0;
+                  PointGeomInfo pgi;
+                  pgi.trignum = pgis.Get(1).trignum;
+                  pgi.u = 0;
+                  pgi.v = 0;
+                  for (int k = 0; k < 3; k++)
+                    {
+                      Point<3> pk = mesh.Point(pnums.Elem(k+1));
+                      pb[0] += 1.0/3.0 * pk[0];
+                      pb[1] += 1.0/3.0 * pk[1];
+                      pb[2] += 1.0/3.0 * pk[2];
+                      pgi.u += 1.0/3.0 * pgis.Get(k+1).u;
+                      pgi.v += 1.0/3.0 * pgis.Get(k+1).v;
+                    }
+                  int iface = mesh.GetFaceDescriptor(el.GetIndex ()).SurfNr();
+                  if (!geo.ProjectPointGI(iface, pb, pgi))
+                    pgi = geo.ProjectPoint(iface, pb);
+
+                  PointIndex pinew = tri2quad_center_for_surface[sei];
+                  pgis.Elem(7) = pgi;
+                  pnums.Elem(7) = pinew;
+                  pointset[pinew] = true;
+                  mesh.Point(pinew) = pb;
+                  if (surfgi.Size() < pinew-IndexBASE<PointIndex>()+1)
+                    surfgi.SetSize (pinew-IndexBASE<PointIndex>()+1);
+                  surfgi[pinew] = pgi;
+                }
 
 
-	      static int reftab[4][3] =
-		{ { 1, 6, 5 },
-		  { 2, 4, 6 },
-		  { 3, 5, 4 },
-		  { 6, 4, 5 } };
+		      static int reftab_tri[4][3] =
+			{ { 1, 6, 5 },
+			  { 2, 4, 6 },
+			  { 3, 5, 4 },
+			  { 6, 4, 5 } };
+		      static int reftab_quad[3][4] =
+			{ { 1, 6, 7, 5 },
+			  { 2, 4, 7, 6 },
+			  { 3, 5, 7, 4 } };
 
-	      int ind = el.GetIndex();
-	      for (int j = 0; j < 4; j++)
-		{
-		  Element2d nel(TRIG);
-		  for (int k = 1; k <= 3; k++)
-		    {
-		      nel.PNum(k) = pnums.Get(reftab[j][k-1]);
-		      nel.GeomInfoPi(k) = pgis.Get(reftab[j][k-1]);
-		    }
+		      int ind = el.GetIndex();
+		      for (int j = 0; j < 4-int(tri2quad); j++)
+			{
+			  Element2d nel(tri2quad ? QUAD : TRIG);
+			  for (int k = 1; k <= 3+int(tri2quad); k++)
+			    {
+			      int pi = tri2quad ? reftab_quad[j][k-1] : reftab_tri[j][k-1];
+			      nel.PNum(k) = pnums.Get(pi);
+			      nel.GeomInfoPi(k) = pgis.Get(pi);
+			    }
 		  nel.SetIndex(ind);
 
 		  if (j == 0)
@@ -325,28 +403,28 @@ namespace netgen
 		  pgis[j] = el.GeomInfoPi(j+1);
 		}
 
-	      for (int j = 0; j < 5; j++)
-		{
-		  int pi1 = pnums[betw[j][0]];
-		  int pi2 = pnums[betw[j][1]];
+		      for (int j = 0; j < 5; j++)
+			{
+			  int pi1 = pnums[betw[j][0]];
+			  int pi2 = pnums[betw[j][1]];
 
-		  INDEX_2 i2 (pi1, pi2);
-		  i2.Sort();
-                  
-                  if (j == 4)
-                    {
-                      auto i2a = PointIndices<2>::Sort(el[0], el[2]);
-                      auto i2b = PointIndices<2>::Sort(el[1], el[3]);
-                      i2 = i2a[0] < i2b[0] ? i2a : i2b;
-                    }
+			  INDEX_2 i2 (pi1, pi2);
+			  i2.Sort();
 
-                  Point<3> pb;
-		  PointGeomInfo pgi;                  
-                  geo.PointBetween(mesh.Point (pi1), mesh.Point (pi2), 0.5,
-                                   mesh.GetFaceDescriptor(el.GetIndex ()).SurfNr(),
-                                   el.GeomInfoPi (betw[j][0]+1 ),
-                                   el.GeomInfoPi (betw[j][1]+1 ),
-                                   pb, pgi); 
+	                  if (j == 4)
+	                    {
+	                      auto i2a = PointIndices<2>::Sort(el[0], el[2]);
+	                      auto i2b = PointIndices<2>::Sort(el[1], el[3]);
+	                      i2 = i2a[0] < i2b[0] ? i2a : i2b;
+	                    }
+
+	                  Point<3> pb;
+			  PointGeomInfo pgi;
+	                  geo.PointBetween(mesh.Point (pi1), mesh.Point (pi2), 0.5,
+	                                   mesh.GetFaceDescriptor(el.GetIndex ()).SurfNr(),
+	                                   el.GeomInfoPi (betw[j][0]+1 ),
+	                                   el.GeomInfoPi (betw[j][1]+1 ),
+	                                   pb, pgi);
 
 		  pgis[4+j] = pgi;
                   PointIndex pinew = between.Get(i2); 
@@ -748,27 +826,53 @@ namespace netgen
       }
 
 
+    std::map<std::tuple<int,int,int,int>, PointIndex> tri2quad_center_lookup;
+    if (tri2quad)
+      for (const auto & info : tri2quad_centers)
+        tri2quad_center_lookup[std::make_tuple(info.parents[0], info.parents[1],
+                                              info.parents[2], info.occurrence)] = info.center;
+
     // update identification tables
     for (int i = 1; i <= mesh.GetIdentifications().GetMaxNr(); i++)
       {
 	idmap_type identmap;
 	mesh.GetIdentifications().GetMap (i, identmap);
 
-	for (int j = 1; j <= between.GetNBags(); j++)
-	  for (int k = 1; k <= between.GetBagSize(j); k++)
-	    {
-	      PointIndices<2> i2;
-	      PointIndex newpi;
-	      between.GetData (j, k, i2, newpi);
-	      PointIndices<2> oi2(identmap[i2[0]], 
+		for (int j = 1; j <= between.GetNBags(); j++)
+		  for (int k = 1; k <= between.GetBagSize(j); k++)
+		    {
+		      PointIndices<2> i2;
+		      PointIndex newpi;
+		      between.GetData (j, k, i2, newpi);
+		      PointIndices<2> oi2(identmap[i2[0]],
                                   identmap[i2[1]]);
-	      oi2.Sort();
-	      if (between.Used (oi2))
-		{
-		  PointIndex onewpi = between.Get(oi2);
-		  mesh.GetIdentifications().Add (newpi, onewpi, i);
-		}
-	    }
+		      if (!oi2[0].IsValid() || !oi2[1].IsValid())
+		        continue;
+		      oi2.Sort();
+		      if (between.Used (oi2))
+			{
+			  PointIndex onewpi = between.Get(oi2);
+			  mesh.GetIdentifications().Add (newpi, onewpi, i);
+			}
+		    }
+
+        if (tri2quad)
+          {
+            for (const auto & info : tri2quad_centers)
+            {
+              PointIndex oi0 = identmap[PointIndex(info.parents[0])];
+              PointIndex oi1 = identmap[PointIndex(info.parents[1])];
+              PointIndex oi2 = identmap[PointIndex(info.parents[2])];
+              if (!oi0.IsValid() || !oi1.IsValid() || !oi2.IsValid())
+                continue;
+
+              auto oi3 = INDEX_3::Sort(oi0, oi1, oi2);
+              auto other = tri2quad_center_lookup.find
+                (std::make_tuple(oi3[0], oi3[1], oi3[2], info.occurrence));
+              if (other != tri2quad_center_lookup.end())
+                mesh.GetIdentifications().Add(info.center, other->second, i);
+            }
+          }
 
       }
 
@@ -782,6 +886,8 @@ namespace netgen
     if (mesh.GetCommunicator().Size() > 1)
       {
         mesh.GetParallelTopology().IdentifyVerticesAfterRefinement();
+        if (tri2quad)
+          mesh.GetParallelTopology().IdentifyTriangleCentersAfterRefinement(tri2quad_centers);
         mesh.GetCommunicator().Barrier();
         mesh.GetParallelTopology().EnumeratePointsGlobally();
       }

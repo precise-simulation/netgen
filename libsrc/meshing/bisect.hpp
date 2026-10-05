@@ -55,6 +55,8 @@ public:
   
   void Refine (Mesh & mesh) const;
   void Refine (Mesh & mesh);
+  void Refine (Mesh & mesh, const bool tri2quad) const;
+  void Refine (Mesh & mesh, const bool tri2quad);
   void Bisect (Mesh & mesh, class BisectionOptions & opt, NgArray<double> * quality_loss = NULL) const;
 
   void MakeSecondOrder (Mesh & mesh) const;

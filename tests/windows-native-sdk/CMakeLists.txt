@@ -35,7 +35,10 @@ foreach(_target ngcore nglib)
   endforeach()
 endforeach()
 
-add_executable(netgen_native_sdk_smoke main.cpp headers.cpp)
-set_source_files_properties(headers.cpp PROPERTIES COMPILE_DEFINITIONS OCCGEOMETRY)
-target_include_directories(netgen_native_sdk_smoke PRIVATE "${OCCT_INCLUDE_DIR}")
+add_library(netgen_native_sdk_headers OBJECT headers.cpp)
+target_compile_definitions(netgen_native_sdk_headers PRIVATE OCCGEOMETRY)
+target_include_directories(netgen_native_sdk_headers PRIVATE "${OCCT_INCLUDE_DIR}")
+target_link_libraries(netgen_native_sdk_headers PRIVATE nglib)
+
+add_executable(netgen_native_sdk_smoke main.cpp)
 target_link_libraries(netgen_native_sdk_smoke PRIVATE nglib)

@@ -452,14 +452,36 @@ built and tested from this chat interface without a local compiler or a manual
 qualification run for the same `GITHUB_SHA`; no workflow-embedded self-SHA pin is
 used.
 
-No build or runtime validation has been performed for this plan. The production
-publication gate remains successful GitHub Actions source/behavior and SDK
-qualification of the exact committed/pushed producer Git SHA on the
-`netgen-featool` branch, followed by a release tag pointing to that same SHA.
+Implementation and qualification completed on 2026-10-05. The final producer
+source commit is `08e60ead2656e33b9853bbbb06d45f8763831398`. Branch-push
+qualification run `37282115200` succeeded on `windows-2022` for that exact SHA,
+including the focused triangle-to-three-quads and ordinary quad refinement
+regressions, the complete native Catch unit surface available in the producer
+profile, native DLL/package audits, the staged SDK consumer, archive extraction,
+relocation checks, and the OCC-backed consumer runtime smoke test.
 
-Implementation started on 2026-10-05. The opt-in native SDK CMake mode,
-relocatable package config, installed native consumer fixture, and GitHub Actions
-producer/publication workflow have been implemented in the working tree. Local
-build, compile, test, and runtime execution remain intentionally unused; the
-first implementation validation will be the branch-push workflow on GitHub
-Actions.
+The first publication attempt, tag
+`netgen-featool-sdk-519a44c868c3-r1`, completed all build and SDK qualification
+steps but failed after creating its draft release because GitHub's
+`GET /releases/tags/{tag}` endpoint did not resolve that draft. The `r1` revision
+was therefore treated as spent and its draft was not mutated by a retry. The
+publication implementation was corrected to detect releases (including drafts)
+from the authenticated release collection, create and track the draft by release
+ID, upload and re-download both assets through the release-asset API, verify the
+qualified ZIP checksum, and publish that same verified draft by ID.
+
+Release tag `netgen-featool-sdk-08e60ead2656-r2` then qualified and published
+successfully in GitHub Actions run `37283082215`. Public release `403512692`
+contains exactly:
+
+- `netgen-featool-v6.2.2604-08e60ead2656-occt7.9.3-win64-msvc.zip`, with GitHub
+  asset digest
+  `sha256:634665b8a6b6c045291336412aafe6d87a38e553e56b56a0df075fc95bca1856`;
+- `netgen-featool-v6.2.2604-08e60ead2656-occt7.9.3-win64-msvc.zip.sha256`.
+
+The tag run repeated the complete clean producer build and qualification before
+publication, and its publication job verified the exact two qualified assets
+before making the draft public. Independent static review of the final native SDK
+fixture and producer/export path found no remaining material issue. No local
+build, compile, test, configure, or runtime execution was used; all executable
+validation was performed by GitHub Actions as required.

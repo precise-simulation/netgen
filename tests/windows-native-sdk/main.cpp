@@ -1,7 +1,12 @@
+namespace nglib
+{
 #include <nglib.h>
 #include <nglib_occ.h>
+}
 
 #include <iostream>
+
+using namespace nglib;
 
 int main(int argc, char ** argv)
 {

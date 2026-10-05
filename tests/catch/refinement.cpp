@@ -255,7 +255,12 @@ TEST_CASE("Triangle to quad refinement preserves identified triangle centers")
 
   REQUIRE(center1.IsValid());
   REQUIRE(center2.IsValid());
-  REQUIRE(mesh.GetIdentifications().Get(center1, center2) == 1);
+
+  bool centers_identified = false;
+  for (const auto & pair : mesh.GetIdentifications().GetPairs())
+    if (pair.I1() == center1 && pair.I2() == center2 && pair.I3() == 1)
+      centers_identified = true;
+  REQUIRE(centers_identified);
 }
 
 

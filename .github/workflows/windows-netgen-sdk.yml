@@ -895,16 +895,14 @@ jobs:
             Accept = "application/vnd.github+json"
             "X-GitHub-Api-Version" = "2022-11-28"
           }
-          $releaseUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$env:GITHUB_REF_NAME"
-          $exists = $false
-          try {
-            Invoke-RestMethod -Uri $releaseUrl -Headers $headers | Out-Null
-            $exists = $true
+          $apiBase = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $allReleases = @()
+          for($page = 1; ; $page++) {
+            $releasePage = @(Invoke-RestMethod -Uri "$apiBase/releases?per_page=100&page=$page" -Headers $headers)
+            $allReleases += $releasePage
+            if($releasePage.Count -lt 100) { break }
           }
-          catch {
-            if([int]$_.Exception.Response.StatusCode -ne 404) { throw }
-          }
-          if($exists) {
+          if(@($allReleases | Where-Object { $_.tag_name -eq $env:GITHUB_REF_NAME }).Count -gt 0) {
             throw "A GitHub Release already exists for $env:GITHUB_REF_NAME; publication is one-shot."
           }
 
@@ -913,14 +911,31 @@ jobs:
             "Prior successful branch qualification run: $env:QUALIFICATION_RUN_ID" + $nl +
             "OCCT: 7.9.3 vc14-64 combined" + $nl +
             "Configuration: VS2022 x64 Release /MD"
-          gh release create $env:GITHUB_REF_NAME $archive $sidecar --repo $env:GITHUB_REPOSITORY --draft --title "Netgen Windows SDK $env:GITHUB_REF_NAME" --notes $notes
-          if($LASTEXITCODE -ne 0) {
-            throw "Could not create the draft GitHub Release."
+          $createBody = @{
+            tag_name = $env:GITHUB_REF_NAME
+            name = "Netgen Windows SDK $env:GITHUB_REF_NAME"
+            body = $notes
+            draft = $true
+            prerelease = $false
+          } | ConvertTo-Json
+          $release = Invoke-RestMethod -Method Post -Uri "$apiBase/releases" -Headers $headers -ContentType "application/json" -Body $createBody
+          if(-not $release.draft -or $release.tag_name -ne $env:GITHUB_REF_NAME) {
+            throw "New release was not created as the expected draft."
           }
 
+          $uploadBase = $release.upload_url -replace '\{\?name,label\}$',''
+          foreach($asset in @(
+            @{ Path = $archive; Name = $env:ARCHIVE_NAME; ContentType = "application/zip" },
+            @{ Path = $sidecar; Name = $env:CHECKSUM_NAME; ContentType = "text/plain" }
+          )) {
+            $encodedName = [uri]::EscapeDataString($asset.Name)
+            Invoke-WebRequest -Method Post -Uri "${uploadBase}?name=$encodedName" -Headers $headers -ContentType $asset.ContentType -InFile $asset.Path | Out-Null
+          }
+
+          $releaseUrl = "$apiBase/releases/$($release.id)"
           $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers
-          if(-not $release.draft) {
-            throw "New release was not created as a draft."
+          if(-not $release.draft -or $release.tag_name -ne $env:GITHUB_REF_NAME) {
+            throw "Created release no longer matches the expected draft."
           }
           $assetNames = @($release.assets | Select-Object -ExpandProperty name | Sort-Object)
           $expectedNames = @($env:ARCHIVE_NAME, $env:CHECKSUM_NAME) | Sort-Object
@@ -930,9 +945,13 @@ jobs:
 
           $verify = Join-Path $env:RUNNER_TEMP "release-verify"
           New-Item -ItemType Directory -Force -Path $verify | Out-Null
-          gh release download $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --pattern $env:ARCHIVE_NAME --pattern $env:CHECKSUM_NAME --dir $verify
-          if($LASTEXITCODE -ne 0) {
-            throw "Could not download assets back from the draft release."
+          $assetHeaders = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/octet-stream"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          foreach($asset in $release.assets) {
+            Invoke-WebRequest -Uri $asset.url -Headers $assetHeaders -OutFile (Join-Path $verify $asset.name)
           }
           $remoteArchive = Join-Path $verify $env:ARCHIVE_NAME
           $remoteSidecar = Join-Path $verify $env:CHECKSUM_NAME
@@ -942,7 +961,8 @@ jobs:
             throw "Draft release assets do not match the qualified ZIP bytes and checksum."
           }
 
-          gh release edit $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --draft=false
-          if($LASTEXITCODE -ne 0) {
+          $publishBody = @{ draft = $false } | ConvertTo-Json
+          $published = Invoke-RestMethod -Method Patch -Uri $releaseUrl -Headers $headers -ContentType "application/json" -Body $publishBody
+          if($published.draft -or $published.tag_name -ne $env:GITHUB_REF_NAME) {
             throw "Could not publish the verified draft release."
           }

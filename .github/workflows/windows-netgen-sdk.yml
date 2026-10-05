@@ -83,7 +83,7 @@ jobs:
             throw "Could not enumerate commits after the pinned baseline."
           }
           $commits | Set-Content -LiteralPath "$env:RUNNER_TEMP\post-baseline-commits.txt"
-          Write-Host "Commits after $baseline:"
+          Write-Host "Commits after ${baseline}:"
           $commits | ForEach-Object { Write-Host "  $_" }
 
           $qualificationRunId = ""
@@ -573,6 +573,8 @@ jobs:
             }
           }
           $closure = [ordered]@{}
+          $occtDynamicCrtEvidence = @()
+          $occtBin = (Resolve-Path -LiteralPath "$env:OCCT_ROOT\win64\vc14\bin").Path.TrimEnd('\')
           while($queue.Count -gt 0) {
             $name = $queue.Dequeue()
             $key = $name.ToLowerInvariant()
@@ -582,7 +584,21 @@ jobs:
             }
             $path = $known[$key]
             $closure[$key] = $path
-            foreach($import in (Get-Imports $path)) {
+            $imports = @(Get-Imports $path)
+            $parent = (Split-Path -Parent $path).TrimEnd('\')
+            if($parent -ieq $occtBin) {
+              $crtImports = @($imports | Where-Object {
+                $_ -match '^(?i)(VCRUNTIME|MSVCP|api-ms-win-crt|ucrtbase)'
+              })
+              if($crtImports.Count -eq 0) {
+                throw "OCCT runtime-closure DLL $name does not expose dynamic MSVC CRT/UCRT imports; /MD compatibility is not established."
+              }
+              $occtDynamicCrtEvidence += [pscustomobject]@{
+                dll = $name
+                dynamic_crt_imports = @($crtImports | Sort-Object -Unique)
+              }
+            }
+            foreach($import in $imports) {
               $importKey = $import.ToLowerInvariant()
               if(-not (Is-SystemRuntime $import) -and
                  $import -notmatch '^(?i)ng(core|lib)\.dll$' -and
@@ -604,6 +620,7 @@ jobs:
             dependency_names = @($closure.Keys)
             dependency_files = $relativeFiles
             runtime_directories = $relativeRuntimeDirs
+            occt_dynamic_crt_evidence = $occtDynamicCrtEvidence
           } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$env:RUNNER_TEMP\occt-closure.json"
 
       - name: Generate producer metadata

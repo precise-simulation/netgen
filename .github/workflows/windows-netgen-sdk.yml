@@ -223,21 +223,40 @@ jobs:
 
           $configs = @(Get-ChildItem -LiteralPath $extract -Recurse -File |
             Where-Object { $_.Name -eq "OpenCASCADEConfig.cmake" -and $_.Directory.Name -eq "cmake" })
-          $roots = @()
+          $sourceRoots = @()
           foreach($config in $configs) {
-            $root = Split-Path -Parent $config.Directory.FullName
-            if((Test-Path -LiteralPath "$root\inc") -and
-               (Test-Path -LiteralPath "$root\win64\vc14\lib") -and
-               (Test-Path -LiteralPath "$root\win64\vc14\bin") -and
-               (Test-Path -LiteralPath "$root\3rdparty-vc14-64")) {
-              $roots += $root
+            $candidate = Split-Path -Parent $config.Directory.FullName
+            if((Test-Path -LiteralPath "$candidate\inc") -and
+               (Test-Path -LiteralPath "$candidate\win64\vc14\lib") -and
+               (Test-Path -LiteralPath "$candidate\win64\vc14\bin")) {
+              $sourceRoots += $candidate
             }
           }
-          $roots = @($roots | Select-Object -Unique)
-          if($roots.Count -ne 1) {
-            throw "Expected exactly one normalized OCCT root, found $($roots.Count)."
+          $sourceRoots = @($sourceRoots | Select-Object -Unique)
+          if($sourceRoots.Count -ne 1) {
+            throw "Expected exactly one OCCT distribution root, found $($sourceRoots.Count). Configs: $($configs.FullName -join '; ')"
           }
-          $root = $roots[0]
+
+          $thirdPartyTrees = @(Get-ChildItem -LiteralPath $extract -Recurse -Directory |
+            Where-Object { $_.Name -eq "3rdparty-vc14-64" })
+          if($thirdPartyTrees.Count -ne 1) {
+            throw "Expected exactly one 3rdparty-vc14-64 tree, found $($thirdPartyTrees.Count)."
+          }
+
+          $root = "$env:RUNNER_TEMP\occt-normalized"
+          if(Test-Path -LiteralPath $root) {
+            Remove-Item -LiteralPath $root -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item -Path "$($sourceRoots[0])\*" -Destination $root -Recurse
+          if(-not (Test-Path -LiteralPath "$root\3rdparty-vc14-64")) {
+            Copy-Item -LiteralPath $thirdPartyTrees[0].FullName -Destination "$root\3rdparty-vc14-64" -Recurse
+          }
+          foreach($required in @("cmake\OpenCASCADEConfig.cmake","inc","win64\vc14\lib","win64\vc14\bin","3rdparty-vc14-64")) {
+            if(-not (Test-Path -LiteralPath (Join-Path $root $required))) {
+              throw "Normalized OCCT root is missing $required."
+            }
+          }
           "OCCT_ROOT=$root" >> $env:GITHUB_ENV
           Write-Host "OCCT root: $root"
 

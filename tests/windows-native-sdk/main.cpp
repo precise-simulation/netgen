@@ -1,10 +1,10 @@
+#include <iostream>
+
 namespace nglib
 {
 #include <nglib.h>
 #include <nglib_occ.h>
 }
-
-#include <iostream>
 
 using namespace nglib;
 

@@ -169,6 +169,9 @@ jobs:
 
           $cmakeVersion = (& cmake --version | Select-Object -First 1).Trim()
           $clOutput = (& $cl /Bv 2>&1 | Out-String).Trim()
+          # cl /Bv reports version metadata and then returns D8003 without a
+          # translation unit. The diagnostic is expected for this probe.
+          $global:LASTEXITCODE = 0
           Write-Host $cmakeVersion
           Write-Host $clOutput
           $compilerLine = (($clOutput -split '\r?\n') | Where-Object { $_ -match 'Compiler Version' } | Select-Object -First 1).Trim()

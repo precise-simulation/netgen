@@ -1167,7 +1167,7 @@ namespace ngcore
 
       // remove all \r characters from the string, check if size changed
       // if so, read the remaining characters
-      str.erase(std::remove(str.begin(), str.end(), '\r'), str.cend());
+      str.erase(std::remove(str.begin(), str.end(), '\r'), str.end());
       size_t chars_to_read = len-str.size();
       while (chars_to_read>0)
       {
@@ -1175,7 +1175,7 @@ namespace ngcore
         str.resize(len);
 
         stream->get(&str[old_size], chars_to_read+1, '\0');
-        str.erase(std::remove(str.begin()+old_size, str.end(), '\r'), str.cend());
+        str.erase(std::remove(str.begin()+old_size, str.end(), '\r'), str.end());
         chars_to_read = len - str.size();
       }
       return *this;

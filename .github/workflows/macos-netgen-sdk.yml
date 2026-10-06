@@ -1,0 +1,148 @@
+name: macOS Netgen SDK
+
+on:
+  workflow_call:
+    inputs:
+      bundle_release:
+        type: boolean
+        default: false
+  push:
+    branches:
+      - netgen-featool
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: macos-netgen-sdk-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  BASELINE_TAG: v6.2.2604
+  BASELINE_SHA: 3ee489c7d58fdbc2a6708cca3cbaefaae506dc17
+  ZLIB_URL: https://zlib.net/fossils/zlib-1.3.1.tar.gz
+  ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
+
+jobs:
+  metadata:
+    name: Resolve source identity
+    runs-on: ubuntu-24.04
+    outputs:
+      source_date_epoch: ${{ steps.provenance.outputs.source_date_epoch }}
+      qualification_run_id: ${{ steps.provenance.outputs.qualification_run_id }}
+    steps:
+      - name: Check out exact producer commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Verify source and publication provenance
+        id: provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE_RELEASE: ${{ inputs.bundle_release }}
+        run: |
+          set -euo pipefail
+          sha="$GITHUB_SHA"
+          test "$(git rev-parse "$BASELINE_TAG^{commit}")" = "$BASELINE_SHA"
+          git merge-base --is-ancestor "$BASELINE_SHA" "$sha"
+          grep -Fq 'add_unit_test(refinement refinement.cpp)' tests/catch/CMakeLists.txt
+          grep -Fq 'Uniform refinement can convert a triangle to three quads' tests/catch/refinement.cpp
+          grep -Fq 'Uniform refinement still refines a quad to four quads' tests/catch/refinement.cpp
+
+          qualification_run_id="$GITHUB_RUN_ID"
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/* ]]; then
+            test "$GITHUB_REF" = refs/heads/netgen-featool
+          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/* ]]; then
+            test "${BUNDLE_RELEASE:-false}" = true
+            if [[ ! "$GITHUB_REF" =~ ^refs/tags/netgen-sdk-([0-9a-fA-F]{12})-r([0-9]+)$ ]]; then
+              echo "combined release tag must match netgen-sdk-<12-char-source-sha>-rN" >&2
+              exit 1
+            fi
+            test "${BASH_REMATCH[1],,}" = "${sha:0:12}"
+            git fetch origin netgen-featool:refs/remotes/origin/netgen-featool
+            git merge-base --is-ancestor "$sha" origin/netgen-featool
+            api="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/macos-netgen-sdk.yml/runs?branch=netgen-featool&event=push&status=completed&head_sha=$sha&per_page=100"
+            runs="$(curl --fail --silent --show-error --location -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api")"
+            qualification_run_id="$(jq -r --arg sha "$sha" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "netgen-featool" and .event == "push" and .conclusion == "success")] | sort_by(.run_number) | reverse | .[0].id // empty' <<<"$runs")"
+            test -n "$qualification_run_id"
+          fi
+          echo "source_date_epoch=$(git show -s --format=%ct "$sha")" >> "$GITHUB_OUTPUT"
+          echo "qualification_run_id=$qualification_run_id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.architecture }} SDK
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            runner: macos-15
+            occt_asset: opencascade-7.9.3-macos13-arm64-shared-a016080bf673.tar.gz
+            occt_size: '26258607'
+            occt_sha256: aea81a9f2c15e83ee9ce96229610b03bd8e6d8b420e6f283475a65e92463bed7
+          - architecture: x86_64
+            runner: macos-15-intel
+            occt_asset: opencascade-7.9.3-macos13-x86_64-shared-a016080bf673.tar.gz
+            occt_size: '27526131'
+            occt_sha256: 8c6f81794a0a50429e1fd120650e74fa0c658aeb4d8a742ec41234b3d2dfd081
+    steps:
+      - name: Check out exact producer commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Select Xcode 16.4 toolchain
+        shell: bash
+        run: bash .github/macos-netgen-sdk/select-toolchain.sh "${{ matrix.architecture }}"
+
+      - name: Provision checksum-pinned CMake
+        shell: bash
+        run: bash .github/macos-netgen-sdk/provision-cmake.sh
+
+      - name: Download and verify pinned producer inputs
+        shell: bash
+        env:
+          OCCT_ASSET: ${{ matrix.occt_asset }}
+          OCCT_ASSET_SIZE: ${{ matrix.occt_size }}
+          OCCT_SHA256: ${{ matrix.occt_sha256 }}
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/netgen-sdk-inputs"
+          mkdir -p "$inputs"
+          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-7.9.3/$OCCT_ASSET"
+          release="$(curl --fail --silent --show-error --location -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/precise-simulation/OCCT/releases/tags/occt-sdk-7.9.3)"
+          test "$(jq -r '.immutable' <<<"$release")" = true
+          asset="$(jq -c --arg name "$OCCT_ASSET" '.assets[] | select(.name == $name)' <<<"$release")"
+          test -n "$asset"
+          test "$(jq -r '.size' <<<"$asset")" = "$OCCT_ASSET_SIZE"
+          test "$(jq -r '.digest' <<<"$asset")" = "sha256:$OCCT_SHA256"
+          test "$(jq -r '.browser_download_url' <<<"$asset")" = "$url"
+          curl --fail --location --retry 3 --retry-all-errors "$url" -o "$inputs/occt.tar.gz"
+          test "$(shasum -a 256 "$inputs/occt.tar.gz" | awk '{print $1}')" = "$OCCT_SHA256"
+          curl --fail --location --retry 3 --retry-all-errors "$ZLIB_URL" -o "$inputs/zlib.tar.gz"
+          test "$(shasum -a 256 "$inputs/zlib.tar.gz" | awk '{print $1}')" = "$ZLIB_SHA256"
+
+      - name: Build, package and qualify SDK
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_DATE_EPOCH: ${{ needs.metadata.outputs.source_date_epoch }}
+          QUALIFICATION_RUN_ID: ${{ needs.metadata.outputs.qualification_run_id }}
+          OCCT_SHA256: ${{ matrix.occt_sha256 }}
+        run: |
+          set -euo pipefail
+          bash .github/macos-netgen-sdk/build-sdk.sh "${{ matrix.architecture }}" "${{ matrix.runner }}"
+
+      - name: Upload qualified macOS SDK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: netgen-macos-sdk-${{ matrix.architecture }}-${{ github.sha }}
+          path: ${{ runner.temp }}/netgen-macos-sdk-out/${{ matrix.architecture }}/*
+          if-no-files-found: error
+          retention-days: 30

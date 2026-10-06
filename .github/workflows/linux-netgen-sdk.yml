@@ -1,0 +1,228 @@
+name: Linux Netgen SDK
+
+on:
+  workflow_call:
+    inputs:
+      bundle_release:
+        type: boolean
+        default: false
+    outputs:
+      archive_name:
+        value: ${{ jobs.build.outputs.archive_name }}
+      checksum_name:
+        value: ${{ jobs.build.outputs.checksum_name }}
+      artifact_name:
+        value: ${{ jobs.build.outputs.artifact_name }}
+  push:
+    branches:
+      - netgen-featool
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: linux-netgen-sdk-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  BASELINE_TAG: v6.2.2604
+  BASELINE_SHA: 3ee489c7d58fdbc2a6708cca3cbaefaae506dc17
+  PRODUCER_IMAGE: quay.io/pypa/manylinux2014_x86_64
+  PRODUCER_IMAGE_TAG: '2026.10.03-1'
+  PRODUCER_IMAGE_DIGEST: sha256:ffd6d1f11237599748657996b750db6b3a5b724fea5a81cd9ea65add4f45b6c9
+  OCCT_ASSET: opencascade-7.9.3-linux-x86_64-glibc2.17-shared-a016080bf673.tar.gz
+  OCCT_ASSET_SIZE: '27369497'
+  OCCT_SHA256: a98315bfe2198dc08572a9fa792240d913ed08d08a50a53b643595d4a8eddb0d
+  OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-7.9.3/opencascade-7.9.3-linux-x86_64-glibc2.17-shared-a016080bf673.tar.gz
+  ZLIB_URL: https://zlib.net/fossils/zlib-1.3.1.tar.gz
+  ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
+
+jobs:
+  build:
+    name: Build and qualify Linux SDK
+    runs-on: ubuntu-24.04
+    outputs:
+      archive_name: ${{ steps.names.outputs.archive_name }}
+      checksum_name: ${{ steps.names.outputs.checksum_name }}
+      artifact_name: ${{ steps.names.outputs.artifact_name }}
+    steps:
+      - name: Check out exact producer commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Define artifact names
+        id: names
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="${GITHUB_SHA:0:12}"
+          archive="netgen-featool-v6.2.2604-${prefix}-occt7.9.3-linux-x86_64-glibc2.17-gcc10.tar.gz"
+          echo "archive_name=$archive" >> "$GITHUB_OUTPUT"
+          echo "checksum_name=$archive.sha256" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=netgen-linux-sdk-$prefix" >> "$GITHUB_OUTPUT"
+
+      - name: Verify source and publication provenance
+        id: provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE_RELEASE: ${{ inputs.bundle_release }}
+        run: |
+          set -euo pipefail
+          sha="$GITHUB_SHA"
+          test "$(git rev-parse "$BASELINE_TAG^{commit}")" = "$BASELINE_SHA"
+          git merge-base --is-ancestor "$BASELINE_SHA" "$sha"
+          grep -Fq 'add_unit_test(refinement refinement.cpp)' tests/catch/CMakeLists.txt
+          grep -Fq 'Uniform refinement can convert a triangle to three quads' tests/catch/refinement.cpp
+          grep -Fq 'Uniform refinement still refines a quad to four quads' tests/catch/refinement.cpp
+
+          qualification_run_id="$GITHUB_RUN_ID"
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/* ]]; then
+            test "$GITHUB_REF" = refs/heads/netgen-featool
+          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/* ]]; then
+            test "${BUNDLE_RELEASE:-false}" = true
+            if [[ ! "$GITHUB_REF" =~ ^refs/tags/netgen-sdk-([0-9a-fA-F]{12})-r([0-9]+)$ ]]; then
+              echo "combined release tag must match netgen-sdk-<12-char-source-sha>-rN" >&2
+              exit 1
+            fi
+            test "${BASH_REMATCH[1],,}" = "${sha:0:12}"
+            git fetch origin netgen-featool:refs/remotes/origin/netgen-featool
+            git merge-base --is-ancestor "$sha" origin/netgen-featool
+            api="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/linux-netgen-sdk.yml/runs?branch=netgen-featool&event=push&status=completed&head_sha=$sha&per_page=100"
+            runs="$(curl --fail --silent --show-error --location -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api")"
+            qualification_run_id="$(jq -r --arg sha "$sha" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "netgen-featool" and .event == "push" and .conclusion == "success")] | sort_by(.run_number) | reverse | .[0].id // empty' <<<"$runs")"
+            test -n "$qualification_run_id"
+          fi
+          echo "qualification_run_id=$qualification_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify pinned producer inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/netgen-sdk-inputs"
+          mkdir -p "$inputs"
+          release="$(curl --fail --silent --show-error --location -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/precise-simulation/OCCT/releases/tags/occt-sdk-7.9.3)"
+          test "$(jq -r '.immutable' <<<"$release")" = true
+          asset="$(jq -c --arg name "$OCCT_ASSET" '.assets[] | select(.name == $name)' <<<"$release")"
+          test -n "$asset"
+          test "$(jq -r '.size' <<<"$asset")" = "$OCCT_ASSET_SIZE"
+          test "$(jq -r '.digest' <<<"$asset")" = "sha256:$OCCT_SHA256"
+          test "$(jq -r '.browser_download_url' <<<"$asset")" = "$OCCT_URL"
+          curl --fail --location --retry 3 --retry-all-errors "$OCCT_URL" -o "$inputs/occt.tar.gz"
+          test "$(sha256sum "$inputs/occt.tar.gz" | awk '{print $1}')" = "$OCCT_SHA256"
+          curl --fail --location --retry 3 --retry-all-errors "$ZLIB_URL" -o "$inputs/zlib.tar.gz"
+          test "$(sha256sum "$inputs/zlib.tar.gz" | awk '{print $1}')" = "$ZLIB_SHA256"
+
+      - name: Pull pinned manylinux producer
+        shell: bash
+        run: docker pull "$PRODUCER_IMAGE@$PRODUCER_IMAGE_DIGEST"
+
+      - name: Build and qualify SDK in pinned producer
+        shell: bash
+        env:
+          QUALIFICATION_RUN_ID: ${{ steps.provenance.outputs.qualification_run_id }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/netgen-linux-sdk"
+          mkdir -p "$work"
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          docker run --rm \
+            -e SOURCE_SHA="$GITHUB_SHA" \
+            -e SOURCE_DATE_EPOCH="$source_date_epoch" \
+            -e QUALIFICATION_RUN_ID \
+            -e PRODUCER_IMAGE \
+            -e PRODUCER_IMAGE_TAG \
+            -e PRODUCER_IMAGE_DIGEST \
+            -e OCCT_SHA256 \
+            -e ZLIB_SHA256 \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$RUNNER_TEMP/netgen-sdk-inputs:/inputs:ro" \
+            -v "$work:/work" \
+            "$PRODUCER_IMAGE@$PRODUCER_IMAGE_DIGEST" \
+            bash /src/.github/linux-netgen-sdk/build-sdk.sh
+
+      - name: Upload qualified Linux SDK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.names.outputs.artifact_name }}
+          path: ${{ runner.temp }}/netgen-linux-sdk/out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  compatibility:
+    name: Ubuntu ${{ matrix.ubuntu }} consumer
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:${{ matrix.ubuntu }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu:
+          - '20.04'
+          - '22.04'
+          - '24.04'
+    steps:
+      - name: Install consumer tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates cmake curl g++ gzip make tar
+
+      - name: Check out consumer fixture
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - name: Download qualified Netgen SDK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/netgen-artifact
+
+      - name: Verify and run relocated external consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          netgen_artifact="$RUNNER_TEMP/netgen-artifact"
+          archive="$netgen_artifact/${{ needs.build.outputs.archive_name }}"
+          sidecar="$netgen_artifact/${{ needs.build.outputs.checksum_name }}"
+          test -f "$archive"
+          test -f "$sidecar"
+          expected="$(awk '{print $1}' "$sidecar" | tr -d '\r')"
+          actual="$(sha256sum "$archive" | awk '{print $1}')"
+          test "$expected" = "$actual"
+
+          netgen_extract="$RUNNER_TEMP/netgen-extracted"
+          mkdir -p "$netgen_extract"
+          tar -xzf "$archive" -C "$netgen_extract"
+          mapfile -t netgen_roots < <(find "$netgen_extract" -mindepth 1 -maxdepth 1 -type d -print)
+          test "${#netgen_roots[@]}" -eq 1
+          netgen_root="${netgen_roots[0]}"
+
+          occt_archive="$RUNNER_TEMP/occt.tar.gz"
+          curl --fail --location --retry 3 \
+            "$OCCT_URL" \
+            -o "$occt_archive"
+          test "$(sha256sum "$occt_archive" | awk '{print $1}')" = "$OCCT_SHA256"
+          occt_extract="$RUNNER_TEMP/occt-extracted"
+          mkdir -p "$occt_extract"
+          tar -xzf "$occt_archive" -C "$occt_extract"
+          mapfile -t occt_roots < <(find "$occt_extract" -mindepth 1 -maxdepth 1 -type d -print)
+          test "${#occt_roots[@]}" -eq 1
+          occt_root="${occt_roots[0]}"
+
+          consumer_build="$RUNNER_TEMP/consumer-build"
+          LDFLAGS="-Wl,-rpath-link,$occt_root/lib" cmake \
+            -S tests/unix-native-sdk \
+            -B "$consumer_build" \
+            -DCMAKE_BUILD_RPATH="$netgen_root/lib;$occt_root/lib" \
+            -DNETGEN_SDK_DIR="$netgen_root" \
+            -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
+          cmake --build "$consumer_build" --parallel 2
+          "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep

@@ -1,6 +1,18 @@
 name: Windows Netgen SDK
 
 on:
+  workflow_call:
+    inputs:
+      bundle_release:
+        type: boolean
+        default: false
+    outputs:
+      archive_name:
+        value: ${{ jobs.build.outputs.archive_name }}
+      checksum_name:
+        value: ${{ jobs.build.outputs.checksum_name }}
+      artifact_name:
+        value: ${{ jobs.build.outputs.artifact_name }}
   push:
     branches:
       - netgen-featool
@@ -33,7 +45,7 @@ jobs:
 
     steps:
       - name: Check out exact producer commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
@@ -53,6 +65,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          BUNDLE_RELEASE: ${{ inputs.bundle_release }}
         run: |
           $ErrorActionPreference = "Stop"
           $sha = $env:GITHUB_SHA.ToLowerInvariant()
@@ -88,6 +101,7 @@ jobs:
 
           $qualificationRunId = ""
           $isTagPush = $env:GITHUB_EVENT_NAME -eq "push" -and $env:GITHUB_REF.StartsWith("refs/tags/")
+          $isBundleRelease = $env:BUNDLE_RELEASE -eq "true"
           if($env:GITHUB_EVENT_NAME -eq "push" -and $env:GITHUB_REF.StartsWith("refs/heads/")) {
             if($env:GITHUB_REF -ne "refs/heads/netgen-featool") {
               throw "Branch qualification may only run for refs/heads/netgen-featool."
@@ -95,7 +109,16 @@ jobs:
             $qualificationRunId = $env:GITHUB_RUN_ID
           }
           elseif($isTagPush) {
-            if($env:GITHUB_REF -notmatch '^refs/tags/netgen-featool-sdk-([0-9a-fA-F]{12})-r([0-9]+)$') {
+            $tagPattern = if($isBundleRelease) {
+              '^refs/tags/netgen-sdk-([0-9a-fA-F]{12})-r([0-9]+)$'
+            }
+            else {
+              '^refs/tags/netgen-featool-sdk-([0-9a-fA-F]{12})-r([0-9]+)$'
+            }
+            if($env:GITHUB_REF -notmatch $tagPattern) {
+              if($isBundleRelease) {
+                throw "Combined release tag must match netgen-sdk-<12-char-source-sha>-rN."
+              }
               throw "Release tag must match netgen-featool-sdk-<12-char-source-sha>-rN."
             }
             $tagPrefix = $Matches[1].ToLowerInvariant()
@@ -195,7 +218,7 @@ jobs:
           } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:RUNNER_TEMP\toolchain.json"
 
       - name: Restore checksum-addressed dependency archives
-        uses: actions/cache@v4
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
         with:
           path: ${{ runner.temp }}/netgen-sdk-downloads
           key: netgen-sdk-archives-${{ env.OCCT_SHA256 }}-${{ env.ZLIB_SHA256 }}
@@ -846,7 +869,7 @@ jobs:
           }
 
       - name: Upload qualified workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ${{ steps.names.outputs.artifact_name }}
           path: ${{ runner.temp }}/qualified-assets/*
@@ -864,7 +887,7 @@ jobs:
 
     steps:
       - name: Download exact qualified assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: release-assets

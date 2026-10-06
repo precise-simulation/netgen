@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SOURCE_SHA:?SOURCE_SHA is required}"
+: "${SOURCE_DATE_EPOCH:?SOURCE_DATE_EPOCH is required}"
+: "${QUALIFICATION_RUN_ID:?QUALIFICATION_RUN_ID is required}"
+: "${PRODUCER_IMAGE:?PRODUCER_IMAGE is required}"
+: "${PRODUCER_IMAGE_TAG:?PRODUCER_IMAGE_TAG is required}"
+: "${PRODUCER_IMAGE_DIGEST:?PRODUCER_IMAGE_DIGEST is required}"
+: "${OCCT_SHA256:?OCCT_SHA256 is required}"
+: "${ZLIB_SHA256:?ZLIB_SHA256 is required}"
+
+source_dir=/src
+work_root=/work
+inputs_dir=/inputs
+occt_archive="$inputs_dir/occt.tar.gz"
+zlib_archive="$inputs_dir/zlib.tar.gz"
+short_sha="${SOURCE_SHA:0:12}"
+sdk_name="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-linux-x86_64-glibc2.17-gcc10"
+build_dir="$work_root/netgen-build"
+install_dir="$work_root/netgen-install"
+sdk_dir="$work_root/$sdk_name"
+out_dir="$work_root/out"
+consumer_dir="$work_root/consumer"
+relocated_dir="$work_root/relocated"
+
+find_python() {
+  local candidate
+  for candidate in /opt/python/cp311-cp311/bin/python /opt/python/cp310-cp310/bin/python /opt/python/cp39-cp39/bin/python /usr/bin/python3; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+python_bin="$(find_python)"
+cmake_version=3.31.6
+tools_dir="$work_root/tools/cmake-$cmake_version"
+cmake_bin=""
+if command -v cmake >/dev/null 2>&1; then
+  cmake_bin="$(command -v cmake)"
+  current_cmake="$($cmake_bin --version | sed -n '1s/.* //p')"
+  if [[ "$(printf '%s\n%s\n' 3.16 "$current_cmake" | sort -V | head -n1)" != 3.16 ]]; then
+    cmake_bin=""
+  fi
+fi
+if [[ -z "$cmake_bin" ]]; then
+  rm -rf "$tools_dir"
+  mkdir -p "$tools_dir"
+  "$python_bin" -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --target "$tools_dir" "cmake==$cmake_version"
+  cmake_bin="$tools_dir/cmake/data/bin/cmake"
+fi
+export PATH="$(dirname "$cmake_bin"):$PATH"
+
+for tool in gcc g++ make cmake ld readelf objdump file sha256sum tar gzip; do
+  command -v "$tool" >/dev/null || { echo "missing producer tool: $tool" >&2; exit 1; }
+done
+[[ "$(uname -m)" == x86_64 ]]
+
+rm -rf "$build_dir" "$install_dir" "$sdk_dir" "$out_dir" "$consumer_dir" "$relocated_dir" "$work_root/occt" "$work_root/zlib-src" "$work_root/zlib-build" "$work_root/zlib-stage"
+mkdir -p "$out_dir" "$work_root/occt" "$work_root/zlib-src" "$work_root/zlib-stage"
+
+tar -xzf "$occt_archive" -C "$work_root/occt"
+mapfile -t occt_roots < <(find "$work_root/occt" -mindepth 1 -maxdepth 1 -type d -print)
+[[ ${#occt_roots[@]} -eq 1 ]]
+occt_root="${occt_roots[0]}"
+occt_manifest="$occt_root/build-manifest.json"
+[[ -f "$occt_manifest" ]]
+"$python_bin" - "$occt_manifest" "$PRODUCER_IMAGE_DIGEST" <<'PY'
+import json, pathlib, sys
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert data["schema_version"] == 1
+assert data["occt"]["version"] == "7.9.3"
+assert data["occt"]["commit"] == "a016080bf6738d6aeae020badee4e888ad1540a5"
+assert data["linkage"] == "shared"
+assert data["producer"]["architecture"] == "x86_64"
+assert data["producer"]["glibc_baseline"] == "2.17"
+assert data["producer"]["image_digest"] == sys.argv[2]
+PY
+[[ -f "$occt_root/lib/cmake/opencascade/OpenCASCADEConfig.cmake" ]]
+[[ -f "$occt_root/include/opencascade/Standard.hxx" ]]
+
+tar -xzf "$zlib_archive" -C "$work_root/zlib-src"
+zlib_source="$work_root/zlib-src/zlib-1.3.1"
+[[ -d "$zlib_source" ]]
+cmake -S "$zlib_source" -B "$work_root/zlib-build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DCMAKE_INSTALL_PREFIX="$work_root/zlib-stage" \
+  -DZLIB_BUILD_EXAMPLES=OFF
+cmake --build "$work_root/zlib-build" --parallel 4
+cmake --install "$work_root/zlib-build"
+mapfile -t zlib_libraries < <(find "$work_root/zlib-stage" -type f -name libz.a -print)
+[[ ${#zlib_libraries[@]} -eq 1 ]]
+zlib_library="${zlib_libraries[0]}"
+
+configure_options=(
+  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_INSTALL_PREFIX="$install_dir"
+  -DCMAKE_FIND_USE_PACKAGE_REGISTRY=FALSE
+  -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=FALSE
+  -DNG_INSTALL_DIR_BIN=bin
+  -DNG_INSTALL_DIR_LIB=lib
+  -DNG_INSTALL_DIR_INCLUDE=include
+  -DNG_INSTALL_DIR_CMAKE=cmake
+  -DUSE_SUPERBUILD=OFF
+  -DUSE_GUI=OFF
+  -DUSE_PYTHON=OFF
+  -DUSE_MPI=OFF
+  -DUSE_CGNS=OFF
+  -DUSE_JPEG=OFF
+  -DUSE_MPEG=OFF
+  -DUSE_STLGEOM=ON
+  -DUSE_INTERFACE=ON
+  -DUSE_CSG=ON
+  -DUSE_GEOM2D=ON
+  -DUSE_NATIVE_ARCH=OFF
+  -DUSE_OCC=ON
+  -DNGLIB_LIBRARY_TYPE=SHARED
+  -DNGCORE_LIBRARY_TYPE=SHARED
+  -DNETGEN_NATIVE_SDK=ON
+  -DENABLE_UNIT_TESTS=ON
+  -DOpenCascade_DIR="$occt_root/lib/cmake/opencascade"
+  -DZLIB_INCLUDE_DIRS="$work_root/zlib-stage/include"
+  -DZLIB_LIBRARIES="$zlib_library"
+  -DZLIB_LIBRARY_RELEASE="$zlib_library"
+)
+printf '%s\n' "${configure_options[@]}" > "$work_root/configure-options.txt"
+cmake -S "$source_dir" -B "$build_dir" "${configure_options[@]}"
+cmake --build "$build_dir" --parallel 4 --target unit_tests
+
+export LD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib"
+ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
+cmake --install "$build_dir"
+
+mkdir -p "$sdk_dir/include" "$sdk_dir/lib" "$sdk_dir/cmake"
+cp -a "$install_dir/include/." "$sdk_dir/include/"
+cp -a "$install_dir/lib/libngcore.so" "$sdk_dir/lib/"
+cp -a "$install_dir/lib/libnglib.so" "$sdk_dir/lib/"
+cp -a "$install_dir/cmake/NetgenConfig.cmake" "$sdk_dir/cmake/"
+cp -a "$install_dir/cmake/netgen-targets.cmake" "$sdk_dir/cmake/"
+cp -a "$install_dir/cmake/netgen-targets-release.cmake" "$sdk_dir/cmake/"
+
+for library in "$sdk_dir/lib/libngcore.so" "$sdk_dir/lib/libnglib.so"; do
+  file "$library" | grep -Eq 'ELF 64-bit.*x86-64|ELF 64-bit.*x86_64'
+  dynamic="$(readelf -d "$library")"
+  if grep -Fq "$source_dir" <<<"$dynamic" || grep -Fq "$work_root" <<<"$dynamic"; then
+    echo "producer path leaked into $(basename "$library")" >&2
+    exit 1
+  fi
+  if grep -Eqi 'NEEDED.*(libz\.so|python|tcl|tk[0-9]|mpi|cgns|jpeg|avcodec|avformat)' <<<"$dynamic"; then
+    echo "disabled runtime dependency found in $(basename "$library")" >&2
+    exit 1
+  fi
+  rpath="$(sed -nE 's/.*Library (rpath|runpath): \[([^]]*)\].*/\2/p' <<<"$dynamic")"
+  [[ -n "$rpath" ]] || { echo "missing RPATH/RUNPATH in $(basename "$library")" >&2; exit 1; }
+  IFS=: read -r -a rpath_entries <<<"$rpath"
+  for entry in "${rpath_entries[@]}"; do
+    case "$entry" in
+      '$ORIGIN'|'$ORIGIN/'*) ;;
+      *) echo "non-relocatable runtime path in $(basename "$library"): $entry" >&2; exit 1 ;;
+    esac
+  done
+done
+
+for cmake_file in "$sdk_dir"/cmake/*.cmake; do
+  for forbidden in "$source_dir" "$build_dir" "$install_dir" "$occt_root" "$work_root/zlib-stage"; do
+    if grep -Fq "$forbidden" "$cmake_file"; then
+      echo "producer path leaked into $(basename "$cmake_file"): $forbidden" >&2
+      exit 1
+    fi
+  done
+  if grep -Eqi '(netgen_cgns|netgen_python|netgen_gui|pyngcore|ngpy|nggui|-march=native|-mavx)' "$cmake_file"; then
+    echo "disabled target or native CPU option leaked into $(basename "$cmake_file")" >&2
+    exit 1
+  fi
+done
+
+"$python_bin" - "$sdk_dir" "$PRODUCER_IMAGE" "$PRODUCER_IMAGE_TAG" "$PRODUCER_IMAGE_DIGEST" "$OCCT_SHA256" "$ZLIB_SHA256" "$QUALIFICATION_RUN_ID" <<'PY'
+import hashlib, json, os, pathlib, subprocess, sys
+sdk = pathlib.Path(sys.argv[1])
+def run(*args):
+    return subprocess.check_output(args, text=True).strip()
+def sha(path):
+    h = hashlib.sha256(); h.update(path.read_bytes()); return h.hexdigest()
+def symbol_max(prefix):
+    maxima = {}
+    for lib in (sdk / "lib").glob("libng*.so"):
+        text = run("objdump", "-T", str(lib))
+        for token in text.replace("(", " ").replace(")", " ").split():
+            if token.startswith(prefix + "_"):
+                version = token.split("_", 1)[1]
+                key = tuple(int(x) for x in version.split("."))
+                if prefix not in maxima or key > maxima[prefix][0]:
+                    maxima[prefix] = (key, version)
+    return maxima.get(prefix, (None, None))[1]
+glibc = symbol_max("GLIBC")
+if glibc and tuple(map(int, glibc.split("."))) > (2, 17):
+    raise SystemExit(f"Netgen shared libraries require GLIBC_{glibc}")
+info = {
+    "schema_version": 1,
+    "upstream": {"tag": "v6.2.2604", "commit": "3ee489c7d58fdbc2a6708cca3cbaefaae506dc17"},
+    "source": {"commit": os.environ["SOURCE_SHA"], "qualification_run_id": sys.argv[7]},
+    "producer": {
+        "image": sys.argv[2], "image_tag": sys.argv[3], "image_digest": sys.argv[4],
+        "architecture": run("uname", "-m"), "gcc": run("gcc", "--version").splitlines()[0],
+        "gxx": run("g++", "--version").splitlines()[0], "cmake": run("cmake", "--version").splitlines()[0],
+        "glibc_baseline": "2.17"
+    },
+    "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": "shared", "native_arch": False},
+    "occt": {"release": "occt-sdk-7.9.3", "commit": "a016080bf6738d6aeae020badee4e888ad1540a5", "asset_sha256": sys.argv[5], "linkage": "shared"},
+    "zlib": {"version": "1.3.1", "sha256": sys.argv[6], "linkage": "static", "pic": True},
+    "symbol_versions": {"GLIBC": glibc, "GLIBCXX": symbol_max("GLIBCXX"), "CXXABI": symbol_max("CXXABI")},
+    "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([sdk / "lib/libngcore.so", sdk / "lib/libnglib.so", *sorted((sdk / "cmake").glob("*.cmake"))])}
+}
+(sdk / "producer-info.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
+PY
+
+configure_consumer() {
+  local root="$1"
+  local build="$2"
+  rm -rf "$build"
+  LDFLAGS="-Wl,-rpath-link,$occt_root/lib" cmake \
+    -S "$source_dir/tests/unix-native-sdk" \
+    -B "$build" \
+    -DCMAKE_BUILD_RPATH="$root/lib;$occt_root/lib" \
+    -DNETGEN_SDK_DIR="$root" \
+    -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
+  cmake --build "$build" --parallel 4
+  "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
+}
+
+configure_consumer "$sdk_dir" "$consumer_dir"
+
+archive="$out_dir/$sdk_name.tar.gz"
+tar -C "$work_root" --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -cf - "$sdk_name" | gzip -n > "$archive"
+(cd "$out_dir" && sha256sum "$(basename "$archive")" > "$(basename "$archive").sha256" && sha256sum -c "$(basename "$archive").sha256")
+
+rm -rf "$sdk_dir" "$install_dir" "$consumer_dir"
+mkdir -p "$relocated_dir"
+tar -xzf "$archive" -C "$relocated_dir"
+relocated_sdk="$relocated_dir/$sdk_name"
+[[ -f "$relocated_sdk/producer-info.json" ]]
+[[ -f "$relocated_sdk/lib/libngcore.so" ]]
+[[ -f "$relocated_sdk/lib/libnglib.so" ]]
+configure_consumer "$relocated_sdk" "$work_root/consumer-relocated"
+
+echo "SDK_ARCHIVE=$archive"

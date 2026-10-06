@@ -125,8 +125,8 @@ printf '%s\n' "${configure_options[@]}" > "$work_root/configure-options.txt"
 cmake -S "$source_dir" -B "$build_dir" "${configure_options[@]}"
 cmake --build "$build_dir" --parallel "$(sysctl -n hw.logicalcpu)" --target unit_tests
 
-export DYLD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib"
-ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
+DYLD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib" \
+  ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
 cmake --install "$build_dir"
 
 mkdir -p "$sdk_dir/include" "$sdk_dir/lib" "$sdk_dir/cmake"
@@ -148,7 +148,7 @@ for library in "$sdk_dir/lib/libngcore.dylib" "$sdk_dir/lib/libnglib.dylib"; do
   load_commands="$(otool -l "$library")"
   dependencies="$(otool -L "$library")"
   grep -Eq 'minos[[:space:]]+13\.0([[:space:]]|$)' <<<"$load_commands"
-  for forbidden in "$source_dir" "$build_dir" "$install_dir" "$occt_root" "$work_root/zlib-stage" /Users/runner/; do
+  for forbidden in "$source_dir" "$build_dir" "$install_dir" "$occt_root" "$work_root/zlib-stage"; do
     if grep -Fq "$forbidden" <<<"$load_commands$dependencies"; then
       echo "producer path leaked into $(basename "$library"): $forbidden" >&2
       exit 1

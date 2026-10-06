@@ -164,6 +164,28 @@ jobs:
               '
           }
 
+          verify_remote_tag() {
+            local ref_json object_type object_sha tag_json
+            ref_json="$(gh api \
+              -H "X-GitHub-Api-Version: $api_version" \
+              "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+            object_type="$(jq -r '.object.type' <<<"$ref_json")"
+            object_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+            for _ in 1 2 3 4 5; do
+              if [[ "$object_type" == commit ]]; then
+                break
+              fi
+              test "$object_type" = tag
+              tag_json="$(gh api \
+                -H "X-GitHub-Api-Version: $api_version" \
+                "repos/$GITHUB_REPOSITORY/git/tags/$object_sha")"
+              object_type="$(jq -r '.object.type' <<<"$tag_json")"
+              object_sha="$(jq -r '.object.sha' <<<"$tag_json")"
+            done
+            test "$object_type" = commit
+            test "$object_sha" = "$GITHUB_SHA"
+          }
+
           existing_draft_id="$(find_draft_id)"
           if [[ -n "$existing_draft_id" ]] || gh api \
             -H "X-GitHub-Api-Version: $api_version" \
@@ -182,6 +204,7 @@ jobs:
           notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared SDKs targeting macOS 13.0 with Xcode 16.4."
           notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
 
+          verify_remote_tag
           gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
@@ -202,6 +225,7 @@ jobs:
             test "$actual" = "$expected"
           done
 
+          verify_remote_tag
           gh api -X PATCH \
             -H "X-GitHub-Api-Version: $api_version" \
             "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
@@ -217,3 +241,4 @@ jobs:
             actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
             test "$actual" = "$expected"
           done
+          verify_remote_tag

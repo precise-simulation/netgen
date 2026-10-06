@@ -221,8 +221,9 @@ jobs:
           LDFLAGS="-Wl,-rpath-link,$occt_root/lib" cmake \
             -S tests/unix-native-sdk \
             -B "$consumer_build" \
-            -DCMAKE_BUILD_RPATH="$netgen_root/lib;$occt_root/lib" \
+            -DCMAKE_BUILD_RPATH="$netgen_root/lib" \
             -DNETGEN_SDK_DIR="$netgen_root" \
             -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
           cmake --build "$consumer_build" --parallel 2
-          "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep
+          LD_LIBRARY_PATH="$occt_root/lib" \
+            "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep

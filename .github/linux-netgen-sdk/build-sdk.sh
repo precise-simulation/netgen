@@ -134,8 +134,8 @@ printf '%s\n' "${configure_options[@]}" > "$work_root/configure-options.txt"
 cmake -S "$source_dir" -B "$build_dir" "${configure_options[@]}"
 cmake --build "$build_dir" --parallel 4 --target unit_tests
 
-export LD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib"
-ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
+LD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib" \
+  ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
 cmake --install "$build_dir"
 
 mkdir -p "$sdk_dir/include" "$sdk_dir/lib" "$sdk_dir/cmake"
@@ -228,17 +228,43 @@ configure_consumer() {
   LDFLAGS="-Wl,-rpath-link,$occt_root/lib" cmake \
     -S "$source_dir/tests/unix-native-sdk" \
     -B "$build" \
-    -DCMAKE_BUILD_RPATH="$root/lib;$occt_root/lib" \
+    -DCMAKE_BUILD_RPATH="$root/lib" \
     -DNETGEN_SDK_DIR="$root" \
     -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
   cmake --build "$build" --parallel 4
-  "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
+  LD_LIBRARY_PATH="$occt_root/lib" \
+    "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
 }
 
 configure_consumer "$sdk_dir" "$consumer_dir"
 
 archive="$out_dir/$sdk_name.tar.gz"
-tar -C "$work_root" --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -cf - "$sdk_name" | gzip -n > "$archive"
+"$python_bin" - "$sdk_dir" "$archive" "$SOURCE_DATE_EPOCH" <<'PY'
+import gzip, pathlib, sys, tarfile
+
+root = pathlib.Path(sys.argv[1])
+archive = pathlib.Path(sys.argv[2])
+epoch = int(sys.argv[3])
+
+def normalize(info):
+    info.mtime = epoch
+    info.uid = info.gid = 0
+    info.uname = info.gname = ""
+    return info
+
+with archive.open("wb") as raw:
+    with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as tar:
+            paths = [root, *sorted(root.rglob("*"), key=lambda path: path.relative_to(root).as_posix())]
+            for path in paths:
+                arcname = root.name if path == root else f"{root.name}/{path.relative_to(root).as_posix()}"
+                info = normalize(tar.gettarinfo(str(path), arcname=arcname))
+                if info.isfile():
+                    with path.open("rb") as stream:
+                        tar.addfile(info, stream)
+                else:
+                    tar.addfile(info)
+PY
 (cd "$out_dir" && sha256sum "$(basename "$archive")" > "$(basename "$archive").sha256" && sha256sum -c "$(basename "$archive").sha256")
 
 rm -rf "$sdk_dir" "$install_dir" "$consumer_dir"

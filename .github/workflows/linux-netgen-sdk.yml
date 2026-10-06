@@ -138,11 +138,11 @@ jobs:
             -e PRODUCER_IMAGE_DIGEST \
             -e OCCT_SHA256 \
             -e ZLIB_SHA256 \
-            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$GITHUB_WORKSPACE:/source:ro" \
             -v "$RUNNER_TEMP/netgen-sdk-inputs:/inputs:ro" \
             -v "$work:/work" \
             "$PRODUCER_IMAGE@$PRODUCER_IMAGE_DIGEST" \
-            bash /src/.github/linux-netgen-sdk/build-sdk.sh
+            bash /source/.github/linux-netgen-sdk/build-sdk.sh
 
       - name: Upload qualified Linux SDK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

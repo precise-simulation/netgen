@@ -123,7 +123,11 @@ jobs:
           test "$(jq -r '.size' <<<"$asset")" = "$OCCT_ASSET_SIZE"
           test "$(jq -r '.digest' <<<"$asset")" = "sha256:$OCCT_SHA256"
           test "$(jq -r '.browser_download_url' <<<"$asset")" = "$url"
-          curl --fail --location --retry 3 --retry-all-errors "$url" -o "$inputs/occt.tar.gz"
+          asset_api_url="$(jq -r '.url' <<<"$asset")"
+          curl --fail --location --retry 3 --retry-all-errors \
+            -H 'Accept: application/octet-stream' \
+            "$asset_api_url" \
+            -o "$inputs/occt.tar.gz"
           test "$(shasum -a 256 "$inputs/occt.tar.gz" | awk '{print $1}')" = "$OCCT_SHA256"
           curl --fail --location --retry 3 --retry-all-errors "$ZLIB_URL" -o "$inputs/zlib.tar.gz"
           test "$(shasum -a 256 "$inputs/zlib.tar.gz" | awk '{print $1}')" = "$ZLIB_SHA256"

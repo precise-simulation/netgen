@@ -10,7 +10,8 @@ set -euo pipefail
 : "${OCCT_SHA256:?OCCT_SHA256 is required}"
 : "${ZLIB_SHA256:?ZLIB_SHA256 is required}"
 
-source_dir=/src
+source_mount=/source
+source_dir=/work/src
 work_root=/work
 inputs_dir=/inputs
 occt_archive="$inputs_dir/occt.tar.gz"
@@ -59,8 +60,10 @@ for tool in gcc g++ make cmake ld readelf objdump file sha256sum tar gzip; do
 done
 [[ "$(uname -m)" == x86_64 ]]
 
-rm -rf "$build_dir" "$install_dir" "$sdk_dir" "$out_dir" "$consumer_dir" "$relocated_dir" "$work_root/occt" "$work_root/zlib-src" "$work_root/zlib-build" "$work_root/zlib-stage"
-mkdir -p "$out_dir" "$work_root/occt" "$work_root/zlib-src" "$work_root/zlib-stage"
+rm -rf "$source_dir" "$build_dir" "$install_dir" "$sdk_dir" "$out_dir" "$consumer_dir" "$relocated_dir" "$work_root/occt" "$work_root/zlib-src" "$work_root/zlib-build" "$work_root/zlib-stage"
+mkdir -p "$source_dir" "$out_dir" "$work_root/occt" "$work_root/zlib-src" "$work_root/zlib-stage"
+cp -a "$source_mount/." "$source_dir/"
+git config --global --add safe.directory "$source_dir"
 
 tar -xzf "$occt_archive" -C "$work_root/occt"
 mapfile -t occt_roots < <(find "$work_root/occt" -mindepth 1 -maxdepth 1 -type d -print)

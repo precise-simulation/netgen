@@ -17,7 +17,7 @@ concurrency:
 env:
   NETGEN_BASELINE_TAG: v6.2.2604
   NETGEN_BASELINE_SHA: 3ee489c7d58fdbc2a6708cca3cbaefaae506dc17
-  WINDOWS_OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V7_9_3/opencascade-7.9.3-vc14-64.zip
+  WINDOWS_OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V7_9_3/opencascade-7.9.3-vc14-64-combined.zip
   WINDOWS_OCCT_SHA256: afbef3457fbc4a2bdca0608e0fe284392f51e4c2c42ccbfb9df7168d8e4eb9b3
   OCCT_RELEASE: occt-sdk-7.9.3
   OCCT_SOURCE_SHA: a016080bf6738d6aeae020badee4e888ad1540a5

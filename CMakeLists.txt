@@ -442,7 +442,7 @@ if (USE_OCC)
     # install rpath (@loader_path) alone cannot find them. Append where they
     # really are as a fallback - @loader_path stays first, so a bundled
     # OpenCascade still takes precedence.
-    if(OpenCASCADE_LIBRARY_DIR AND OpenCASCADE_BUILD_SHARED_LIBS)
+    if(OpenCASCADE_LIBRARY_DIR AND OpenCASCADE_BUILD_SHARED_LIBS AND NOT NETGEN_NATIVE_SDK)
       # for targets created after this point
       list(APPEND CMAKE_INSTALL_RPATH "${OpenCASCADE_LIBRARY_DIR}")
       # nglib and nggui are created further up, so they already captured the

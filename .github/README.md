@@ -56,11 +56,12 @@ extracts before locating `OpenCASCADEConfig.cmake`, `inc`, `win64/vc14`, and
 `3rdparty-vc14-64`.
 
 The Linux and macOS OCCT archives come from the immutable
-`precise-simulation/OCCT` `occt-sdk-8.0.1` release. The workflows first verify
-the release metadata, asset size, digest, and URL. macOS then downloads the
-already-verified public asset URL with an explicit retry/backoff loop. This
-avoids cross-repository `GITHUB_TOKEN` asset-API permission failures while the
-downloaded bytes remain gated by the pinned SHA-256.
+`precise-simulation/OCCT` `occt-sdk-8.0.1` release. Linux verifies the release
+metadata as well as the pinned asset. The parallel macOS jobs deliberately do
+not call the unauthenticated GitHub release-metadata API because shared runner
+rate limits can return HTTP 403 during tagged rebuilds. Instead they download
+the fully pinned public asset URL with explicit retry/backoff and require both
+the exact pinned byte size and SHA-256 before using it.
 
 Netgen's `BUILD_OCC=ON` superbuild separately pins the upstream OCCT source
 archive `V8_0_1.zip` with MD5 `5b0b171d7028cf73bd9369997091347a`.

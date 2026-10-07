@@ -116,13 +116,6 @@ jobs:
           inputs="$RUNNER_TEMP/netgen-sdk-inputs"
           mkdir -p "$inputs"
           url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1/$OCCT_ASSET"
-          release="$(curl --fail --silent --show-error --location -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/precise-simulation/OCCT/releases/tags/occt-sdk-8.0.1)"
-          test "$(jq -r '.immutable' <<<"$release")" = true
-          asset="$(jq -c --arg name "$OCCT_ASSET" '.assets[] | select(.name == $name)' <<<"$release")"
-          test -n "$asset"
-          test "$(jq -r '.size' <<<"$asset")" = "$OCCT_ASSET_SIZE"
-          test "$(jq -r '.digest' <<<"$asset")" = "sha256:$OCCT_SHA256"
-          test "$(jq -r '.browser_download_url' <<<"$asset")" = "$url"
           downloaded=false
           for attempt in 1 2 3 4 5; do
             rm -f "$inputs/occt.tar.gz"
@@ -133,6 +126,7 @@ jobs:
             sleep $((attempt * 5))
           done
           test "$downloaded" = true
+          test "$(stat -f '%z' "$inputs/occt.tar.gz")" = "$OCCT_ASSET_SIZE"
           test "$(shasum -a 256 "$inputs/occt.tar.gz" | awk '{print $1}')" = "$OCCT_SHA256"
           curl --fail --location --retry 3 --retry-all-errors "$ZLIB_URL" -o "$inputs/zlib.tar.gz"
           test "$(shasum -a 256 "$inputs/zlib.tar.gz" | awk '{print $1}')" = "$ZLIB_SHA256"

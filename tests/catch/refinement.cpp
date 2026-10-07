@@ -126,7 +126,7 @@ TEST_CASE("Triangle to quad refinement reuses shared edge midpoints")
 
   REQUIRE(mesh.GetNSE() == 6);
   REQUIRE(mesh.GetNP() == 11);
-  for (auto & el : mesh.SurfaceElements())
+  for (auto el : mesh.SurfaceElements())
     REQUIRE(el.GetType() == QUAD);
 
   int shared_midpoints = 0;
@@ -308,7 +308,7 @@ TEST_CASE("Uniform refinement still refines a quad to four quads")
 
   REQUIRE(mesh.GetNSE() == 4);
   REQUIRE(mesh.GetNP() == 9);
-  for (auto & el : mesh.SurfaceElements())
+  for (auto el : mesh.SurfaceElements())
     REQUIRE(el.GetType() == QUAD);
 
   bool found_center = false;

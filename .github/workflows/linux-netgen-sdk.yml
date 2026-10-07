@@ -161,10 +161,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ubuntu:
-          - '20.04'
-          - '22.04'
-          - '24.04'
+        include:
+          - ubuntu: '20.04'
+            compiler_package: g++-10
+            cc: gcc-10
+            cxx: g++-10
+          - ubuntu: '22.04'
+            compiler_package: g++
+            cc: gcc
+            cxx: g++
+          - ubuntu: '24.04'
+            compiler_package: g++
+            cc: gcc
+            cxx: g++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
     steps:
       - name: Install consumer tools
         shell: bash
@@ -172,7 +184,9 @@ jobs:
           set -euo pipefail
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates cmake curl g++ gzip make tar
+            ca-certificates cmake curl ${{ matrix.compiler_package }} gzip make tar
+          "$CC" --version
+          "$CXX" --version
 
       - name: Check out consumer fixture
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

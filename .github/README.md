@@ -57,10 +57,10 @@ extracts before locating `OpenCASCADEConfig.cmake`, `inc`, `win64/vc14`, and
 
 The Linux and macOS OCCT archives come from the immutable
 `precise-simulation/OCCT` `occt-sdk-8.0.1` release. The workflows first verify
-the release metadata, asset size, digest, and URL. macOS prefers the authenticated
-GitHub asset API and falls back to the already-verified public asset URL if the
-asset API returns an access error; the downloaded bytes must still match the
-pinned SHA-256.
+the release metadata, asset size, digest, and URL. macOS then downloads the
+already-verified public asset URL with an explicit retry/backoff loop. This
+avoids cross-repository `GITHUB_TOKEN` asset-API permission failures while the
+downloaded bytes remain gated by the pinned SHA-256.
 
 Netgen's `BUILD_OCC=ON` superbuild separately pins the upstream OCCT source
 archive `V8_0_1.zip` with MD5 `5b0b171d7028cf73bd9369997091347a`.

@@ -108,7 +108,6 @@ jobs:
       - name: Download and verify pinned producer inputs
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           OCCT_ASSET: ${{ matrix.occt_asset }}
           OCCT_ASSET_SIZE: ${{ matrix.occt_size }}
           OCCT_SHA256: ${{ matrix.occt_sha256 }}
@@ -124,17 +123,16 @@ jobs:
           test "$(jq -r '.size' <<<"$asset")" = "$OCCT_ASSET_SIZE"
           test "$(jq -r '.digest' <<<"$asset")" = "sha256:$OCCT_SHA256"
           test "$(jq -r '.browser_download_url' <<<"$asset")" = "$url"
-          asset_api_url="$(jq -r '.url' <<<"$asset")"
-          if ! curl --fail --location --retry 3 --retry-all-errors \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H 'Accept: application/octet-stream' \
-            "$asset_api_url" \
-            -o "$inputs/occt.tar.gz"; then
+          downloaded=false
+          for attempt in 1 2 3 4 5; do
             rm -f "$inputs/occt.tar.gz"
-            curl --fail --location --retry 3 --retry-all-errors \
-              "$url" \
-              -o "$inputs/occt.tar.gz"
-          fi
+            if curl --fail --location "$url" -o "$inputs/occt.tar.gz"; then
+              downloaded=true
+              break
+            fi
+            sleep $((attempt * 5))
+          done
+          test "$downloaded" = true
           test "$(shasum -a 256 "$inputs/occt.tar.gz" | awk '{print $1}')" = "$OCCT_SHA256"
           curl --fail --location --retry 3 --retry-all-errors "$ZLIB_URL" -o "$inputs/zlib.tar.gz"
           test "$(shasum -a 256 "$inputs/zlib.tar.gz" | awk '{print $1}')" = "$ZLIB_SHA256"

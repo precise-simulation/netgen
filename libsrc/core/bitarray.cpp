@@ -39,14 +39,14 @@ namespace ngcore
     if (size == asize) return;
     if (owns_data)
       {
+        MemTraceFree(data, GetMemoryUsage());
         delete [] data;
-        mt.Free(GetMemoryUsage());
       }
 
     size = asize;
     data = new unsigned char [Addr (size)+1];
     owns_data = true;
-    mt.Alloc(GetMemoryUsage());
+    MemTraceAlloc(data, GetMemoryUsage());
   }
 
   BitArray & BitArray :: Set () throw()
@@ -118,9 +118,9 @@ namespace ngcore
     size_t n = ba.Size();
     for (size_t i = 0; i < n; i++)
       {
-	if (i % 50 == 0) s << i << ": ";
-	s << int(ba[i]);
-	if (i % 50 == 49) s << "\n";
+        if (i % 50 == 0) s << i << ": ";
+        s << int(ba[i]);
+        if (i % 50 == 49) s << "\n";
       }
     s << std::flush;
     return s;

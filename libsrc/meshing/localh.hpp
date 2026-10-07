@@ -115,7 +115,7 @@ namespace netgen
     DLL_HEADER double GetMinH (Point<3> pmin, Point<3> pmax) const;
 
     /// mark boxes intersecting with boundary-box
-    // void CutBoundary (const Point3d & pmin, const Point3d & pmax)
+    // void CutBoundary (const Point<3> & pmin, const Point<3> & pmax)
     // { CutBoundaryRec (pmin, pmax, root); }
 
     void CutBoundary (const Box<3> & box)
@@ -125,10 +125,10 @@ namespace netgen
   
     /// find inner boxes
     void FindInnerBoxes (const class AdFront3 & adfront,
-			 int (*testinner)(const Point3d & p1));
+                         int (*testinner)(const Point<3> & p1));
 
     void FindInnerBoxes (const class AdFront2 & adfront,
-			 int (*testinner)(const Point<2> & p1));
+                         int (*testinner)(const Point<2> & p1));
 
 
     /// clears all flags 
@@ -141,11 +141,11 @@ namespace netgen
     void WidenRefinement ();
 
     /// get points in inner elements
-    void GetInnerPoints (NgArray<Point<3> > & points) const;
-    void GetInnerPointsRec (const GradingBox * box, NgArray<Point<3> > & points) const;
+    void GetInnerPoints (Array<Point<3> > & points) const;
+    void GetInnerPointsRec (const GradingBox * box, Array<Point<3> > & points) const;
 
     /// get points in outer closure
-    void GetOuterPoints (NgArray<Point<3> > & points);
+    void GetOuterPoints (Array<Point<3> > & points);
 
     ///
     void Convexify ();
@@ -157,32 +157,32 @@ namespace netgen
     void PrintMemInfo (ostream & ost) const;
   private:
     /// 
-    double GetMinHRec (const Point3d & pmin, const Point3d & pmax,
-		       const GradingBox * box) const;
+    double GetMinHRec (const Point<3> & pmin, const Point<3> & pmax,
+                       const GradingBox * box) const;
     ///
-    void CutBoundaryRec (const Point3d & pmin, const Point3d & pmax,
-			 GradingBox * box);
+    void CutBoundaryRec (const Point<3> & pmin, const Point<3> & pmax,
+                         GradingBox * box);
 
     ///
-    void FindInnerBoxesRec ( int (*inner)(const Point3d & p),
-			     GradingBox * box);
+    void FindInnerBoxesRec ( int (*inner)(const Point<3> & p),
+                             GradingBox * box);
 
     ///
     void FindInnerBoxesRec2 (GradingBox * box,
-			     const class AdFront3 & adfront,
-			     NgArray<Box3d> & faceboxes,
-			     NgArray<int> & finds, int nfinbox);
+                             const class AdFront3 & adfront,
+                             Array<Box3d> & faceboxes,
+                             Array<int> & finds, int nfinbox);
 
 
 
     void FindInnerBoxesRec ( int (*inner)(const Point<2> & p),
-			     GradingBox * box);
+                             GradingBox * box);
 
     ///
     void FindInnerBoxesRec2 (GradingBox * box,
-			     const class AdFront2 & adfront,
-			     FlatArray<Box<2>> faceboxes,
-			     FlatArray<int> finds); // , int nfinbox);
+                             const class AdFront2 & adfront,
+                             FlatArray<Box<2>> faceboxes,
+                             FlatArray<int> finds); // , int nfinbox);
 
 
 
@@ -206,8 +206,8 @@ namespace netgen
   inline ostream & operator<< (ostream & ost, const GradingBox & box)
   {
     ost << "gradbox, pmid = " << box.PMid() << ", h2 = " << box.H2() 
-	<< " cutbound = " << box.flags.cutboundary << " isinner = " << box.flags.isinner 
-	<< endl;
+        << " cutbound = " << box.flags.cutboundary << " isinner = " << box.flags.isinner 
+        << endl;
     return ost;
   }
 

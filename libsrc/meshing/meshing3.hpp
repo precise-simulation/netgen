@@ -32,6 +32,8 @@ class Meshing3
   Array<string> problems;
   /// tolerance criterion
   double tolfak;
+  /// mesh point number -> front point number
+  Array<Front3PointIndex, PointIndex> glob2front;
 public:
   /// 
   Meshing3 (const string & rulefilename); 
@@ -46,23 +48,21 @@ public:
   MESHING3_RESULT GenerateMesh (Mesh & mesh, const MeshingParameters & mp);
   
   ///
-  int ApplyRules (Array<Point3d, PointIndex> & lpoints,
-                  Array<int, PointIndex> & allowpoint,
-		  Array<MiniElement2d> & lfaces, INDEX lfacesplit,
-		  INDEX_2_HASHTABLE<int> & connectedpairs,
-		  NgArray<Element> & elements,
-		  NgArray<INDEX> & delfaces, int tolerance, 
-		  double sloppy, int rotind1,
-		  float & retminerr);
+  int ApplyRules (Array<Point<3>, LocalPointIndex> & lpoints,
+                  Array<int, LocalPointIndex> & allowpoint,
+                  Array<MiniElement2d> & lfaces, int lfacesplit,
+                  ClosedHashTable<IVec<2>,int> & connectedpairs,
+                  Array<LocalElement> & elements,
+                  Array<int> & delfaces, int tolerance, 
+                  double sloppy, int rotind1,
+                  float & retminerr);
   
   ///
-  PointIndex AddPoint (const Point3d & p, PointIndex globind);
+  Front3PointIndex AddPoint (const Point<3> & p, PointIndex globind);
+  /// elem is given in mesh point numbers
+  void AddBoundaryElement (const Element2dRef & elem);
   ///
-  void AddBoundaryElement (const Element2d & elem);
-  ///
-  void AddBoundaryElement (const MiniElement2d & elem);
-  ///
-  int AddConnectedPair (const INDEX_2 & pair);
+  int AddConnectedPair (PointIndices<2> pair);
   
   ///
   void BlockFill (Mesh & mesh, double gh);
@@ -113,8 +113,8 @@ public:
 /*
 template <typename POINTArray, typename FACEArray>
 extern int FindInnerPoint (POINTArray & grouppoints,
-			   FACEArray & groupfaces,
-			   Point3d & p);
+                           FACEArray & groupfaces,
+                           Point<3> & p);
 
 */
 

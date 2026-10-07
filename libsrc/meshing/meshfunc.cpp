@@ -24,7 +24,7 @@ namespace netgen
       // maps from local (domain) mesh to global mesh
       Array<PointIndex, PointIndex> pmap;
 
-      // Array<INDEX_2> connected_pairs;
+      // Array<IVec<2>> connected_pairs;
 
       MeshingParameters mp;
 
@@ -57,7 +57,7 @@ namespace netgen
       ipmap.SetSize(num_domains);
       // auto dim = mesh.GetDimension();
       auto num_points = mesh.GetNP();
-      auto num_facedescriptors = mesh.GetNFD();
+      // auto num_facedescriptors = mesh.GetNFD();
 
 
       constexpr PointIndex state0 = IndexBASE<PointIndex>()-1; 
@@ -86,10 +86,11 @@ namespace netgen
       // mark interior edge points
       for(const auto& seg : mesh.LineSegments())
         {
-          if(seg.domin > 0 && seg.domin == seg.domout)
+          const auto & ed = mesh.GetEdgeDescriptor(seg.GetIndex());
+          if(ed.DomainIn() > 0 && ed.DomainIn() == ed.DomainOut())
             {
-              ipmap[seg.domin-1][seg[0]] = state1; // 1;
-              ipmap[seg.domin-1][seg[1]] = state1; // 1;
+              ipmap[ed.DomainIn()-1][seg[0]] = state1; // 1;
+              ipmap[ed.DomainIn()-1][seg[1]] = state1; // 1;
             }
         }
 
@@ -115,7 +116,7 @@ namespace netgen
       // mark used points for already existing volume elements, add them (with wrong point numbers) to domain mesh
       for(const auto & el : mesh.VolumeElements())
       {
-        auto dom = el.GetIndex();
+        int dom = el.GetIndex().Nr1();
         
         auto & els = ret[dom-1].mesh->VolumeElements();
         for(auto pi : el.PNums())
@@ -146,6 +147,14 @@ namespace netgen
             }
       }
 
+      // copy edge descriptors to sub-meshes so ED lookups work there too
+      for(auto i : Range(ret))
+      {
+          auto & m = *ret[i].mesh;
+          for(auto j : Range(1, mesh.GetNED()+1))
+            m.AddEdgeDescriptor(mesh.GetEdgeDescriptor(j));
+      }
+
       // add segments
       for(auto i : Range(ret))
       {
@@ -169,17 +178,17 @@ namespace netgen
           auto nmax = identifications.GetMaxNr ();
           auto & m_ident = m.GetIdentifications();
 
-          for (auto & sel : m.SurfaceElements())
+          for (auto sel : m.SurfaceElements())
             for(auto & pi : sel.PNums())
               pi = imap[pi];
 
-          for (auto & el : m.VolumeElements())
+          for (auto el : m.VolumeElements())
             for(auto & pi : el.PNums())
               pi = imap[pi];
 
           for(auto n : Range(1,nmax+1))
           {
-              NgArray<INDEX_2> pairs;
+              Array<PointIndices<2>> pairs;
               identifications.GetPairs(n, pairs);
 
               for(auto pair : pairs)
@@ -265,7 +274,7 @@ namespace netgen
               if(n*(mesh[el[np]]-p0) < 0.0)
                   continue;
 
-              el.SetIndex(md.domain);
+              el.SetIndex(VolumeRegionIndex::FromNr1(md.domain));
               mesh.AddVolumeElement(el);
               if(el.NP()==8)
               {
@@ -337,7 +346,7 @@ namespace netgen
            for (PointIndex pi : mesh.Points().Range())
              meshing.AddPoint (mesh[pi], pi);
 
-           NgArray<INDEX_2> connectednodes;
+           Array<PointIndices<2>> connectednodes;
            for (int nr = 1; nr <= mesh.GetIdentifications().GetMaxNr(); nr++)
              if (mesh.GetIdentifications().GetType(nr) != Identifications::PERIODIC)
                {
@@ -351,7 +360,7 @@ namespace netgen
            
            for (int i = 1; i <= mesh.GetNOpenElements(); i++)
              {
-               Element2d hel = mesh.OpenElement(i);
+               Element2d hel (mesh.OpenElement(i));
                meshing.AddBoundaryElement (hel);
              }
            
@@ -361,7 +370,7 @@ namespace netgen
            
            // for (int i = oldne + 1; i <= mesh.GetNE(); i++)
            for (ElementIndex i : mesh.VolumeElements().Range().Modify(oldne, 0))
-             mesh.VolumeElement(i).SetIndex (domain);
+             mesh.VolumeElement(i).SetIndex (VolumeRegionIndex::FromNr1(domain));
            
            (*testout) 
              << "mesh has " << mesh.GetNE() << " prism/pyramid elements" << endl;
@@ -409,7 +418,7 @@ namespace netgen
 
       // for (int i = oldne + 1; i <= mesh.GetNE(); i++)
       for (ElementIndex i : mesh.VolumeElements().Range().Modify(oldne, 0))
-         mesh.VolumeElement(i).SetIndex (domain);
+         mesh.VolumeElement(i).SetIndex (VolumeRegionIndex::FromNr1(domain));
 
       PrintMessage (3, mesh.GetNP(), " points, ",
          mesh.GetNE(), " elements");
@@ -418,7 +427,7 @@ namespace netgen
 
     Box<3> domain_bbox( Box<3>::EMPTY_BOX ); 
    
-    for (auto & sel : mesh.SurfaceElements())
+    for (auto sel : mesh.SurfaceElements())
      {
        if (sel.IsDeleted() ) continue;
 
@@ -456,19 +465,12 @@ namespace netgen
 
          Meshing3 meshing(tetrules);
 
-         Array<PointIndex, PointIndex> glob2loc(mesh.GetNP());
-         glob2loc = PointIndex::INVALID;
-
          for (PointIndex pi : mesh.Points().Range())
            if (domain_bbox.IsIn (mesh[pi]))
-             glob2loc[pi] = meshing.AddPoint (mesh[pi], pi);
+             meshing.AddPoint (mesh[pi], pi);
 
          for (auto sel : mesh.OpenElements())
-           {
-             for(auto & pi : sel.PNums())
-               pi = glob2loc[pi];
-             meshing.AddBoundaryElement (sel);
-           }
+           meshing.AddBoundaryElement (sel);
 
          int oldne = mesh.GetNE();
 
@@ -476,8 +478,8 @@ namespace netgen
          mp.sloppy = 5;
          meshing.GenerateMesh (mesh, mp);
          
-         for (auto & el : mesh.VolumeElements().Range(oldne, END))
-           el.SetIndex (domain);
+         for (auto el : mesh.VolumeElements().Range(oldne, END))
+           el.SetIndex (VolumeRegionIndex::FromNr1(domain));
          
 
          mesh.CalcSurfacesOfNode();
@@ -492,21 +494,21 @@ namespace netgen
             MeshOptimize3d optmesh(mesh, mp, OPT_REST);
 
             const char * optstr = "mcmstmcmstmcmstmcm";
-            for (size_t j = 1; j <= strlen(optstr); j++)
+            for (size_t j = 0; j < strlen(optstr); j++)
             {
                mesh.FindOpenElements();
                mesh.CalcSurfacesOfNode();
                mesh.FreeOpenElementsEnvironment(2);
                mesh.CalcSurfacesOfNode();
 
-               switch (optstr[j-1])
+               switch (optstr[j])
                {
                case 'c': optmesh.CombineImprove(); break;
                case 'd': optmesh.SplitImprove(); break;
                case 's': optmesh.SwapImprove(); break;
                case 't': optmesh.SwapImprove2(); break;
                case 'm': optmesh.ImproveMesh(); break;
-               }	  
+               }          
 
             }
 
@@ -567,7 +569,7 @@ namespace netgen
          auto first_new_pi = m_.pmap.Range().Next();
          auto & m = *m_.mesh;
          Array<PointIndex, PointIndex> pmap(m.Points().Size());
-         for(auto pi : Range(IndexBASE<PointIndex>(), first_new_pi))
+         for(auto pi : Range(BEGIN, first_new_pi))
              pmap[pi] = m_.pmap[pi];
 
          for (auto pi : Range(first_new_pi, m.Points().Range().Next()))
@@ -578,7 +580,7 @@ namespace netgen
          {
              for (auto i : Range(el.GetNP()))
                  el[i] = pmap[el[i]];
-             el.SetIndex(m_.domain);
+             el.SetIndex(VolumeRegionIndex::FromNr1(m_.domain));
              mesh.AddVolumeElement(el);
          }
          // for(const auto& [p1p2, dummy] : m.GetIdentifications().GetIdentifiedPoints())
@@ -601,7 +603,7 @@ namespace netgen
      for(auto & m : meshes)
      {
          Array<PointIndex, PointIndex> pmap(m.Points().Size());
-         for(auto pi : Range(IndexBASE<PointIndex>(), first_new_pi))
+         for(auto pi : Range(BEGIN, first_new_pi))
              pmap[pi] = pi;
 
          for (auto pi : Range(first_new_pi, m.Points().Range().Next()))
@@ -691,8 +693,8 @@ namespace netgen
 
 
   MESHING3_RESULT OptimizeVolume (const MeshingParameters & mp, 
-				  Mesh & mesh3d)
-    //				  const CSGeometry * geometry)
+                                  Mesh & mesh3d)
+    //                            const CSGeometry * geometry)
   {
     static Timer t("OptimizeVolume"); RegionTimer reg(t);
   #ifndef EMSCRIPTEN
@@ -739,41 +741,41 @@ namespace netgen
 
     for (auto i : Range(mp.optsteps3d))
       {
-	if (multithread.terminate)
-	  break;
+        if (multithread.terminate)
+          break;
 
-	// teterrpow = mp.opterrpow;
-	// for (size_t j = 1; j <= strlen(mp.optimize3d); j++)
+        // teterrpow = mp.opterrpow;
+        // for (size_t j = 1; j <= strlen(mp.optimize3d); j++)
         for (auto j : Range(mp.optimize3d.size()))
-	  {
+          {
             multithread.percent = 100.* (double(j)/mp.optimize3d.size() + i)/mp.optsteps3d;
-	    if (multithread.terminate)
-	      break;
+            if (multithread.terminate)
+              break;
 
-	    switch (mp.optimize3d[j])
-	      {
-	      case 'c': 
+            switch (mp.optimize3d[j])
+              {
+              case 'c': 
           optmesh.SetGoal(OPT_REST);
           optmesh.CombineImprove();
           optmesh.SetGoal(OPT_QUALITY);
           break;
-	      case 'd': optmesh.SplitImprove(); break;
-	      case 'D': optmesh.SplitImprove2(); break;
-	      case 's': optmesh.SwapImprove(); break;
+              case 'd': optmesh.SplitImprove(); break;
+              case 'D': optmesh.SplitImprove2(); break;
+              case 's': optmesh.SwapImprove(); break;
                 // case 'u': optmesh.SwapImproveSurface(mesh3d); break;
-	      case 't': optmesh.SwapImprove2(); break;
+              case 't': optmesh.SwapImprove2(); break;
 #ifdef SOLIDGEOM
-	      case 'm': mesh3d.ImproveMesh(*geometry); break;
-	      case 'M': mesh3d.ImproveMesh(*geometry); break;
+              case 'm': mesh3d.ImproveMesh(*geometry); break;
+              case 'M': mesh3d.ImproveMesh(*geometry); break;
 #else
-	      case 'm': mesh3d.ImproveMesh(mp); break;
-	      case 'M': mesh3d.ImproveMesh(mp); break;
+              case 'm': mesh3d.ImproveMesh(mp); break;
+              case 'M': mesh3d.ImproveMesh(mp); break;
 #endif
-	      case 'j': mesh3d.ImproveMeshJacobian(mp); break;
-	      }
-	  }
-	// mesh3d.mglevels = 1;
-	MeshQuality3d (mesh3d);
+              case 'j': mesh3d.ImproveMeshJacobian(mp); break;
+              }
+          }
+        // mesh3d.mglevels = 1;
+        MeshQuality3d (mesh3d);
       }
   
     multithread.task = savetask;
@@ -792,8 +794,11 @@ namespace netgen
 
     Array<SegmentIndex> free_segs;
     for (auto segi : Range(mesh.LineSegments()))
-      if(mesh[segi].domin == domain && mesh[segi].domout == domain)
+    {
+      const auto & ed = mesh.GetEdgeDescriptor(mesh[segi].GetIndex());
+      if(ed.DomainIn() == domain && ed.DomainOut() == domain)
         free_segs.Append(segi);
+    }
 
     auto get_nonconforming = [&] (const auto & p2el) {
       Array<SegmentIndex> nonconforming;
@@ -857,7 +862,7 @@ namespace netgen
       }
 
       // split tet into 4 new tests, with new point inside
-      auto el = mesh[ei_max_inside];
+      auto el = Copy(mesh[ei_max_inside]);
       if(el.GetNP() != 4) {
         PrintMessage(3, "Only tet elements are supported to split around free segments");
         return;
@@ -965,25 +970,25 @@ namespace netgen
     int it = 10;
     while (nillegal && (it--) > 0)
       {
-	if (multithread.terminate)
-	  break;
+        if (multithread.terminate)
+          break;
 
-	PrintMessage (5, nillegal, " illegal tets");
+        PrintMessage (5, nillegal, " illegal tets");
         optmesh.SplitImprove ();
 
-	mesh3d.MarkIllegalElements();  // test
-	optmesh.SwapImprove ();
-	mesh3d.MarkIllegalElements();  // test
-	optmesh.SwapImprove2 ();
+        mesh3d.MarkIllegalElements();  // test
+        optmesh.SwapImprove ();
+        mesh3d.MarkIllegalElements();  // test
+        optmesh.SwapImprove2 ();
 
-	oldn = nillegal;
-	nillegal = mesh3d.MarkIllegalElements();
+        oldn = nillegal;
+        nillegal = mesh3d.MarkIllegalElements();
         nillegal_min = min(nillegal_min, nillegal);
         if(nillegal > nillegal_min)
           break;
 
-	if (oldn != nillegal)
-	  it = 10;
+        if (oldn != nillegal)
+          it = 10;
       }
     PrintMessage (5, nillegal, " illegal tets");
   }

@@ -11,16 +11,16 @@ TEST_CASE("Uniform refinement can convert a triangle to three quads")
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 1.0, 0.0));
-  mesh.AddFaceDescriptor(FaceDescriptor(1, 1, 0, 0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(1.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(0.0, 1.0, 0.0));
+  auto face = mesh.AddFaceDescriptor(FaceRegion(1, 1, 0, 0));
 
   Element2d trig(TRIG);
-  trig.SetIndex(1);
-  trig.PNum(1) = PointIndex(1);
-  trig.PNum(2) = PointIndex(2);
-  trig.PNum(3) = PointIndex(3);
+  trig.SetIndex(face);
+  trig.PNum(1) = p1;
+  trig.PNum(2) = p2;
+  trig.PNum(3) = p3;
   mesh.AddSurfaceElement(trig);
 
   geo.GetRefinement().Refine(mesh, true);
@@ -28,9 +28,8 @@ TEST_CASE("Uniform refinement can convert a triangle to three quads")
   REQUIRE(mesh.GetNSE() == 3);
   REQUIRE(mesh.GetNP() == 7);
   PointIndex center = PointIndex::INVALID;
-  for (int i = 1; i <= mesh.GetNP(); i++)
+  for (PointIndex pi : mesh.Points().Range())
     {
-      PointIndex pi(i);
       const auto & p = mesh.Point(pi);
       if (std::abs(p[0]-1.0/3.0) < 1e-12 &&
           std::abs(p[1]-1.0/3.0) < 1e-12 &&
@@ -42,10 +41,10 @@ TEST_CASE("Uniform refinement can convert a triangle to three quads")
   REQUIRE_FALSE(mesh.mlbetweennodes[center][0].IsValid());
   REQUIRE_FALSE(mesh.mlbetweennodes[center][1].IsValid());
 
-  for (auto & el : mesh.SurfaceElements())
+  for (auto el : mesh.SurfaceElements())
     {
       REQUIRE(el.GetType() == QUAD);
-      REQUIRE(el.GetIndex() == 1);
+      REQUIRE(el.GetIndex() == face);
 
       int original_vertices = 0;
       int center_vertices = 0;
@@ -53,7 +52,7 @@ TEST_CASE("Uniform refinement can convert a triangle to three quads")
       for (int k = 1; k <= 4; k++)
         {
           PointIndex pi = el.PNum(k);
-          if (pi <= PointIndex(3))
+          if (pi == p1 || pi == p2 || pi == p3)
             original_vertices++;
           if (pi == center)
             center_vertices++;
@@ -74,26 +73,26 @@ TEST_CASE("Uniform refinement still refines a triangle to four triangles")
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 1.0, 0.0));
-  mesh.AddFaceDescriptor(FaceDescriptor(1, 1, 0, 0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(1.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(0.0, 1.0, 0.0));
+  auto face = mesh.AddFaceDescriptor(FaceRegion(1, 1, 0, 0));
 
   Element2d trig(TRIG);
-  trig.SetIndex(1);
-  trig.PNum(1) = PointIndex(1);
-  trig.PNum(2) = PointIndex(2);
-  trig.PNum(3) = PointIndex(3);
+  trig.SetIndex(face);
+  trig.PNum(1) = p1;
+  trig.PNum(2) = p2;
+  trig.PNum(3) = p3;
   mesh.AddSurfaceElement(trig);
 
   geo.GetRefinement().Refine(mesh);
 
   REQUIRE(mesh.GetNSE() == 4);
   REQUIRE(mesh.GetNP() == 6);
-  for (auto & el : mesh.SurfaceElements())
+  for (auto el : mesh.SurfaceElements())
     {
       REQUIRE(el.GetType() == TRIG);
-      REQUIRE(el.GetIndex() == 1);
+      REQUIRE(el.GetIndex() == face);
     }
 }
 
@@ -103,24 +102,24 @@ TEST_CASE("Triangle to quad refinement reuses shared edge midpoints")
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 1.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 1.0, 0.0));
-  mesh.AddFaceDescriptor(FaceDescriptor(1, 1, 0, 0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(1.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(1.0, 1.0, 0.0));
+  auto p4 = mesh.AddPoint(Point<3>(0.0, 1.0, 0.0));
+  auto face = mesh.AddFaceDescriptor(FaceRegion(1, 1, 0, 0));
 
   Element2d trig1(TRIG);
-  trig1.SetIndex(1);
-  trig1.PNum(1) = PointIndex(1);
-  trig1.PNum(2) = PointIndex(2);
-  trig1.PNum(3) = PointIndex(3);
+  trig1.SetIndex(face);
+  trig1.PNum(1) = p1;
+  trig1.PNum(2) = p2;
+  trig1.PNum(3) = p3;
   mesh.AddSurfaceElement(trig1);
 
   Element2d trig2(TRIG);
-  trig2.SetIndex(1);
-  trig2.PNum(1) = PointIndex(1);
-  trig2.PNum(2) = PointIndex(3);
-  trig2.PNum(3) = PointIndex(4);
+  trig2.SetIndex(face);
+  trig2.PNum(1) = p1;
+  trig2.PNum(2) = p3;
+  trig2.PNum(3) = p4;
   mesh.AddSurfaceElement(trig2);
 
   geo.GetRefinement().Refine(mesh, true);
@@ -132,9 +131,8 @@ TEST_CASE("Triangle to quad refinement reuses shared edge midpoints")
 
   int shared_midpoints = 0;
   int triangle_centers = 0;
-  for (int i = 1; i <= mesh.GetNP(); i++)
+  for (PointIndex pi : mesh.Points().Range())
     {
-      PointIndex pi(i);
       const auto & p = mesh.Point(pi);
       if (std::abs(p[0]-0.5) < 1e-12 &&
           std::abs(p[1]-0.5) < 1e-12 &&
@@ -142,8 +140,8 @@ TEST_CASE("Triangle to quad refinement reuses shared edge midpoints")
         {
           shared_midpoints++;
           auto parents = mesh.mlbetweennodes[pi];
-          REQUIRE(parents[0] == PointIndex(1));
-          REQUIRE(parents[1] == PointIndex(3));
+          REQUIRE(parents[0] == p1);
+          REQUIRE(parents[1] == p3);
         }
       if ((std::abs(p[0]-2.0/3.0) < 1e-12 && std::abs(p[1]-1.0/3.0) < 1e-12) ||
           (std::abs(p[0]-1.0/3.0) < 1e-12 && std::abs(p[1]-2.0/3.0) < 1e-12))
@@ -163,18 +161,18 @@ TEST_CASE("Triangle to quad refinement keeps duplicate triangle centers distinct
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 1.0, 0.0));
-  mesh.AddFaceDescriptor(FaceDescriptor(1, 1, 0, 0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(1.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(0.0, 1.0, 0.0));
+  auto face = mesh.AddFaceDescriptor(FaceRegion(1, 1, 0, 0));
 
   for (int i = 0; i < 2; i++)
     {
       Element2d trig(TRIG);
-      trig.SetIndex(1);
-      trig.PNum(1) = PointIndex(1);
-      trig.PNum(2) = PointIndex(2);
-      trig.PNum(3) = PointIndex(3);
+      trig.SetIndex(face);
+      trig.PNum(1) = p1;
+      trig.PNum(2) = p2;
+      trig.PNum(3) = p3;
       mesh.AddSurfaceElement(trig);
     }
 
@@ -183,7 +181,7 @@ TEST_CASE("Triangle to quad refinement keeps duplicate triangle centers distinct
   REQUIRE(mesh.GetNSE() == 6);
   REQUIRE(mesh.GetNP() == 8);
 
-  NgArray<PointIndex> centers;
+  Array<PointIndex> centers;
   for (PointIndex pi : mesh.Points().Range())
     {
       const auto & p = mesh.Point(pi);
@@ -214,31 +212,31 @@ TEST_CASE("Triangle to quad refinement preserves identified triangle centers")
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 1.0, 0.0));
-  mesh.AddPoint(Point3d(2.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(3.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(2.0, 1.0, 0.0));
-  mesh.AddFaceDescriptor(FaceDescriptor(1, 1, 0, 0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(1.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(0.0, 1.0, 0.0));
+  auto p4 = mesh.AddPoint(Point<3>(2.0, 0.0, 0.0));
+  auto p5 = mesh.AddPoint(Point<3>(3.0, 0.0, 0.0));
+  auto p6 = mesh.AddPoint(Point<3>(2.0, 1.0, 0.0));
+  auto face = mesh.AddFaceDescriptor(FaceRegion(1, 1, 0, 0));
 
   Element2d trig1(TRIG);
-  trig1.SetIndex(1);
-  trig1.PNum(1) = PointIndex(1);
-  trig1.PNum(2) = PointIndex(2);
-  trig1.PNum(3) = PointIndex(3);
+  trig1.SetIndex(face);
+  trig1.PNum(1) = p1;
+  trig1.PNum(2) = p2;
+  trig1.PNum(3) = p3;
   mesh.AddSurfaceElement(trig1);
 
   Element2d trig2(TRIG);
-  trig2.SetIndex(1);
-  trig2.PNum(1) = PointIndex(4);
-  trig2.PNum(2) = PointIndex(5);
-  trig2.PNum(3) = PointIndex(6);
+  trig2.SetIndex(face);
+  trig2.PNum(1) = p4;
+  trig2.PNum(2) = p5;
+  trig2.PNum(3) = p6;
   mesh.AddSurfaceElement(trig2);
 
-  mesh.GetIdentifications().Add(PointIndex(1), PointIndex(4), 1);
-  mesh.GetIdentifications().Add(PointIndex(2), PointIndex(5), 1);
-  mesh.GetIdentifications().Add(PointIndex(3), PointIndex(6), 1);
+  mesh.GetIdentifications().Add(p1, p4, 1);
+  mesh.GetIdentifications().Add(p2, p5, 1);
+  mesh.GetIdentifications().Add(p3, p6, 1);
 
   geo.GetRefinement().Refine(mesh, true);
 
@@ -257,8 +255,8 @@ TEST_CASE("Triangle to quad refinement preserves identified triangle centers")
   REQUIRE(center2.IsValid());
 
   bool centers_identified = false;
-  for (const auto & pair : mesh.GetIdentifications().GetPairs())
-    if (pair.I1() == center1 && pair.I2() == center2 && pair.I3() == 1)
+  for (auto [points, nr] : mesh.GetIdentifications().GetPairs())
+    if (points[0] == center1 && points[1] == center2 && nr == 1)
       centers_identified = true;
   REQUIRE(centers_identified);
 }
@@ -269,16 +267,16 @@ TEST_CASE("Triangle to quad refinement rejects volume meshes")
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 1.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 0.0, 1.0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(1.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(0.0, 1.0, 0.0));
+  auto p4 = mesh.AddPoint(Point<3>(0.0, 0.0, 1.0));
 
   Element tet(TET);
-  tet.PNum(1) = PointIndex(1);
-  tet.PNum(2) = PointIndex(2);
-  tet.PNum(3) = PointIndex(3);
-  tet.PNum(4) = PointIndex(4);
+  tet.PNum(1) = p1;
+  tet.PNum(2) = p2;
+  tet.PNum(3) = p3;
+  tet.PNum(4) = p4;
   mesh.AddVolumeElement(tet);
 
   REQUIRE_THROWS(geo.GetRefinement().Refine(mesh, true));
@@ -292,18 +290,18 @@ TEST_CASE("Uniform refinement still refines a quad to four quads")
   NetgenGeometry geo;
   Mesh mesh;
 
-  mesh.AddPoint(Point3d(0.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(2.0, 0.0, 0.0));
-  mesh.AddPoint(Point3d(1.5, 1.0, 0.0));
-  mesh.AddPoint(Point3d(0.0, 2.0, 0.0));
-  mesh.AddFaceDescriptor(FaceDescriptor(1, 1, 0, 0));
+  auto p1 = mesh.AddPoint(Point<3>(0.0, 0.0, 0.0));
+  auto p2 = mesh.AddPoint(Point<3>(2.0, 0.0, 0.0));
+  auto p3 = mesh.AddPoint(Point<3>(1.5, 1.0, 0.0));
+  auto p4 = mesh.AddPoint(Point<3>(0.0, 2.0, 0.0));
+  auto face = mesh.AddFaceDescriptor(FaceRegion(1, 1, 0, 0));
 
   Element2d quad(QUAD);
-  quad.SetIndex(1);
-  quad.PNum(1) = PointIndex(1);
-  quad.PNum(2) = PointIndex(2);
-  quad.PNum(3) = PointIndex(3);
-  quad.PNum(4) = PointIndex(4);
+  quad.SetIndex(face);
+  quad.PNum(1) = p1;
+  quad.PNum(2) = p2;
+  quad.PNum(3) = p3;
+  quad.PNum(4) = p4;
   mesh.AddSurfaceElement(quad);
 
   geo.GetRefinement().Refine(mesh);

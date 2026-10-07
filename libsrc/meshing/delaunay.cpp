@@ -21,10 +21,10 @@ namespace netgen
   public:
     DelaunayTet () = default;
 
-    DelaunayTet (const Element & el)
+    DelaunayTet (const ElementRef & el)
     {
       for (int i = 0; i < 4; i++)
-	pnums[i] = el[i];
+        pnums[i] = el[i];
     }
     
     PointIndex & operator[] (int i) { return pnums[i]; }
@@ -37,8 +37,8 @@ namespace netgen
     int FaceNr (const PointIndices<3> & face) const  // which face nr is it ?
     {
       for (int i = 0; i < 3; i++)
-	if (pnums[i] != face[0] && pnums[i] != face[1] && pnums[i] != face[2])
-	  return i;
+        if (pnums[i] != face[0] && pnums[i] != face[1] && pnums[i] != face[2])
+          return i;
       return 3;
     }
 
@@ -49,7 +49,7 @@ namespace netgen
                 pnums[deltetfaces[i][2]] };
     }
 
-    void GetFace (int i, Element2d & face) const
+    void GetFace (int i, Element2dRef face) const
     {
       // face.SetType(TRIG);
       face[0] = pnums[deltetfaces[i][0]];
@@ -70,15 +70,15 @@ namespace netgen
   class MeshNB
   {
     // face nodes -> one element
-    INDEX_3_CLOSED_HASHTABLE<int> faces;
+    ClosedHashTable<SortedPointIndices<3>, int> faces;
 
     // 
-    NgArray<DelaunayTet> & tets;
+    Array<DelaunayTet> & tets;
 
   public:
 
     // estimated number of points
-    MeshNB (NgArray<DelaunayTet> & atets, int np)
+    MeshNB (Array<DelaunayTet> & atets, int np)
       : faces(200), tets(atets)
     { ; }
 
@@ -88,15 +88,15 @@ namespace netgen
     // delete element with 4 nodes
     void Delete (int elnr)
     {
-      DelaunayTet & el = tets.Elem(elnr);
+      DelaunayTet & el = tets[elnr-1];
       for (int i = 0; i < 4; i++)
-	faces.Set (el.GetFace(i).Sort(), el.NB(i));
+        faces.Set (el.GetFace(i).Sort(), el.NB(i));
     }
 
     // get neighbour of element elnr in direction fnr 
     int GetNB (int elnr, int fnr)
     { 
-      return tets.Get(elnr).NB(fnr); 
+      return tets[elnr-1].NB(fnr); 
     }
 
     //
@@ -110,31 +110,31 @@ namespace netgen
 
   void MeshNB :: Add (int elnr)
   {
-    DelaunayTet & el = tets.Elem(elnr);
+    DelaunayTet & el = tets[elnr-1];
 
     for (int i = 0; i < 4; i++)
       {
-	INDEX_3 i3 = INDEX_3::Sort (el.GetFace(i));
+        SortedPointIndices<3> i3 = el.GetFace(i);
 
-	int posnr;
-	
-	if (!faces.PositionCreate (i3, posnr))
-	  {
-	    // face already in use
-	    int othertet = faces.GetData (posnr);
+        size_t posnr;
+        
+        if (!faces.PositionCreate (i3, posnr))
+          {
+            // face already in use
+            int othertet = faces.GetData (posnr);
 
-	    el.NB(i) = othertet;
-	    if (othertet)
-	      {
-		int fnr = tets.Get(othertet).FaceNr (i3);
-		tets.Elem(othertet).NB(fnr) = elnr;
-	      }
-	  }
-	else
-	  {
-	    faces.SetData (posnr, elnr);	
-	    el.NB(i) = 0;
-	  }
+            el.NB(i) = othertet;
+            if (othertet)
+              {
+                int fnr = tets[othertet-1].FaceNr (i3);
+                tets[othertet-1].NB(fnr) = elnr;
+              }
+          }
+        else
+          {
+            faces.SetData (posnr, elnr);        
+            el.NB(i) = 0;
+          }
       }
   }
 
@@ -147,7 +147,7 @@ namespace netgen
   */
   class SphereList 
   {
-    NgArray<int> links;
+    Array<int> links;
   public:
     SphereList () 
     { ; }
@@ -155,22 +155,22 @@ namespace netgen
     void AddElement (int elnr)
     {
       if (elnr > links.Size())
-	links.Append (1);
-      links.Elem(elnr) = elnr;
+        links.Append (1);
+      links[elnr-1] = elnr;
     }
 
     void DeleteElement (int elnr)
     {
-      links.Elem(elnr) = 0;
+      links[elnr-1] = 0;
     }    
   
     void ConnectElement (int eli, int toi)
     {
-      links.Elem (eli) = links.Get (toi);
-      links.Elem (toi) = eli;
+      links[eli-1] = links[toi-1];
+      links[toi-1] = eli;
     }
       
-    void GetList (int eli, NgArray<int> & linked) const;
+    void GetList (int eli, Array<int> & linked) const;
 
     template <typename TFUNC>
     void IterateList (int eli, TFUNC func)
@@ -179,7 +179,7 @@ namespace netgen
       do
         {
           func(pi);
-          pi = links.Get(pi);
+          pi = links[pi-1];
         }
       while (pi != eli);
     }
@@ -187,7 +187,7 @@ namespace netgen
   };
 
 
-  void SphereList :: GetList (int eli, NgArray<int> & linked) const
+  void SphereList :: GetList (int eli, Array<int> & linked) const
   {
     linked.SetSize (0);
     int pi = eli;
@@ -195,20 +195,20 @@ namespace netgen
     do
       {
 #ifdef DELAUNAY_DEBUG
-	if (pi <= 0 || pi > links.Size())
-	  {
-	    cerr << "link, error " << endl;
-	    cerr << "pi = " << pi << " linked.s = " << linked.Size() << endl;
-	    exit(1);
-	  }
-	if (linked.Size() > links.Size())
-	  {
-	    cerr << "links have loop" << endl;
-	    exit(1);
-	  }
+        if (pi <= 0 || pi > links.Size())
+          {
+            cerr << "link, error " << endl;
+            cerr << "pi = " << pi << " linked.s = " << linked.Size() << endl;
+            exit(1);
+          }
+        if (linked.Size() > links.Size())
+          {
+            cerr << "links have loop" << endl;
+            exit(1);
+          }
 #endif
-	linked.Append (pi);
-	pi = links.Get(pi);
+        linked.Append (pi);
+        pi = links[pi-1];
       }
     while (pi != eli);
   }
@@ -217,15 +217,15 @@ namespace netgen
 
 
 
-  void AddDelaunayPoint (PointIndex newpi, const Point3d & newp, 
-			 NgArray<DelaunayTet> & tempels, 
-			 Mesh & mesh,
-			 DTREE & tettree,
-			 MeshNB & meshnb,
-			 NgArray<Point<3> > & centers, NgArray<double> & radi2,
-			 NgArray<int> & connected, NgArray<int> & treesearch, 
-			 NgArray<int> & freelist, SphereList & list,
-			 IndexSet & insphere, IndexSet & closesphere, Array<DelaunayTet> & newels)
+  void AddDelaunayPoint (PointIndex newpi, const Point<3> & newp, 
+                         Array<DelaunayTet> & tempels, 
+                         Mesh & mesh,
+                         DTREE & tettree,
+                         MeshNB & meshnb,
+                         Array<Point<3> > & centers, Array<double> & radi2,
+                         Array<int> & connected, Array<int> & treesearch, 
+                         Array<int> & freelist, SphereList & list,
+                         IndexSet & insphere, IndexSet & closesphere, Array<DelaunayTet> & newels)
   {
     static Timer t("Meshing3::AddDelaunayPoint", NoTracing, NoTiming); RegionTimer reg(t);
     static Timer tsearch("addpoint, search", NoTracing, NoTiming);
@@ -241,7 +241,7 @@ namespace netgen
 
     const Point<3> * pp[4];
     Point<3> pc;
-    Point3d tpmin, tpmax;
+    Point<3> tpmin, tpmax;
 
 
 
@@ -258,16 +258,16 @@ namespace netgen
 
     for (auto jjj : treesearch)
       {
-	quot = Dist2 (centers.Get(jjj), newp) / radi2.Get(jjj);
-	
-	if((cfelind == -1 || quot < 0.99*minquot) && quot < 1)
-	  {
-	    minquot = quot;
-	    el = tempels.Get(jjj);
-	    cfelind = jjj;
-	    if(minquot < 0.917632)
-	      break;
-	  }
+        quot = Dist2 (centers.Get(jjj), newp) / radi2.Get(jjj);
+        
+        if((cfelind == -1 || quot < 0.99*minquot) && quot < 1)
+          {
+            minquot = quot;
+            el = tempels.Get(jjj);
+            cfelind = jjj;
+            if(minquot < 0.917632)
+              break;
+          }
       }
     */
 
@@ -276,8 +276,8 @@ namespace netgen
     tettree.GetFirstIntersecting
       (newp, newp, [&](const auto pi)
        {
-         double rad2 = radi2.Get(pi);
-         double d2 = Dist2 (centers.Get(pi), newp); //  / radi2.Get(pi);
+         double rad2 = radi2[pi-1];
+         double d2 = Dist2 (centers[pi-1], newp); //  / radi2.Get(pi);
          if (d2 >= rad2) return false;
          
          // if (d2 < 0.917632 * rad2)
@@ -287,10 +287,10 @@ namespace netgen
              return true;
            }
          
-	if (cfelind == -1 || d2 < 0.99*minquot*rad2) 
-	  {
-	    minquot = d2/rad2;
-	    cfelind = pi;
+        if (cfelind == -1 || d2 < 0.99*minquot*rad2) 
+          {
+            minquot = d2/rad2;
+            cfelind = pi;
           }
         return false;
        } );
@@ -298,10 +298,10 @@ namespace netgen
 
     if (cfelind == -1)
       {
-	PrintWarning ("Delaunay, point not in any sphere");
-	return;
+        PrintWarning ("Delaunay, point not in any sphere");
+        return;
       }
-	
+        
     tfind.Start();
     /*
       insphere:     point is in sphere -> delete element
@@ -323,75 +323,75 @@ namespace netgen
 
     while (changed)
       {
-	changed = false;
-	starti = nstarti;
-	nstarti = insphere.GetArray().Size()+1;
+        changed = false;
+        starti = nstarti;
+        nstarti = insphere.GetArray().Size()+1;
 
 
-	// if point in sphere, then it is also closesphere
-	for (int j = starti; j < nstarti; j++)
-	  {
-	    int helind = insphere.GetArray().Get(j);
-	    if (!closesphere.IsIn (helind))
-	      closesphere.Add (helind);
-	  }
+        // if point in sphere, then it is also closesphere
+        for (int j = starti; j < nstarti; j++)
+          {
+            int helind = insphere.GetArray()[j-1];
+            if (!closesphere.Contains (helind))
+              closesphere.Add (helind);
+          }
 
-	// add connected spheres to insphere - list
-	for (int j = starti; j < nstarti; j++)
-	  {
-	    list.IterateList (insphere.GetArray().Get(j),
+        // add connected spheres to insphere - list
+        for (int j = starti; j < nstarti; j++)
+          {
+            list.IterateList (insphere.GetArray()[j-1],
                               [&](int celind)
                               {
-                                if (tempels.Get(celind)[0] != PointIndex(PointIndex::INVALID) && 
-                                    !insphere.IsIn (celind))
+                                if (tempels[celind-1][0] != PointIndex(PointIndex::INVALID) && 
+                                    !insphere.Contains (celind))
                                   {
                                     changed = true;
                                     insphere.Add (celind);
                                   }
                               });
-	  }
-	
-	// check neighbour-tets
-	for (int j = starti; j < nstarti; j++)
-	  for (int k = 0; k < 4; k++)
-	    {
-	      int helind = insphere.GetArray().Get(j);
-	      int nbind = meshnb.GetNB (helind, k);
+          }
+        
+        // check neighbour-tets
+        for (int j = starti; j < nstarti; j++)
+          for (int k = 0; k < 4; k++)
+            {
+              int helind = insphere.GetArray()[j-1];
+              int nbind = meshnb.GetNB (helind, k);
 
-	      if (nbind && !insphere.IsIn (nbind) )
-		{
-                  double d2 = Dist2 (centers.Get(nbind), newp);
-		  if (d2 < radi2.Get(nbind) * (1+1e-8) )
-		    closesphere.Add (nbind);
-		    
-		  if (d2 < radi2.Get(nbind) * (1 + 1e-12))
-		    {
-		      // point is in sphere -> remove tet
-		      insphere.Add (nbind);
-		      changed = true;
-		    }
-		  else
-		    {
-		      PointIndices<3> i3 = tempels.Get(helind).GetFace (k);
-		      const Point<3> & p1 = mesh[i3[0]];
-		      const Point<3> & p2 = mesh[i3[1]];
-		      const Point<3> & p3 = mesh[i3[2]];
+              if (nbind && !insphere.Contains (nbind) )
+                {
+                  double d2 = Dist2 (centers[nbind-1], newp);
+                  if (d2 < radi2[nbind-1] * (1+1e-8) )
+                    closesphere.Add (nbind);
+                    
+                  if (d2 < radi2[nbind-1] * (1 + 1e-12))
+                    {
+                      // point is in sphere -> remove tet
+                      insphere.Add (nbind);
+                      changed = true;
+                    }
+                  else
+                    {
+                      PointIndices<3> i3 = tempels[helind-1].GetFace (k);
+                      const Point<3> & p1 = mesh[i3[0]];
+                      const Point<3> & p2 = mesh[i3[1]];
+                      const Point<3> & p3 = mesh[i3[2]];
 
-		      Vec<3> n = Cross (p2-p1, p3-p1);
+                      Vec<3> n = Cross (p2-p1, p3-p1);
                       n /= n.Length();
 
-		      double dist = n * (newp-p1);
-                      double scal = n * (mesh.Point (tempels.Get(helind)[k])-p1);
-		      if (scal > 0) dist *= -1;
+                      double dist = n * (newp-p1);
+                      double scal = n * (mesh.Point (tempels[helind-1][k])-p1);
+                      if (scal > 0) dist *= -1;
 
-		      if (dist > -1e-10)  // 1e-10
-			{
-			  insphere.Add (nbind);
-			  changed = true;
-			}
-		    }
-		}
-	    }
+                      if (dist > -1e-10)  // 1e-10
+                        {
+                          insphere.Add (nbind);
+                          changed = true;
+                        }
+                    }
+                }
+            }
       } // while (changed)
 
     tfind.Stop();
@@ -402,68 +402,68 @@ namespace netgen
 
     for (int celind : insphere.GetArray())
       for (int k = 0; k < 4; k++)
-	{
-	  int nbind = meshnb.GetNB (celind, k);
+        {
+          int nbind = meshnb.GetNB (celind, k);
 
-	  if (!nbind || !insphere.IsIn (nbind))
-	    {
-	      tempels.Get (celind).GetFace (k, face);
-		
-	      // Element newel(TET);
+          if (!nbind || !insphere.Contains (nbind))
+            {
+              tempels[celind-1].GetFace (k, face);
+                
+              // Element newel(TET);
               DelaunayTet newel;
-	      for (int l = 0; l < 3; l++)
+              for (int l = 0; l < 3; l++)
                 newel[l] = face[l];
               newel[3] = newpi;
 
-	      newels.Append (newel);
+              newels.Append (newel);
 
 #ifdef DEBUG_DELAUNAY
               Vec<3> v1 = mesh[face[1]] - mesh[face[0]];
               Vec<3> v2 = mesh[face[2]] - mesh[face[0]];
-	      Vec<3> n = Cross (v1, v2);
+              Vec<3> n = Cross (v1, v2);
 
               n.Normalize();
-	      if (n * Vec3d(mesh.Point (face[0]), 
-			    mesh.Point (tempels.Get(celind)[k]))
-		  > 0)
-		n *= -1;
+              if (n * Vec<3>(mesh.Point (face[0]), 
+                            mesh.Point (tempels.Get(celind)[k]))
+                  > 0)
+                n *= -1;
 
               double hval = n *  ( newp - mesh[face[0]]);
-		
-	      if (hval > -1e-12)
-		{
-		  cerr << "vec to outer" << endl;
-		  (*testout) << "vec to outer, hval = " << hval << endl;
-		  (*testout) << "v1 x v2 = " << Cross (v1, v2) << endl;
-		  (*testout) << "facep: "
-			     << mesh.Point (face[0]) << " "
-			     << mesh.Point (face[1]) << " "
-			     << mesh.Point (face[2]) << endl;
-		}
+                
+              if (hval > -1e-12)
+                {
+                  cerr << "vec to outer" << endl;
+                  (*testout) << "vec to outer, hval = " << hval << endl;
+                  (*testout) << "v1 x v2 = " << Cross (v1, v2) << endl;
+                  (*testout) << "facep: "
+                             << mesh.Point (face[0]) << " "
+                             << mesh.Point (face[1]) << " "
+                             << mesh.Point (face[2]) << endl;
+                }
 #endif
-	    }
-	}
+            }
+        }
 
     meshnb.ResetFaceHT (10*insphere.GetArray().Size()+1);
 
     for (auto celind : insphere.GetArray())
       {
-	meshnb.Delete (celind); 
-	list.DeleteElement (celind);
-	  
-	for (int k = 0; k < 4; k++)
-        tempels.Elem(celind)[k] = PointIndex::INVALID;
+        meshnb.Delete (celind); 
+        list.DeleteElement (celind);
+          
+        for (int k = 0; k < 4; k++)
+        tempels[celind-1][k] = PointIndex::INVALID;
         
         tettree.DeleteElement (celind);
-	freelist.Append (celind);
+        freelist.Append (celind);
       }
 
     bool hasclose = false;
     for (int ind : closesphere.GetArray())
       {
-	if (!insphere.IsIn(ind) &&
-	    fabs (Dist2 (centers.Get (ind), newp) - radi2.Get(ind)) < 1e-8 )
-	  hasclose = true;
+        if (!insphere.Contains (ind) &&
+            fabs (Dist2 (centers[ind-1], newp) - radi2[ind-1]) < 1e-8 )
+          hasclose = true;
       }
 
     /*
@@ -473,85 +473,85 @@ namespace netgen
     */
     for (const auto & newel : newels)
       {
-	int nelind;
+        int nelind;
 
-	if (!freelist.Size())
-	  {
-	    tempels.Append (newel);
-	    nelind = tempels.Size();
-	  }
-	else
-	  {
-	    nelind = freelist.Last();
-	    freelist.DeleteLast();
+        if (!freelist.Size())
+          {
+            tempels.Append (newel);
+            nelind = tempels.Size();
+          }
+        else
+          {
+            nelind = freelist.Last();
+            freelist.DeleteLast();
 
-	    tempels.Elem(nelind) = newel;
-	  }
+            tempels[nelind-1] = newel;
+          }
 
-	meshnb.Add (nelind);
-	list.AddElement (nelind);
+        meshnb.Add (nelind);
+        list.AddElement (nelind);
 
-	for (int k = 0; k < 4; k++)
-	  pp[k] = &mesh.Point (newel[k]);
+        for (int k = 0; k < 4; k++)
+          pp[k] = &mesh.Point (newel[k]);
 
-	if (CalcSphereCenter (&pp[0], pc) )
-	  {
+        if (CalcSphereCenter (&pp[0], pc) )
+          {
 #ifdef DEBUG_DELAUNAY
-	    PrintSysError ("Delaunay: New tet is flat");
+            PrintSysError ("Delaunay: New tet is flat");
 
-	    (*testout) << "new tet is flat" << endl;
-	    for (int k = 0; k < 4; k++)
-	      (*testout) << newel[k] << " ";
-	    (*testout) << endl;
-	    for (int k = 0; k < 4; k++)
-	      (*testout) << *pp[k-1] << " ";
-	    (*testout) << endl;
+            (*testout) << "new tet is flat" << endl;
+            for (int k = 0; k < 4; k++)
+              (*testout) << newel[k] << " ";
+            (*testout) << endl;
+            for (int k = 0; k < 4; k++)
+              (*testout) << *pp[k-1] << " ";
+            (*testout) << endl;
 #endif
             ;
-	  }
+          }
 
-	double r2 = Dist2 (*pp[0], pc);
-	if (hasclose)
+        double r2 = Dist2 (*pp[0], pc);
+        if (hasclose)
           /*
-	  for (int k = 1; k <= closesphere.GetArray().Size(); k++)
-	    {
-	      int csameind = closesphere.GetArray().Get(k); 
+          for (int k = 1; k <= closesphere.GetArray().Size(); k++)
+            {
+              int csameind = closesphere.GetArray().Get(k); 
           */
           for (int csameind : closesphere.GetArray())
             {
-	      if (!insphere.IsIn(csameind) &&
-		  fabs (r2 - radi2.Get(csameind)) < 1e-10 && 
-		  Dist2 (pc, centers.Get(csameind)) < 1e-20)
-		{
-		  pc = centers.Get(csameind);
-		  r2 = radi2.Get(csameind);
-		  list.ConnectElement (nelind, csameind);
-		  break;
-		}
-	    }
+              if (!insphere.Contains (csameind) &&
+                  fabs (r2 - radi2[csameind-1]) < 1e-10 && 
+                  Dist2 (pc, centers[csameind-1]) < 1e-20)
+                {
+                  pc = centers[csameind-1];
+                  r2 = radi2[csameind-1];
+                  list.ConnectElement (nelind, csameind);
+                  break;
+                }
+            }
       
-	if (centers.Size() < nelind)
-	  {
-	    centers.Append (pc);
-	    radi2.Append (r2);
-	  }
-	else
-	  {
-	    centers.Elem(nelind) = pc;
-	    radi2.Elem(nelind) = r2;
-	  }
+        if (centers.Size() < nelind)
+          {
+            centers.Append (pc);
+            radi2.Append (r2);
+          }
+        else
+          {
+            centers[nelind-1] = pc;
+            radi2[nelind-1] = r2;
+          }
 
-	closesphere.Add (nelind);
-	  
-	tpmax = tpmin = *pp[0];
-	for (int k = 1; k <= 3; k++)
-	  {
-	    tpmin.SetToMin (*pp[k]);
-	    tpmax.SetToMax (*pp[k]);
-	  }
-	tpmax = tpmax + 0.01 * (tpmax - tpmin);
+        closesphere.Add (nelind);
+          
+        tpmax = tpmin = *pp[0];
+        for (int k = 1; k <= 3; k++)
+          {
+            SetToMin (tpmin, *pp[k]);
+            SetToMax (tpmax, *pp[k]);
+          }
+        tpmax = tpmax + 0.01 * (tpmax - tpmin);
         tinsert.Start();
-	tettree.Insert (tpmin, tpmax, nelind);
+        tettree.Insert (tpmin, tpmax, nelind);
         tinsert.Stop();
       }
       tnewtets.Stop();
@@ -563,19 +563,19 @@ namespace netgen
 
 
   void Delaunay1 (Mesh & mesh, int domainnr, const MeshingParameters & mp, const AdFront3 & adfront,
-		  NgArray<DelaunayTet> & tempels,
-		  int oldnp, DelaunayTet & startel, Point3d & pmin, Point3d & pmax)
+                  Array<DelaunayTet> & tempels,
+                  int oldnp, DelaunayTet & startel, Point<3> & pmin, Point<3> & pmax)
   {
     static Timer t("Meshing3::Delaunay1"); RegionTimer reg(t);
     
-    NgArray<Point<3>> centers;
-    NgArray<double> radi2;
+    Array<Point<3>> centers;
+    Array<double> radi2;
   
     Box<3> bbox(Box<3>::EMPTY_BOX);
 
     for (auto & face : adfront.Faces())
-      for (PointIndex pi : face.Face().PNums())      
-        bbox.Add (mesh.Point(pi));
+      for (Front3PointIndex fpi : face.Face().PNums())      
+        bbox.Add (mesh.Point(adfront.GetGlobalIndex(fpi)));
 
     for (PointIndex pi : mesh.LockedPoints())
       bbox.Add (mesh.Point (pi));
@@ -590,8 +590,8 @@ namespace netgen
     vdiag = Vec<3> (r1, r1, r1);
     //double r2;
 
-    Point<3> pmin2 = pmin - 8 * vdiag;
-    Point<3> pmax2 = pmax + 8 * vdiag;
+    Point<3> pmin2 = pmin - 8.0 * vdiag;
+    Point<3> pmax2 = pmax + 8.0 * vdiag;
 
     Point<3> cp1(pmin2), cp2(pmax2), cp3(pmax2), cp4(pmax2);
     cp2(0) = pmin2(0);
@@ -611,12 +611,12 @@ namespace netgen
     usep = false;
 
     for (auto & face : adfront.Faces())
-      for (PointIndex pi : face.Face().PNums())      
-        usep[pi] = true;
+      for (Front3PointIndex fpi : face.Face().PNums())      
+        usep[adfront.GetGlobalIndex(fpi)] = true;
 
     /*
     for (size_t i = oldnp + PointIndex::BASE; 
-	 i < np + PointIndex::BASE; i++)
+         i < np + PointIndex::BASE; i++)
     */
     for (auto i : mesh.Points().Range().Modify(oldnp, -4))
       usep[i] = true;
@@ -626,13 +626,16 @@ namespace netgen
     
     // mark points of free edge segments (no adjacent face)
     for (auto & seg : mesh.LineSegments())
-      if(seg.domin == domainnr && seg.domout == domainnr)
+    {
+      const auto & ed = mesh.GetEdgeDescriptor(seg.GetIndex());
+      if(ed.DomainIn() == domainnr && ed.DomainOut() == domainnr)
       {
         usep[seg[0]] = true;
         usep[seg[1]] = true;
       }
+    }
 
-    NgArray<int> freelist;
+    Array<int> freelist;
 
     int cntp = 0;
 
@@ -648,7 +651,7 @@ namespace netgen
     tempels.Append (startel);
     meshnb.Add (1);
     list.AddElement (1);
-    NgArray<int> connected, treesearch;
+    Array<int> connected, treesearch;
 
     Box<3> tbox(Box<3>::EMPTY_BOX);
     for (size_t k = 0; k < 4; k++)
@@ -660,7 +663,7 @@ namespace netgen
     tettree.Insert (tpmin, tpmax, 1);
 
     Point<3> pc;
-	  
+          
     const Point<3> * pp[4];
     for (int k = 0; k < 4; k++)
       pp[k] = &mesh.Point (startel[k]);
@@ -689,42 +692,42 @@ namespace netgen
     // for (PointIndex pi = mesh.Points().Begin(); pi < mesh.Points().End()-4; pi++)
     for (PointIndex pi : mesh.Points().Range().Modify(0, -4))
       // mixed[pi] = PointIndex ( (prim * pi) % np + PointIndex::BASE );
-      mixed[pi] = (prim * (pi-IndexBASE<PointIndex>()+1)) % np + IndexBASE<PointIndex>() ;
+      mixed[pi] = (prim * (pi.Nr1())) % np + IndexBASE<PointIndex>() ;
 
     Array<DelaunayTet> newels;
     // for (PointIndex pi = mesh.Points().Begin(); pi < mesh.Points().End()-4; pi++)
     for (PointIndex pi : mesh.Points().Range().Modify(0, -4))      
       {
-	if ((pi-IndexBASE<PointIndex>()) % 1000 == 0)
-	  {
-	    if ((pi-IndexBASE<PointIndex>()) % 10000 == 0)
-	      PrintDot ('+');
-	    else
-	      PrintDot ('.');
-	  }
+        if ((pi-IndexBASE<PointIndex>()) % 1000 == 0)
+          {
+            if ((pi-IndexBASE<PointIndex>()) % 10000 == 0)
+              PrintDot ('+');
+            else
+              PrintDot ('.');
+          }
 
-	multithread.percent = 100.0 * (pi-IndexBASE<PointIndex>()) / np;
-	if (multithread.terminate)
-	  break;
+        multithread.percent = 100.0 * (pi-IndexBASE<PointIndex>()) / np;
+        if (multithread.terminate)
+          break;
 
-	PointIndex newpi = mixed[pi];
+        PointIndex newpi = mixed[pi];
 
-	if (!usep[newpi])
-	  continue;
+        if (!usep[newpi])
+          continue;
 
-	cntp++;
+        cntp++;
 
-	const MeshPoint & newp = mesh[newpi];
+        const MeshPoint & newp = mesh[newpi];
       
-	AddDelaunayPoint (newpi, newp, tempels, mesh,
-			  tettree, meshnb, centers, radi2, 
-			  connected, treesearch, freelist, list, insphere, closesphere, newels);
+        AddDelaunayPoint (newpi, newp, tempels, mesh,
+                          tettree, meshnb, centers, radi2, 
+                          connected, treesearch, freelist, list, insphere, closesphere, newels);
 
       }
     
     for (int i = tempels.Size(); i >= 1; i--)
-      if (!tempels.Get(i)[0].IsValid())
-	tempels.DeleteElement (i);
+      if (!tempels[i-1][0].IsValid())
+        tempels.DeleteElement(i-1);
 
     PrintDot ('\n');
 
@@ -745,7 +748,7 @@ namespace netgen
   }
 
 
-  void DelaunayRemoveDegenerated( const Mesh::T_POINTS & points, NgArray<DelaunayTet> & tempels, int np )
+  void DelaunayRemoveDegenerated( const Mesh::T_POINTS & points, Array<DelaunayTet> & tempels, int np )
   {
     static Timer tdegenerated("Delaunay - remove degenerated"); RegionTimer rt(tdegenerated);
 
@@ -755,48 +758,48 @@ namespace netgen
     int ndeg = 0;
     for (int i = 1; i <= tempels.Size(); i++)
       {
-	Element el(4);
-	for (int j = 0; j < 4; j++)
-	  el[j] = tempels.Elem(i)[j];
-	//      Element & el = tempels.Elem(i);
-	const Point3d & lp1 = points[el[0]];
-	const Point3d & lp2 = points[el[1]];
-	const Point3d & lp3 = points[el[2]];
-	const Point3d & lp4 = points[el[3]];
-	Vec3d v1(lp1, lp2);
-	Vec3d v2(lp1, lp3);
-	Vec3d v3(lp1, lp4);
-	Vec3d n = Cross (v1, v2);
-	double vol = n * v3;
+        Element el(4);
+        for (int j = 0; j < 4; j++)
+          el[j] = tempels[i-1][j];
+        //      Element & el = tempels.Elem(i);
+        const Point<3> & lp1 = points[el[0]];
+        const Point<3> & lp2 = points[el[1]];
+        const Point<3> & lp3 = points[el[2]];
+        const Point<3> & lp4 = points[el[3]];
+        Vec<3> v1(lp1, lp2);
+        Vec<3> v2(lp1, lp3);
+        Vec<3> v3(lp1, lp4);
+        Vec<3> n = Cross (v1, v2);
+        double vol = n * v3;
 
-	double h = v1.Length() + v2.Length() + v3.Length();
-	if (fabs (vol) < 1e-8 * (h * h * h) &&
-	    (el[0] < IndexBASE<PointIndex>()+np &&
+        double h = v1.Length() + v2.Length() + v3.Length();
+        if (fabs (vol) < 1e-8 * (h * h * h) &&
+            (el[0] < IndexBASE<PointIndex>()+np &&
              el[1] < IndexBASE<PointIndex>()+np &&
-	     el[2] < IndexBASE<PointIndex>()+np &&
+             el[2] < IndexBASE<PointIndex>()+np &&
              el[3] < IndexBASE<PointIndex>()+np) )   // old: 1e-12
-	  {
-	    badnode.SetBitAtomic(el[0]);
-	    badnode.SetBitAtomic(el[1]);
-	    badnode.SetBitAtomic(el[2]);
-	    badnode.SetBitAtomic(el[3]);
-	    ndeg++;
-	    (*testout) << "vol = " << vol << " h = " << h << endl;
-	  }
+          {
+            badnode.SetBitAtomic(el[0]);
+            badnode.SetBitAtomic(el[1]);
+            badnode.SetBitAtomic(el[2]);
+            badnode.SetBitAtomic(el[3]);
+            ndeg++;
+            (*testout) << "vol = " << vol << " h = " << h << endl;
+          }
 
-	if (vol > 0)
-	  Swap (el[2], el[3]);
+        if (vol > 0)
+          Swap (el[2], el[3]);
       }
 
     auto ne = tempels.Size();
     for (int i = ne; i >= 1; i--)
       {
-	const DelaunayTet & el = tempels.Get(i);
-	if (badnode.Test(el[0]) ||
-	    badnode.Test(el[1]) ||
-	    badnode.Test(el[2]) ||
-	    badnode.Test(el[3]) )
-	  tempels.DeleteElement(i);
+        const DelaunayTet & el = tempels[i-1];
+        if (badnode.Test(el[0]) ||
+            badnode.Test(el[1]) ||
+            badnode.Test(el[2]) ||
+            badnode.Test(el[3]) )
+          tempels.DeleteElement(i-1);
       }
 
   
@@ -804,7 +807,7 @@ namespace netgen
   }
 
   // Remove flat tets containing two adjacent surface trigs
-  void DelaunayRemoveTwoTriaTets( const Mesh & mesh, NgArray<DelaunayTet> & tempels, NgArray<int> & openels )
+  void DelaunayRemoveTwoTriaTets( const Mesh & mesh, Array<DelaunayTet> & tempels, Array<int> & openels )
   {
     static Timer topenel("Delaunay - find openel"); RegionTimer rt(topenel);
 
@@ -814,7 +817,7 @@ namespace netgen
 
     for (int i = 1; i <= mesh.GetNOpenElements(); i++)
       {
-        const Element2d & tri = mesh.OpenElement(i);
+        const Element2dRef & tri = mesh.OpenElement(i);
         bnd_points.SetBit(tri[0]);
         bnd_points.SetBit(tri[1]);
         bnd_points.SetBit(tri[2]);
@@ -871,10 +874,10 @@ namespace netgen
     openels.SetSize(0);
     for (int i = 1; i <= mesh.GetNOpenElements(); i++)
       {
-	const Element2d & tri = mesh.OpenElement(i);
+        const Element2dRef & tri = mesh.OpenElement(i);
         // ngcore::IVec<3,PointIndex> i3(tri[0], tri[1], tri[2]);
         PointIndices<3> i3(tri[0], tri[1], tri[2]);
-	i3.Sort();
+        i3.Sort();
         if(!face_table.Used(i3))
             openels.Append(i);
       }
@@ -885,7 +888,7 @@ namespace netgen
            [&](auto & table, int i)
            {
              auto openel_i = openels[i];
-             const Element2d & tri = mesh.OpenElement(openel_i);
+             const Element2dRef & tri = mesh.OpenElement(openel_i);
              table.Add(tri[0], openel_i);
              table.Add(tri[1], openel_i);
              table.Add(tri[2], openel_i);
@@ -898,7 +901,7 @@ namespace netgen
         for (auto i_ : myrange)
           {
             auto i = openels[i_];
-            const Element2d & tri = mesh.OpenElement(i);
+            const Element2dRef & tri = mesh.OpenElement(i);
 
             for( auto edge : Range(3) )
             {
@@ -936,14 +939,14 @@ namespace netgen
 
                         if(el[0]==pi3 || el[1]==pi3 || el[2]==pi3 || el[3]==pi3)
                         {
-                            const Point3d & p1 = mesh[pi0];
-                            const Point3d & p2 = mesh[pi1];
-                            const Point3d & p3 = mesh[pi2];
-                            const Point3d & p4 = mesh[pi3];
-                            Vec3d v1(p1, p2);
-                            Vec3d v2(p1, p3);
-                            Vec3d v3(p1, p4);
-                            Vec3d n = Cross (v1, v2);
+                            const Point<3> & p1 = mesh[pi0];
+                            const Point<3> & p2 = mesh[pi1];
+                            const Point<3> & p3 = mesh[pi2];
+                            const Point<3> & p4 = mesh[pi3];
+                            Vec<3> v1(p1, p2);
+                            Vec<3> v2(p1, p3);
+                            Vec<3> v3(p1, p4);
+                            Vec<3> n = Cross (v1, v2);
                             double vol = n * v3;
 
                             double h = v1.Length() + v2.Length() + v3.Length();
@@ -962,16 +965,16 @@ namespace netgen
 
     for (int i = ne; i >= 1; i--)
       {
-	const DelaunayTet & el = tempels.Get(i);
-	if (badnode[el[0]] ||
-	    badnode[el[1]] ||
-	    badnode[el[2]] ||
-	    badnode[el[3]] )
-	  tempels.DeleteElement(i);
+        const DelaunayTet & el = tempels[i-1];
+        if (badnode[el[0]] ||
+            badnode[el[1]] ||
+            badnode[el[2]] ||
+            badnode[el[3]] )
+          tempels.DeleteElement(i-1);
       }
   }
 
-  void DelaunayRemoveIntersecting( const Mesh & mesh, NgArray<DelaunayTet> & tempels, NgArray<int> & openels, Point3d pmin, Point3d pmax )
+  void DelaunayRemoveIntersecting( const Mesh & mesh, Array<DelaunayTet> & tempels, Array<int> & openels, Point<3> pmin, Point<3> pmax )
   {
     static Timer trem_intersect("Delaunay - remove intersecting"); RegionTimer rt(trem_intersect);
 
@@ -979,118 +982,118 @@ namespace netgen
     PrintMessage (3, "Remove intersecting");
     if (openels.Size())
       {
-	BoxTree<3> setree(pmin, pmax);
+        BoxTree<3> setree(pmin, pmax);
 
-	/*      
-		cout << "open elements in search tree: " << openels.Size() << endl;
-		cout << "pmin, pmax = " << pmin << " - " << pmax << endl;
-	*/
+        /*      
+                cout << "open elements in search tree: " << openels.Size() << endl;
+                cout << "pmin, pmax = " << pmin << " - " << pmax << endl;
+        */
 
-	for (int i = 1; i <= openels.Size(); i++)
-	  {
-	    int fnr;
-	    fnr = openels.Get(i);
-	    if (fnr)
-	      {
-		const Element2d & tri = mesh.OpenElement(fnr);
-	      
-		Point3d ltpmin (mesh.Point(tri[0]));
-		Point3d ltpmax (ltpmin);
-	      
-		for (int k = 2; k <= 3; k++)
-		  {
-		    ltpmin.SetToMin (mesh.Point (tri.PNum(k)));
-		    ltpmax.SetToMax (mesh.Point (tri.PNum(k)));
-		  }
-		setree.Insert (ltpmin, ltpmax, fnr);
-	      }
-	  }
+        for (int i = 0; i < openels.Size(); i++)
+          {
+            int fnr;
+            fnr = openels[i];
+            if (fnr)
+              {
+                const Element2dRef & tri = mesh.OpenElement(fnr);
+              
+                Point<3> ltpmin (mesh.Point(tri[0]));
+                Point<3> ltpmax (ltpmin);
+              
+                for (int k = 2; k <= 3; k++)
+                  {
+                    SetToMin (ltpmin, mesh.Point (tri.PNum(k)));
+                    SetToMax (ltpmax, mesh.Point (tri.PNum(k)));
+                  }
+                setree.Insert (ltpmin, ltpmax, fnr);
+              }
+          }
       
-	NgArray<int> neartrias;
-	for (int i = 1; i <= tempels.Size(); i++)
-	  {
-	    const Point<3> *pp[4];
-	    int tetpi[4];
-	    DelaunayTet & el = tempels.Elem(i);
-	  
-	    int intersect = 0;
-	  
-	    for (int j = 0; j < 4; j++)
-	      {
-		pp[j] = &mesh.Point(el[j]);
-		tetpi[j] = el[j]-IndexBASE<PointIndex>()+1;
-	      }
-	  
-	    Point3d tetpmin(*pp[0]);
-	    Point3d tetpmax(tetpmin);
-	    for (int j = 1; j < 4; j++)
-	      {
-		tetpmin.SetToMin (*pp[j]);
-		tetpmax.SetToMax (*pp[j]);
-	      }
-	    tetpmin = tetpmin + 0.01 * (tetpmin - tetpmax);
-	    tetpmax = tetpmax + 0.01 * (tetpmax - tetpmin);
-	  
-	    setree.GetIntersecting (tetpmin, tetpmax, neartrias);
-	  
-	  
-	    //      for (j = 1; j <= mesh.GetNSE(); j++)
-	    //	{
-	    for (int jj = 1; jj <= neartrias.Size(); jj++)
-	      {
-		int j = neartrias.Get(jj);
-	      
-		const Element2d & tri = mesh.OpenElement(j);
-		const Point<3> *tripp[3];
-		int tripi[3];
-	      
-		for (int k = 1; k <= 3; k++)
-		  {
-		    tripp[k-1] = &mesh.Point (tri.PNum(k));
-		    tripi[k-1] = tri.PNum(k)-IndexBASE<PointIndex>()+1;
-		  }
-	      
-		if (IntersectTetTriangle (&pp[0], &tripp[0], tetpi, tripi))
-		  {
-		    /*
-		    int il1, il2;
-		    (*testout) << "intersect !" << endl;
-		    (*testout) << "triind: ";
-		    for (il1 = 0; il1 < 3; il1++)
-		      (*testout) << " " << tripi[il1];
-		    (*testout) << endl;
-		    (*testout) << "tetind: ";
-		    for (il2 = 0; il2 < 4; il2++)
-		      (*testout) << " " << tetpi[il2];
-		    (*testout) << endl;
-		  
-		    (*testout) << "trip: ";
-		    for (il1 = 0; il1 < 3; il1++)
-		      (*testout) << " " << *tripp[il1];
-		    (*testout) << endl;
-		    (*testout) << "tetp: ";
-		    for (il2 = 0; il2 < 4; il2++)
-		      (*testout) << " " << *pp[il2];
-		    (*testout) << endl;
-		    */
-		  
-		  
-		    intersect = 1;
-		    break;
-		  }
-	      }
-	  
-	  
-	    if (intersect)
-	      {
-		tempels.DeleteElement(i);
-		i--;
-	      }
-	  }
+        Array<int> neartrias;
+        for (int i = 1; i <= tempels.Size(); i++)
+          {
+            const Point<3> *pp[4];
+            int tetpi[4];
+            DelaunayTet & el = tempels[i-1];
+          
+            int intersect = 0;
+          
+            for (int j = 0; j < 4; j++)
+              {
+                pp[j] = &mesh.Point(el[j]);
+                tetpi[j] = el[j].Nr1();
+              }
+          
+            Point<3> tetpmin(*pp[0]);
+            Point<3> tetpmax(tetpmin);
+            for (int j = 1; j < 4; j++)
+              {
+                SetToMin (tetpmin, *pp[j]);
+                SetToMax (tetpmax, *pp[j]);
+              }
+            tetpmin = tetpmin + 0.01 * (tetpmin - tetpmax);
+            tetpmax = tetpmax + 0.01 * (tetpmax - tetpmin);
+          
+            setree.GetIntersecting (tetpmin, tetpmax, neartrias);
+          
+          
+            //      for (j = 1; j <= mesh.GetNSE(); j++)
+            //  {
+            for (int jj = 0; jj < neartrias.Size(); jj++)
+              {
+                int j = neartrias[jj];
+              
+                const Element2dRef & tri = mesh.OpenElement(j);
+                const Point<3> *tripp[3];
+                int tripi[3];
+              
+                for (int k = 1; k <= 3; k++)
+                  {
+                    tripp[k-1] = &mesh.Point (tri.PNum(k));
+                    tripi[k-1] = tri.PNum(k).Nr1();
+                  }
+              
+                if (IntersectTetTriangle (&pp[0], &tripp[0], tetpi, tripi))
+                  {
+                    /*
+                    int il1, il2;
+                    (*testout) << "intersect !" << endl;
+                    (*testout) << "triind: ";
+                    for (il1 = 0; il1 < 3; il1++)
+                      (*testout) << " " << tripi[il1];
+                    (*testout) << endl;
+                    (*testout) << "tetind: ";
+                    for (il2 = 0; il2 < 4; il2++)
+                      (*testout) << " " << tetpi[il2];
+                    (*testout) << endl;
+                  
+                    (*testout) << "trip: ";
+                    for (il1 = 0; il1 < 3; il1++)
+                      (*testout) << " " << *tripp[il1];
+                    (*testout) << endl;
+                    (*testout) << "tetp: ";
+                    for (il2 = 0; il2 < 4; il2++)
+                      (*testout) << " " << *pp[il2];
+                    (*testout) << endl;
+                    */
+                  
+                  
+                    intersect = 1;
+                    break;
+                  }
+              }
+          
+          
+            if (intersect)
+              {
+                tempels.DeleteElement(i-1);
+                i--;
+              }
+          }
       }
   }
 
-  void DelaunayRemoveOuter( const Mesh & mesh, NgArray<DelaunayTet> & tempels, const AdFront3 & adfront )
+  void DelaunayRemoveOuter( const Mesh & mesh, Array<DelaunayTet> & tempels, const AdFront3 & adfront )
   {
     static Timer trem_outer("Delaunay - remove outer"); RegionTimer rt(trem_outer);
 
@@ -1099,65 +1102,35 @@ namespace netgen
 
     // find connected tets (with no face between, and no hole due
     // to removed intersecting tets.
-    //  INDEX_3_HASHTABLE<INDEX_2> innerfaces(np);
+    //  INDEX_3_HASHTABLE<IVec<2>> innerfaces(np);
 
   
-    INDEX_3_HASHTABLE<int> boundaryfaces(mesh.GetNOpenElements()/3+1);
+    ClosedHashTable<SortedPointIndices<3>, int> boundaryfaces(2*mesh.GetNOpenElements()+8);
     /*
     for (int i = 1; i <= mesh.GetNOpenElements(); i++)
       {
-	const Element2d & tri = mesh.OpenElement(i);
-	INDEX_3 i3 (tri[0], tri[1], tri[2]);
-	i3.Sort();
-	boundaryfaces.PrepareSet (i3);
+        const Element2dRef & tri = mesh.OpenElement(i);
+        IVec<3> i3 (tri[0], tri[1], tri[2]);
+        i3.Sort();
+        boundaryfaces.PrepareSet (i3);
       }
     */
-    for (const Element2d & tri : mesh.OpenElements())
-      {
-	PointIndices<3> i3 (tri[0], tri[1], tri[2]);
-	i3.Sort();
-	boundaryfaces.PrepareSet (i3);
-      }
-    boundaryfaces.AllocateElements();
     for (int i = 1; i <= mesh.GetNOpenElements(); i++)
       {
-	const Element2d & tri = mesh.OpenElement(i);
-	PointIndices<3> i3 (tri[0], tri[1], tri[2]);
-	i3.Sort();
-	boundaryfaces.Set (i3, 1);
+        const Element2dRef & tri = mesh.OpenElement(i);
+        PointIndices<3> i3 (tri[0], tri[1], tri[2]);
+        i3.Sort();
+        boundaryfaces.Set (i3, 1);
       }
 
     /*
     for (int i = 0; i < tempels.Size(); i++)
       for (int j = 0; j < 4; j++)
-	tempels[i].NB(j) = 0;
+        tempels[i].NB(j) = 0;
     */
     for (auto & el : tempels)
       for (int j = 0; j < 4; j++)
-	el.NB(j) = 0;
-
-    /*
-    TABLE<int,PointIndex::BASE> elsonpoint(mesh.GetNP());
-
-    for (const DelaunayTet & el : tempels)
-      {
-	PointIndices<4> i4(el[0], el[1], el[2], el[3]);
-	i4.Sort();
-	elsonpoint.IncSizePrepare (i4.I1());
-	elsonpoint.IncSizePrepare (i4.I2());
-      }
-
-    elsonpoint.AllocateElementsOneBlock();
-
-    for (int i = 0; i < tempels.Size(); i++)
-      {
-	const DelaunayTet & el = tempels[i];
-	PointIndices<4> i4(el[0], el[1], el[2], el[3]);
-	i4.Sort();
-	elsonpoint.Add (i4.I1(), i+1);
-	elsonpoint.Add (i4.I2(), i+1);
-      }
-    */
+        el.NB(j) = 0;
 
     TableCreator<int, PointIndex> creator(mesh.GetNP());
     while (!creator.Done())
@@ -1179,49 +1152,49 @@ namespace netgen
     //  cout << "elsonpoint mem: ";
     //  elsonpoint.PrintMemInfo(cout);
 
-    INDEX_3_CLOSED_HASHTABLE<INDEX_2> faceht(100);   
+    ClosedHashTable<PointIndices<3>, IVec<2>> faceht(128);
   
     Element2d hel(TRIG);
     // for (PointIndex pi = mesh.Points().Begin(); pi < mesh.Points().End(); pi++)
     for (PointIndex pi : mesh.Points().Range())
       {
-	faceht.SetSize (4 * elsonpoint[pi].Size());
-	for (int ii = 0; ii < elsonpoint[pi].Size(); ii++)
-	  {
-	    int i = elsonpoint[pi][ii];
-	    const DelaunayTet & el = tempels.Get(i);
+        faceht.SetSize (8 * elsonpoint[pi].Size() + 8);
+        for (int ii = 0; ii < elsonpoint[pi].Size(); ii++)
+          {
+            int i = elsonpoint[pi][ii];
+            const DelaunayTet & el = tempels[i-1];
 
-	    for (int j = 1; j <= 4; j++)
-	      {
-		el.GetFace (j-1, hel);
-		hel.Invert();
-		hel.NormalizeNumbering();
-	      
-		if (hel[0] == pi)
-		  {
-		    PointIndices<3> i3(hel[0], hel[1], hel[2]);
-		  
-		    if (!boundaryfaces.Used (i3))
-		      {
-			if (faceht.Used (i3))
-			  {
-			    INDEX_2 i2 = faceht.Get(i3);
-			  
-			    tempels.Elem(i).NB(j-1) = i2.I1();
-			    tempels.Elem(i2.I1()).NB(i2.I2()-1) = i;
-			  }
-			else
-			  {
-			    hel.Invert();
-			    hel.NormalizeNumbering();
-			    PointIndices<3> i3i(hel[0], hel[1], hel[2]);
-			    INDEX_2 i2(i, j);
-			    faceht.Set (i3i, i2);
-			  }
-		      }
-		  }
-	      }
-	  }
+            for (int j = 1; j <= 4; j++)
+              {
+                el.GetFace (j-1, hel);
+                hel.Invert();
+                hel.NormalizeNumbering();
+              
+                if (hel[0] == pi)
+                  {
+                    PointIndices<3> i3(hel[0], hel[1], hel[2]);
+                  
+                    if (!boundaryfaces.Used (i3))
+                      {
+                        if (faceht.Used (i3))
+                          {
+                            IVec<2> i2 = faceht.Get(i3);
+                          
+                            tempels[i-1].NB(j-1) = i2[0];
+                            tempels[i2[0]-1].NB(i2[1]-1) = i;
+                          }
+                        else
+                          {
+                            hel.Invert();
+                            hel.NormalizeNumbering();
+                            PointIndices<3> i3i(hel[0], hel[1], hel[2]);
+                            IVec<2> i2(i, j);
+                            faceht.Set (i3i, i2);
+                          }
+                      }
+                  }
+              }
+          }
       }
   
     /*
@@ -1230,27 +1203,27 @@ namespace netgen
       const DelaunayTet & el = tempels.Get(i);
       for (j = 1; j <= 4; j++)
       {
-      INDEX_3 i3;
+      IVec<3> i3;
       Element2d face;
       el.GetFace1 (j, face);
       for (int kk = 1; kk <= 3; kk++)
-      i3.I(kk) = face.PNum(kk);
+      i3[kk-1] = face.PNum(kk);
 
       i3.Sort();
       if (!boundaryfaces.Used (i3))
       {
       if (innerfaces.Used(i3))
       {
-      INDEX_2 i2;
+      IVec<2> i2;
       i2 = innerfaces.Get(i3);
-      i2.I2() = i;
+      i2[1] = i;
       innerfaces.Set (i3, i2);
       }
       else
       {
-      INDEX_2 i2;
-      i2.I1() = i;
-      i2.I2() = 0;
+      IVec<2> i2;
+      i2[0] = i;
+      i2[1] = 0;
       innerfaces.Set (i3, i2);
       }
       }
@@ -1272,8 +1245,8 @@ namespace netgen
       for (i = 1; i <= innerfaces.GetNBags(); i++)
       for (j = 1; j <= innerfaces.GetBagSize(i); j++)
       {
-      INDEX_3 i3;
-      INDEX_2 i2;
+      IVec<3> i3;
+      IVec<2> i2;
       innerfaces.GetData (i, j, i3, i2);
       (*testout) << i2 << endl;
       }
@@ -1301,7 +1274,7 @@ namespace netgen
     BitArray inner(ne+1), outer(ne+1);
     inner.Clear();
     outer.Clear();
-    NgArray<int> elstack;
+    Array<int> elstack;
 
     /*
       int starti = 0;
@@ -1321,90 +1294,90 @@ namespace netgen
     int lowest_undefined_el = 1;
     while (1)
       {
-	int inside;
-	bool done = 1;
+        int inside;
+        bool done = 1;
 
-	int i;
-	for (i = lowest_undefined_el; i <= ne; i++)
-	  if (!inner.Test(i) && !outer.Test(i))
-	    {
+        int i;
+        for (i = lowest_undefined_el; i <= ne; i++)
+          if (!inner.Test(i) && !outer.Test(i))
+            {
               lowest_undefined_el = i+1;
-	      done = 0;
-	      break;
-	    }
+              done = 0;
+              break;
+            }
 
-	if (done) break;
+        if (done) break;
       
-	const DelaunayTet & el = tempels.Get(i);
-	const Point3d & p1 = mesh.Point (el[0]);
-	const Point3d & p2 = mesh.Point (el[1]);
-	const Point3d & p3 = mesh.Point (el[2]);
-	const Point3d & p4 = mesh.Point (el[3]);
+        const DelaunayTet & el = tempels[i-1];
+        const Point<3> & p1 = mesh.Point (el[0]);
+        const Point<3> & p2 = mesh.Point (el[1]);
+        const Point<3> & p3 = mesh.Point (el[2]);
+        const Point<3> & p4 = mesh.Point (el[3]);
       
-	Point3d ci = Center (p1, p2, p3, p4);
+        Point<3> ci = Center (p1, p2, p3, p4);
 
-	inside = adfront.Inside (ci);
+        inside = adfront.Inside (ci);
 
-	/*
-	  cout << "startel: " << i << endl;
-	  cout << "inside = " << inside << endl;
-	  cout << "ins2 = " << adfront->Inside (Center (ci, p1)) << endl;
-	  cout << "ins3 = " << adfront->Inside (Center (ci, p2)) << endl;
-	*/
+        /*
+          cout << "startel: " << i << endl;
+          cout << "inside = " << inside << endl;
+          cout << "ins2 = " << adfront->Inside (Center (ci, p1)) << endl;
+          cout << "ins3 = " << adfront->Inside (Center (ci, p2)) << endl;
+        */
       
-	elstack.SetSize(0);
-	elstack.Append (i);
+        elstack.SetSize(0);
+        elstack.Append (i);
   
-	while (elstack.Size())
-	  {
-	    int ei = elstack.Last();
-	    elstack.DeleteLast();
-	  
-	    if (!inner.Test(ei) && !outer.Test(ei))
-	      {
-		if (inside)
-		  inner.SetBit(ei);
-		else
-		  outer.SetBit(ei);
+        while (elstack.Size())
+          {
+            int ei = elstack.Last();
+            elstack.DeleteLast();
+          
+            if (!inner.Test(ei) && !outer.Test(ei))
+              {
+                if (inside)
+                  inner.SetBit(ei);
+                else
+                  outer.SetBit(ei);
 
 
-		for (int j = 1; j <= 4; j++)
-		  {
-		    INDEX_3 i3 = tempels.Get(ei).GetFace(j-1);
-		    /*
-		    Element2d face;
-		    tempels.Get(ei).GetFace(j, face);
-		    for (int kk = 1; kk <= 3; kk++)
-		      i3.I(kk) = face.PNum(kk);
-		    */
-		    i3.Sort();
-		  
+                for (int j = 1; j <= 4; j++)
+                  {
+                    PointIndices<3> i3 = tempels[ei-1].GetFace(j-1);
+                    /*
+                    Element2d face;
+                    tempels.Get(ei).GetFace(j, face);
+                    for (int kk = 1; kk <= 3; kk++)
+                      i3[kk-1] = face.PNum(kk);
+                    */
+                    i3.Sort();
+                  
 
-		    if (tempels.Get(ei).NB(j-1))
-		      elstack.Append (tempels.Get(ei).NB(j-1));
+                    if (tempels[ei-1].NB(j-1))
+                      elstack.Append (tempels[ei-1].NB(j-1));
 
-		    /*
-		      if (innerfaces.Used(i3))
-		      {
-		      INDEX_2 i2 = innerfaces.Get(i3);
-		      int other = i2.I1() + i2.I2() - ei;
+                    /*
+                      if (innerfaces.Used(i3))
+                      {
+                      IVec<2> i2 = innerfaces.Get(i3);
+                      int other = i2[0] + i2[1] - ei;
 
-		      if (other != tempels.Get(ei).NB1(j))
-		      cerr << "different1 !!" << endl;
+                      if (other != tempels.Get(ei).NB1(j))
+                      cerr << "different1 !!" << endl;
 
-		      if (other)
-		      {
-		      elstack.Append (other);
-		      }
-		      }
-		      else
-		      if (tempels.Get(ei).NB1(j))
-		      cerr << "different2 !!" << endl;
-		    */
+                      if (other)
+                      {
+                      elstack.Append (other);
+                      }
+                      }
+                      else
+                      if (tempels.Get(ei).NB1(j))
+                      cerr << "different2 !!" << endl;
+                    */
 
-		  }
-	      }
-	  }
+                  }
+              }
+          }
       }
 
 
@@ -1412,52 +1385,52 @@ namespace netgen
     // check outer elements
     if (debugparam.slowchecks)
       {
-	for (int i = 1; i <= ne; i++)
-	  {
-	    const DelaunayTet & el = tempels.Get(i);
-	    const Point3d & p1 = mesh.Point (el[0]);
-	    const Point3d & p2 = mesh.Point (el[1]);
-	    const Point3d & p3 = mesh.Point (el[2]);
-	    const Point3d & p4 = mesh.Point (el[3]);
-	  
-	    Point3d ci = Center (p1, p2, p3, p4);
-	  
-	    //       if (adfront->Inside (ci) != adfront->Inside (Center (ci, p1)))
-	    // 	cout << "ERROR: outer test unclear !!!" << endl;	
-	  
-	    if (inner.Test(i) != adfront.Inside (ci))
-	      {
-		/*
-		  cout << "ERROR: outer test wrong !!!" 
-		  << "inner = " << int(inner.Test(i))
-		  << "outer = " << int(outer.Test(i))
-		  << endl;
-	      
-		  cout << "Vol = " << Determinant(Vec3d(p1, p2),
-		  Vec3d(p1, p3),
-		  Vec3d(p1, p4)) << endl;
-	      
-		*/	      
-		for (int j = 1; j <= 4; j++)
-		  {
-		    Point3d hp;
-		    switch (j)
-		      {
-		      case 1: hp = Center (ci, p1); break;
-		      case 2: hp = Center (ci, p2); break;
-		      case 3: hp = Center (ci, p3); break;
-		      case 4: hp = Center (ci, p4); break;
-		      }
-		    //		  cout << "inside(" << hp << ") = " << adfront->Inside(hp) << endl;
-		  }
-	      
-	      }
-	  
-	    if (adfront.Inside(ci))
-	      outer.Clear(i);
-	    else
-	      outer.SetBit(i);
-	  }
+        for (int i = 1; i <= ne; i++)
+          {
+            const DelaunayTet & el = tempels[i-1];
+            const Point<3> & p1 = mesh.Point (el[0]);
+            const Point<3> & p2 = mesh.Point (el[1]);
+            const Point<3> & p3 = mesh.Point (el[2]);
+            const Point<3> & p4 = mesh.Point (el[3]);
+          
+            Point<3> ci = Center (p1, p2, p3, p4);
+          
+            //       if (adfront->Inside (ci) != adfront->Inside (Center (ci, p1)))
+            //  cout << "ERROR: outer test unclear !!!" << endl;        
+          
+            if (inner.Test(i) != adfront.Inside (ci))
+              {
+                /*
+                  cout << "ERROR: outer test wrong !!!" 
+                  << "inner = " << int(inner.Test(i))
+                  << "outer = " << int(outer.Test(i))
+                  << endl;
+              
+                  cout << "Vol = " << Determinant(Vec<3>(p1, p2),
+                  Vec<3>(p1, p3),
+                  Vec<3>(p1, p4)) << endl;
+              
+                */            
+                for (int j = 1; j <= 4; j++)
+                  {
+                    Point<3> hp;
+                    switch (j)
+                      {
+                      case 1: hp = Center (ci, p1); break;
+                      case 2: hp = Center (ci, p2); break;
+                      case 3: hp = Center (ci, p3); break;
+                      case 4: hp = Center (ci, p4); break;
+                      }
+                    //            cout << "inside(" << hp << ") = " << adfront->Inside(hp) << endl;
+                  }
+              
+              }
+          
+            if (adfront.Inside(ci))
+              outer.Clear(i);
+            else
+              outer.SetBit(i);
+          }
       }
 
 
@@ -1470,15 +1443,15 @@ namespace netgen
     for (i = 1; i <= innerfaces.GetNBags(); i++)
     for (j = 1; j <= innerfaces.GetBagSize(i); j++)
     {
-    INDEX_3 i3;
-    INDEX_2 i2;
+    IVec<3> i3;
+    IVec<2> i2;
     innerfaces.GetData (i, j, i3, i2);
-    if (i2.I2())
+    if (i2[1])
     {
-    if (outer.Test(i2.I1()) != outer.Test(i2.I2()))
+    if (outer.Test(i2[0]) != outer.Test(i2[1]))
     {
-    tempmesh.AddVolumeElement (tempels.Get(i2.I1()));
-    tempmesh.AddVolumeElement (tempels.Get(i2.I2()));
+    tempmesh.AddVolumeElement (tempels.Get(i2[0]));
+    tempmesh.AddVolumeElement (tempels.Get(i2[1]));
     cerr << "outer flag different for connected els" << endl;
     }
     }
@@ -1500,10 +1473,10 @@ namespace netgen
     if (tempmesh.SurfaceElement(j).GetIndex()==2)
     {
     const Element & el = tempmesh.VolumeElement(i);
-    const Element2d & sel = tempmesh.SurfaceElement(j);
+    const Element2dRef & sel = tempmesh.SurfaceElement(j);
 
-    const Point3d *tripp[3];
-    const Point3d *pp[4];
+    const Point<3> *tripp[3];
+    const Point<3> *pp[4];
     int tetpi[4], tripi[3];
 
     for (k = 1; k <= 4; k++)
@@ -1546,8 +1519,8 @@ namespace netgen
 
     for (int i = ne; i >= 1; i--)
       {
-	if (outer.Test(i))
-	  tempels.DeleteElement(i);
+        if (outer.Test(i))
+          tempels.DeleteElement(i-1);
       }
 
 
@@ -1568,16 +1541,16 @@ namespace netgen
     // PushStatus ("Delaunay meshing");
 
 
-    NgArray<DelaunayTet> tempels;
-    Point3d pmin, pmax;
+    Array<DelaunayTet> tempels;
+    Point<3> pmin, pmax;
 
     DelaunayTet startel;
 
     int oldnp = mesh.GetNP();
     if (mp.blockfill)
       {
-	BlockFillLocalH (mesh, mp);
-	PrintMessage (3, "number of points: ", mesh.GetNP());
+        BlockFillLocalH (mesh, mp);
+        PrintMessage (3, "number of points: ", mesh.GetNP());
       }
 
     int np = mesh.GetNP();
@@ -1588,60 +1561,59 @@ namespace netgen
       // improve delaunay - mesh by swapping !!!!
 
       Mesh tempmesh;
-      tempmesh.GetMemoryTracer().SetName("delaunay-tempmesh");
 
       for (auto & meshpoint : mesh.Points())
         tempmesh.AddPoint (meshpoint);
       
       for (auto & tempel : tempels)
-	{   
-	  Element el(4);
-	  for (int j = 0; j < 4; j++)
+        {   
+          Element el(4);
+          for (int j = 0; j < 4; j++)
             el[j] = tempel[j];
 
-	  el.SetIndex (1);
+          el.SetIndex (VolumeRegionIndex::FromNr1(1));
 
-	  const Point<3> & lp1 = mesh.Point (el[0]);
-	  const Point<3> & lp2 = mesh.Point (el[1]);
-	  const Point<3> & lp3 = mesh.Point (el[2]);
-	  const Point<3> & lp4 = mesh.Point (el[3]);
-	  Vec<3> v1 = lp2-lp1;
-	  Vec<3> v2 = lp3-lp1;
-	  Vec<3> v3 = lp4-lp1;
+          const Point<3> & lp1 = mesh.Point (el[0]);
+          const Point<3> & lp2 = mesh.Point (el[1]);
+          const Point<3> & lp3 = mesh.Point (el[2]);
+          const Point<3> & lp4 = mesh.Point (el[3]);
+          Vec<3> v1 = lp2-lp1;
+          Vec<3> v2 = lp3-lp1;
+          Vec<3> v3 = lp4-lp1;
 
-	  Vec<3> n = Cross (v1, v2);
-	  double vol = n * v3;
-	  if (vol > 0) swap (el[2], el[3]);
+          Vec<3> n = Cross (v1, v2);
+          double vol = n * v3;
+          if (vol > 0) swap (el[2], el[3]);
 
-	  tempmesh.AddVolumeElement (el);
-	}
+          tempmesh.AddVolumeElement (el);
+        }
 
       tempels.DeleteAll();
 
       MeshQuality3d (tempmesh);
 
-      tempmesh.AddFaceDescriptor (FaceDescriptor (1, 1, 0, 0));
-      tempmesh.AddFaceDescriptor (FaceDescriptor (2, 1, 0, 0));
+      tempmesh.AddFaceDescriptor (FaceRegion (1, 1, 0, 0));
+      tempmesh.AddFaceDescriptor (FaceRegion (2, 1, 0, 0));
 
 
     
       for (int i = 1; i <= mesh.GetNOpenElements(); i++)
-	{
-	  Element2d sel = mesh.OpenElement(i);
-	  sel.SetIndex(1);
-	  tempmesh.AddSurfaceElement (sel);
-	  swap (sel[1], sel[2]);
-	  tempmesh.AddSurfaceElement (sel);
-	}
+        {
+          Element2d sel (mesh.OpenElement(i));
+          sel.SetIndex(FaceRegionIndex::FromNr1(1));
+          tempmesh.AddSurfaceElement (sel);
+          swap (sel[1], sel[2]);
+          tempmesh.AddSurfaceElement (sel);
+        }
 
 
       for (int i = 1; i <= 4; i++)
-	{
-	  Element2d self(TRIG);
-	  self.SetIndex (1);
-	  startel.GetFace (i-1, self);
-	  tempmesh.AddSurfaceElement (self);
-	}
+        {
+          Element2d self(TRIG);
+          self.SetIndex (FaceRegionIndex::FromNr1(1));
+          startel.GetFace (i-1, self);
+          tempmesh.AddSurfaceElement (self);
+        }
 
       
       //  for (i = mesh.GetNP() - 3; i <= mesh.GetNP(); i++)
@@ -1676,23 +1648,23 @@ namespace netgen
     
       tempels.SetSize(tempmesh.GetNE());
       tempels.SetSize(0);
-      for (auto & el : tempmesh.VolumeElements())
+      for (auto el : tempmesh.VolumeElements())
         tempels.Append (el);
     }
 
     DelaunayRemoveDegenerated(mesh.Points(), tempels, np);
 
-    NgArray<int> openels;
+    Array<int> openels;
     DelaunayRemoveTwoTriaTets(mesh, tempels, openels);
     DelaunayRemoveIntersecting(mesh, tempels, openels, pmin, pmax);
     DelaunayRemoveOuter(mesh, tempels, *adfront);
 
     for (int i = 0; i < tempels.Size(); i++)
       {
-	Element el(4);
-	for (int j = 0; j < 4; j++)
-	  el[j] = tempels[i][j];
-	mesh.AddVolumeElement (el);
+        Element el(4);
+        for (int j = 0; j < 4; j++)
+          el[j] = tempels[i][j];
+        mesh.AddVolumeElement (el);
       }
 
     mesh.FindOpenElements(domainnr);

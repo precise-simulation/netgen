@@ -17,11 +17,11 @@ namespace netgen
     bool deletable;
     int tangential_plane_seg;
   
-    NgArray< const SplineSeg3<3> * > spline3_path;
-    NgArray< const LineSeg<3> * > line_path;
+    Array< const SplineSeg3<3> * > spline3_path;
+    Array< const LineSeg<3> * > line_path;
   
-    mutable NgArray < Vec<3> > x_dir, y_dir, z_dir, loc_z_dir;
-    mutable NgArray < Point<3> > p0;
+    mutable Array < Vec<3> > x_dir, y_dir, z_dir, loc_z_dir;
+    mutable Array < Point<3> > p0;
 
     mutable Vec<3> profile_tangent;
     mutable double profile_par;
@@ -41,16 +41,16 @@ namespace netgen
 
   public:
     double CalcProj(const Point<3> & point3d, Point<2> & point2d,
-		    int seg) const;
+                    int seg) const;
     void CalcProj(const Point<3> & point3d, Point<2> & point2d,
-		  int & seg, double & t) const;
+                  int & seg, double & t) const;
 
   public:
     ExtrusionFace(const SplineSeg<2> * profile_in,
-		  const SplineGeometry<3> * path_in,
-		  const Vec<3> & z_direction);
+                  const SplineGeometry<3> * path_in,
+                  const Vec<3> & z_direction);
 
-    ExtrusionFace(const NgArray<double> & raw_data);
+    ExtrusionFace(const Array<double> & raw_data);
     // default constructor for archive
     ExtrusionFace() {}
 
@@ -73,7 +73,7 @@ namespace netgen
 
     double MaxCurvature () const override;
     //virtual double MaxCurvatureLoc (const Point<3> & /* c */ , 
-    //				  double /* rad */) const;
+    //                            double /* rad */) const;
 
     void Project (Point<3> & p) const override;
 
@@ -81,8 +81,8 @@ namespace netgen
     void Print (ostream & str) const override;
   
     void GetTriangleApproximation (TriangleApproximation & tas, 
-					   const Box<3> & boundingbox, 
-					   double facets) const override;
+                                           const Box<3> & boundingbox, 
+                                           double facets) const override;
 
     const SplineGeometry<3> & GetPath(void) const {return *path;}
     const SplineSeg<2> & GetProfile(void) const {return *profile;}
@@ -90,31 +90,31 @@ namespace netgen
     bool BoxIntersectsFace(const Box<3> & box) const;
 
     void LineIntersections ( const Point<3> & p,
-			     const Vec<3> & v,
-			     const double eps,
-			     int & before,
-			     int & after,
-			     bool & intersecting ) const;
+                             const Vec<3> & v,
+                             const double eps,
+                             int & before,
+                             int & after,
+                             bool & intersecting ) const;
 
 
     bool PointInFace (const Point<3> & p, const double eps) const;
     
     INSOLID_TYPE VecInFace ( const Point<3> & p,
-			     const Vec<3> & v,
-			     const double eps ) const;
+                             const Vec<3> & v,
+                             const double eps ) const;
 
     const Vec<3> & GetYDir ( void ) const {return y_dir[latest_seg];}
     const Vec<3> & GetProfileTangent (void) const {return profile_tangent;}
     double GetProfilePar(void) const {return profile_par;}
 
-    void GetRawData(NgArray<double> & data) const;
+    void GetRawData(Array<double> & data) const;
 
     void CalcLocalCoordinates (int seg, double t, 
-			       Vec<3> & ex, Vec<3> & ey, Vec<3> & ez) const;
+                               Vec<3> & ex, Vec<3> & ey, Vec<3> & ez) const;
 
     void CalcLocalCoordinatesDeriv (int seg, double t, 
-				    Vec<3> & ex, Vec<3> & ey, Vec<3> & ez,
-				    Vec<3> & dex, Vec<3> & dey, Vec<3> & dez) const;
+                                    Vec<3> & ex, Vec<3> & ey, Vec<3> & ez,
+                                    Vec<3> & dex, Vec<3> & dey, Vec<3> & dez) const;
 
     void DefineTangentialPlane(const Point<3>& ap1,
                                const Point<3>& ap2) override;
@@ -133,14 +133,14 @@ namespace netgen
 
     Vec<3> z_direction;
 
-    NgArray<ExtrusionFace*> faces;
+    Array<ExtrusionFace*> faces;
 
     mutable int latestfacenum;
 
   public:
     Extrusion(shared_ptr<SplineGeometry<3>> path_in,
-	      shared_ptr<SplineGeometry<2>> profile_in,
-	      const Vec<3> & z_dir);
+              shared_ptr<SplineGeometry<2>> profile_in,
+              const Vec<3> & z_dir);
     // default constructor for archive
     Extrusion() {}
     ~Extrusion();
@@ -154,11 +154,11 @@ namespace netgen
     INSOLID_TYPE PointInSolid (const Point<3> & p,
                                double eps) const override;
     INSOLID_TYPE PointInSolid (const Point<3> & p,
-			       double eps,
-			       NgArray<int> * const facenums) const;
+                               double eps,
+                               Array<int> * const facenums) const;
 
     void GetTangentialSurfaceIndices (const Point<3> & p, 
-                                      NgArray<int> & surfind, double eps) const override;
+                                      Array<int> & surfind, double eps) const override;
 
     INSOLID_TYPE VecInSolid (const Point<3> & p,
                              const Vec<3> & v,

@@ -77,7 +77,7 @@ class NGGUI_API VisualSceneSolution : public VisualScene
   int fieldlineslist;
   int num_fieldlineslists;
   int fieldlines_startarea;
-  NgArray<double> fieldlines_startarea_parameter;
+  Array<double> fieldlines_startarea_parameter;
   int fieldlines_startface;
   string fieldlines_filename;
   double fieldlines_reltolerance;
@@ -103,15 +103,13 @@ class NGGUI_API VisualSceneSolution : public VisualScene
   string unit = "";
   string title = "";
 
-  NgLock *lock;
-
   VisualSelect select;
 #ifdef PARALLELGL
-  NgArray<int> par_linelists;
-  NgArray<int> par_surfellists;
+  Array<int> par_linelists;
+  Array<int> par_surfellists;
 #endif
 
-  NgArray<UserVisualizationObject*> user_vis;
+  Array<UserVisualizationObject*> user_vis;
 
 public:
 
@@ -163,7 +161,7 @@ public:
   
 
 
-  NgArray<SolData*> soldata;
+  Array<SolData*> soldata;
 
 
   int usetexture;    // 0..no, 1..1D texture (standard), 2..2D-texture (complex)
@@ -220,14 +218,14 @@ public:
   void SaveSolutionData (const char * filename);
 
   /*
-  static void RealVec3d (const double * values, Vec3d & v, 
-			 bool iscomplex, bool imag);
+  static void RealVec3d (const double * values, Vec<3> & v, 
+                         bool iscomplex, bool imag);
   */
   static Vec<3> RealVec3d (const double * values, 
-			   bool iscomplex, bool imag);
+                           bool iscomplex, bool imag);
 
-  static void RealVec3d (const double * values, Vec3d & v, 
-			 bool iscomplex, double phaser, double phasei);
+  static void RealVec3d (const double * values, Vec<3> & v, 
+                         bool iscomplex, double phaser, double phasei);
 
 
   void SetSubdivision (int sd)
@@ -244,71 +242,71 @@ public:
   }
   void DeleteUserVisualizationObject (UserVisualizationObject * vis)
   {
-    int pos = user_vis.Pos(vis);
-    if (pos >= 0)
-      user_vis.Delete(pos);
+    auto pos = user_vis.Pos(vis);
+    if (pos != user_vis.ILLEGAL_POSITION)
+      user_vis.DeleteElement(pos);
   }
 
 private:
-  void GetClippingPlaneTrigs (SolData * sol, NgArray<ClipPlaneTrig> & trigs, NgArray<ClipPlanePoint> & pts);
-  void GetClippingPlaneGrid (NgArray<ClipPlanePoint> & pts);
+  void GetClippingPlaneTrigs (SolData * sol, Array<ClipPlaneTrig> & trigs, Array<ClipPlanePoint> & pts);
+  void GetClippingPlaneGrid (Array<ClipPlanePoint> & pts);
   void DrawCone (const Point<3> & p1, const Point<3> & p2, double r);
   void DrawCylinder (const Point<3> & p1, const Point<3> & p2, double r);
 
-  bool SurfaceElementActive(const SolData *data, const Mesh & mesh, const Element2d & sei) const;
-  bool VolumeElementActive(const SolData *data, const Mesh & mesh, const Element & ei) const;
+  bool SurfaceElementActive(const SolData *data, const Mesh & mesh, const Element2dRef & sei) const;
+  bool VolumeElementActive(const SolData *data, const Mesh & mesh, const ElementRef & ei) const;
 
   // Get Function Value, local coordinates lam1, lam2, lam3, 
   bool GetValue (const SolData * data, ElementIndex elnr, 
-		   double lam1, double lam2, double lam3,
-		   int comp, double & val) const;
+                   double lam1, double lam2, double lam3,
+                   int comp, double & val) const;
 
   bool GetValue (const SolData * data, ElementIndex elnr,
-		 const double xref[], const double x[], const double dxdxref[], 
-		 int comp, double & val) const;
+                 const double xref[], const double x[], const double dxdxref[], 
+                 int comp, double & val) const;
 
   bool GetValueComplex (const SolData * data, ElementIndex elnr, 
-			double lam1, double lam2, double lam3,
-			int comp, complex<double> & val) const;
+                        double lam1, double lam2, double lam3,
+                        int comp, complex<double> & val) const;
 
   bool GetValues (const SolData * data, ElementIndex elnr, 
-		  double lam1, double lam2, double lam3,
-		  double * values) const;
+                  double lam1, double lam2, double lam3,
+                  double * values) const;
 
   bool GetValues (const SolData * data, ElementIndex elnr, 
-		  const double xref[], const double x[], const double dxdxref[], 
-		  double * values) const;
+                  const double xref[], const double x[], const double dxdxref[], 
+                  double * values) const;
 
   bool GetMultiValues (const SolData * data, ElementIndex elnr, int facetnr, int npt,
-		       const double * xref, int sxref,
-		       const double * x, int sx,
-		       const double * dxdxref, int sdxdxref,
-		       double * val, int sval) const;
+                       const double * xref, int sxref,
+                       const double * x, int sx,
+                       const double * dxdxref, int sdxdxref,
+                       double * val, int sval) const;
 
 
   bool GetSurfValue (const SolData * data, SurfaceElementIndex elnr, int facetnr,
-		     double lam1, double lam2, 
-		     int comp, double & val) const;
+                     double lam1, double lam2, 
+                     int comp, double & val) const;
 
   bool GetSurfValue (const SolData * data, SurfaceElementIndex elnr, int facetnr, 
-		     const double xref[], const double x[], const double dxdxref[], 
-		     int comp, double & val) const;
+                     const double xref[], const double x[], const double dxdxref[], 
+                     int comp, double & val) const;
 
   
   bool GetSurfValueComplex (const SolData * data, SurfaceElementIndex elnr, int facetnr, 
-			    double lam1, double lam2, 
-			    int comp, complex<double> & val) const;
+                            double lam1, double lam2, 
+                            int comp, complex<double> & val) const;
 
   bool GetSurfValues (const SolData * data, SurfaceElementIndex elnr, int facetnr, 
-		      double lam1, double lam2, 
-		      double * values) const;
+                      double lam1, double lam2, 
+                      double * values) const;
 
   bool GetSurfValues (const SolData * data, SurfaceElementIndex elnr, int facetnr, 
-		      const double xref[], const double x[], const double dxdxref[], 
-		      double * values) const;
+                      const double xref[], const double x[], const double dxdxref[], 
+                      double * values) const;
 
   bool GetMultiSurfValues (const SolData * data, SurfaceElementIndex elnr, int facetnr, 
-			   int npt,
+                           int npt,
                            const double * xref, int sxref,
                            const double * x, int sx,
                            const double * dxdxref, int sdxdxref,
@@ -321,7 +319,7 @@ private:
   Vec<3> GetDeformation (ElementIndex elnr, const Point<3> & p) const;
   Vec<3> GetSurfDeformation (SurfaceElementIndex selnr, int facetnr, double lam1, double lam2) const;
 
-  void GetPointDeformation (PointIndex pnum, Point<3> & p, SurfaceElementIndex elnr = -1) const;
+  void GetPointDeformation (PointIndex pnum, Point<3> & p, SurfaceElementIndex elnr = SurfaceElementIndex::INVALID) const;
 
 public:
   /// draw elements (build lists)
@@ -330,25 +328,25 @@ public:
   void Draw1DElements();
 
   void DrawSurfaceVectors ();
-  void DrawTrigSurfaceVectors(const NgArray< Point<3> > & lp, const Point<3> & pmin, const Point<3> & pmax,
-			      const int sei, const SolData * vsol, bool swap_lam=false);
+  void DrawTrigSurfaceVectors(const Array< Point<3> > & lp, const Point<3> & pmin, const Point<3> & pmax,
+                              SurfaceElementIndex sei, const SolData * vsol, bool swap_lam=false);
   void DrawIsoSurface(const SolData * sol, const SolData * grad, int comp);
   
   void DrawIsoLines (const Point<3> & p1, 
-		     const Point<3> & p2, 
-		     const Point<3> & p3,
-		     double val1, double val2, double val3);
+                     const Point<3> & p2, 
+                     const Point<3> & p3,
+                     double val1, double val2, double val3);
 
   // draw isolines between lines (p1,p2) and (p3,p4)
   void DrawIsoLines2 (const Point<3> & p1, 
-		      const Point<3> & p2, 
-		      const Point<3> & p3,
-		      const Point<3> & p4,
-		      double val1, double val2, double val3, double val4);
+                      const Point<3> & p2, 
+                      const Point<3> & p3,
+                      const Point<3> & p4,
+                      double val1, double val2, double val3, double val4);
 
 
   void DrawClipPlaneTrigs (); // const SolData * sol, int comp);
-		  
+                  
   void SetOpenGlColor(double val);
 
   // 0 .. non, 1 .. scalar, 2 .. complex
@@ -357,7 +355,7 @@ public:
 
   friend int Ng_Vis_Set (ClientData clientData,
                          Tcl_Interp * interp,
-			 int argc, const char *argv[]);
+                         int argc, const char *argv[]);
 
   void SetScalfunction( int i ) {
       scalfunction = i;

@@ -99,12 +99,27 @@ namespace ngcore
     constexpr operator bool() const { return false; } };
 
   namespace detail {
+    template <typename T, typename = void>
+    struct has_raw_integer : std::false_type {};
+    template <typename T>
+    struct has_raw_integer<T, std::void_t<decltype(std::declval<const T&>().GetRawInteger())>>
+      : std::true_type {};
+
+    // index types have no int conversion, ask them for their value
+    template <typename T>
+    inline static constexpr ptrdiff_t GetRawInteger (const T & n)
+    {
+      if constexpr (std::is_integral_v<T>) return ptrdiff_t(n);
+      else if constexpr (has_raw_integer<T>::value) return ptrdiff_t(n.GetRawInteger());
+      else return ptrdiff_t(n);
+    }
+
     template <typename T, typename Tmin, typename Tmax>
     inline static constexpr void CheckRange(const char * s, const T& n, Tmin first, Tmax next)
     {
       if constexpr (!IsSafe<decltype(n)>())
         if (n<first || n>=next)
-          ThrowRangeException(s, ptrdiff_t(n), ptrdiff_t(first), ptrdiff_t(next));
+          ThrowRangeException(s, GetRawInteger(n), GetRawInteger(first), GetRawInteger(next));
     }
 
     template <typename Ta, typename Tb>

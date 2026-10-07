@@ -43,7 +43,7 @@ namespace netgen::cg
 
       Segment s;
       for (auto i : Range(np))
-          s[i] = verts[i];
+          s[i] = PointIndex::FromNr1(verts[i]);
       return s;
     }
 
@@ -78,7 +78,7 @@ namespace netgen::cg
 
       Element2d el(np);
       for (auto i : Range(np))
-          el[i] = verts[i];
+          el[i] = PointIndex::FromNr1(verts[i]);
       return el;
     }
 
@@ -113,18 +113,18 @@ namespace netgen::cg
 
       Element el(np);
       for (auto i : Range(np))
-          el[i] = verts[map[i]];
+          el[i] = PointIndex::FromNr1(verts[map[i]]);
       return el;
     }
 
   void WriteCGNSElement( const Segment & el, Array<cgsize_t> & verts )
     {
       verts.Append(BAR_2);
-      verts.Append(el[0]);
-      verts.Append(el[1]);
+      verts.Append(el[0].Nr1());
+      verts.Append(el[1].Nr1());
     }
 
-  void WriteCGNSElement( const Element2d & el, Array<cgsize_t> & verts )
+  void WriteCGNSElement( const Element2dRef & el, Array<cgsize_t> & verts )
     {
       static constexpr int map_tri6[]  = {0,2,1,3,5,4}; // untested
       static constexpr int map_quad8[] = {0,3,2,1,4,7,6,5}; // untested
@@ -156,10 +156,10 @@ namespace netgen::cg
       verts.Append(type);
 
       for (auto i : Range(el.GetNP()))
-          verts.Append(el[i]);
+          verts.Append(el[i].Nr1());
     }
 
-  void WriteCGNSElement( const Element & el, Array<cgsize_t> & verts )
+  void WriteCGNSElement( const ElementRef & el, Array<cgsize_t> & verts )
     {
       static constexpr int map_tet4[]   = {0,2,1,3};
       static constexpr int map_prism6[] = {0,2,1,3,5,4};
@@ -195,11 +195,16 @@ namespace netgen::cg
       verts.Append(type);
 
       for (auto i : Range(el.GetNP()))
-          verts.Append(el[map[i]]);
+          verts.Append(el[map[i]].Nr1());
     }
 
   int WriteCGNSRegion( const Mesh & mesh, int dim, int index, int fn, int base, int zone, int ne_before )
   {
+    auto seg_fdi = [&mesh](const Segment& s) -> int {
+        if (mesh.HasEdgeDescriptor(s))
+          return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+        return -1;
+    };
     int meshdim = mesh.GetDimension();
     int codim = meshdim-dim;
 
@@ -212,14 +217,14 @@ namespace netgen::cg
 
     if(codim==0) name += mesh.GetMaterial(index+1);
     if(codim==1) name += *mesh.GetBCNamePtr(index);
-    if(codim==2) name += mesh.GetCD2Name(index);
+    if(codim==2) name += mesh.GetRegionName(mesh.GetDimension()-2, index+1);
 
     int ne = 0;
     Array<int> data;
 
     if(dim==3)
       for(const auto el : mesh.VolumeElements())
-        if(el.GetIndex()==index)
+        if(el.GetIndex().Nr1()==index)
         {
           ne++;
           WriteCGNSElement(el, data);
@@ -227,7 +232,7 @@ namespace netgen::cg
 
     if(dim==2)
       for(const auto el : mesh.SurfaceElements())
-        if(el.GetIndex()==index)
+        if(el.GetIndex().Nr1()==index)
         {
           ne++;
           WriteCGNSElement(el, data);
@@ -235,7 +240,7 @@ namespace netgen::cg
 
     if(dim==1)
       for(const auto el : mesh.LineSegments())
-        if(el.si==index)
+        if(seg_fdi(el)==index)
         {
           ne++;
           WriteCGNSElement(el, data);
@@ -402,9 +407,9 @@ namespace netgen::cg
         {
           static Timer tall("CGNS::ReadMesh-Zone"); RegionTimer rtall(tall);
           static Timer tsection("CGNS::ReadMesh-Section");
-          first_index_1d = mesh.GetRegionNamesCD(2).Size();
-          first_index_2d = mesh.GetRegionNamesCD(1).Size();
-          first_index_3d = mesh.GetRegionNamesCD(0).Size();
+          first_index_1d = mesh.GetNED();
+          first_index_2d = mesh.GetNFD();
+          first_index_3d = mesh.GetNRegions(3);
 
           Array<double> x(nv), y(nv), z(nv);
           cgsize_t imin=1;
@@ -422,7 +427,7 @@ namespace netgen::cg
             // check if this point is new
             if( point_table.PositionCreate (hash, pos) )
             {
-              pi_ng = mesh.AddPoint( {x[i], y[i], z[i]} );
+              pi_ng = mesh.AddPoint( {x[i], y[i], z[i]} ).Nr1();
               point_table.SetData(pos, pi_ng);
             }
             else
@@ -490,11 +495,11 @@ namespace netgen::cg
                           {
                             index_1d++;
                             have_1d_elements = true;
-                            mesh.AddEdgeDescriptor(EdgeDescriptor{});
+                            mesh.AddEdgeDescriptor(EdgeRegion{});
                             names_1d.Append(ngname);
                           }
                           auto el = ReadCGNSElement1D(type, vertices.Range(vi, vertices.Size()));
-                          el.si = index_1d;
+                          el.SetIndex(EdgeRegionIndex::FromNr1(index_1d));
                           mesh.AddSegment(el);
                           vi += el.GetNP();
                           ne_1d++;
@@ -506,11 +511,11 @@ namespace netgen::cg
                           {
                             index_2d++;
                             have_2d_elements = true;
-                            mesh.AddFaceDescriptor(FaceDescriptor(index_2d, 1, 0, 1));
+                            mesh.AddFaceDescriptor(FaceRegion(index_2d, 1, 0, 1));
                             names_2d.Append(ngname);
                           }
                           auto el = ReadCGNSElement2D(type, vertices.Range(vi, vertices.Size()));
-                          el.SetIndex(index_2d);
+                          el.SetIndex(FaceRegionIndex::FromNr1(index_2d));
                           mesh.AddSurfaceElement(el);
                           vi += el.GetNP();
                           ne_2d++;
@@ -526,7 +531,7 @@ namespace netgen::cg
                           }
 
                           auto el = ReadCGNSElement3D(type, vertices.Range(vi, vertices.Size()));
-                          el.SetIndex(index_3d);
+                          el.SetIndex(VolumeRegionIndex::FromNr1(index_3d));
                           mesh.AddVolumeElement(el);
                           vi += el.GetNP();
                           ne_3d++;
@@ -551,12 +556,12 @@ namespace netgen::cg
                   if(dim==1)
                     {
                       index_1d++;
-                      mesh.AddEdgeDescriptor(EdgeDescriptor{});
+                      mesh.AddEdgeDescriptor(EdgeRegion{});
                       names_1d.Append(ngname);
                       for(auto i : Range(ne_section))
                         {
                           auto el = ReadCGNSElement1D(type, vertices.Range(np*i, np*(i+1)));
-                          el.si = index_1d;
+                          el.SetIndex(EdgeRegionIndex::FromNr1(index_1d));
                           mesh.AddSegment(el);
                         }
                       ne_1d += ne_section;
@@ -565,12 +570,12 @@ namespace netgen::cg
                   if(dim==2)
                     {
                       index_2d++;
-                      mesh.AddFaceDescriptor(FaceDescriptor(index_2d, 1, 0, 1));
+                      mesh.AddFaceDescriptor(FaceRegion(index_2d, 1, 0, 1));
                       names_2d.Append(ngname);
                       for(auto i : Range(ne_section))
                         {
                           auto el = ReadCGNSElement2D(type, vertices.Range(np*i, np*(i+1)));
-                          el.SetIndex(index_2d);
+                          el.SetIndex(FaceRegionIndex::FromNr1(index_2d));
                           mesh.AddSurfaceElement(el);
                         }
                       ne_2d += ne_section;
@@ -583,7 +588,7 @@ namespace netgen::cg
                       for(auto i : Range(ne_section))
                         {
                           auto el = ReadCGNSElement3D(type, vertices.Range(np*i, np*(i+1)));
-                          el.SetIndex(index_3d);
+                          el.SetIndex(VolumeRegionIndex::FromNr1(index_3d));
                           mesh.AddVolumeElement(el);
                         }
                       ne_3d += ne_section;
@@ -591,12 +596,8 @@ namespace netgen::cg
                 }
             }
 
-          mesh.GetRegionNamesCD(2).SetSize(index_1d);
-          mesh.GetRegionNamesCD(1).SetSize(index_2d);
-          mesh.GetRegionNamesCD(0).SetSize(index_3d);
-          mesh.GetRegionNamesCD(2) = nullptr;
-          mesh.GetRegionNamesCD(1) = nullptr;
-          mesh.GetRegionNamesCD(0) = nullptr;
+          if (index_1d > 0) mesh.EnsureEdgeDescriptor(index_1d);
+          mesh.Regions<3>() = RegionArray<3>(index_3d);
         }
 
       void SetNames( Mesh & mesh )
@@ -612,12 +613,12 @@ namespace netgen::cg
           else
           {
             for (auto i : Range(names_1d.Size()))
-              mesh.SetCD2Name(first_index_1d + i +1, names_1d[i]);
+              mesh.EnsureEdgeDescriptor(first_index_1d + i +1).SetName(names_1d[i]);
 
             for (auto i : Range(names_2d.Size()))
             {
               mesh.SetBCName(first_index_2d + i, names_2d[i]);
-              mesh.GetFaceDescriptor(first_index_2d + i +1).SetDomainIn(first_index_3d+1);
+              mesh.GetFaceDescriptor(FaceRegionIndex::FromNr0(first_index_2d + i)).SetDomainIn(first_index_3d+1);
             }
 
             for (auto i : Range(names_3d.Size()))
@@ -676,25 +677,26 @@ namespace netgen
 
       for (auto sei : Range(mesh.SurfaceElements()))
       {
-        int ei0, ei1;
-        topo.GetSurface2VolumeElement (sei+1, ei0, ei1);
+        ElementIndex ei0, ei1;
+        topo.GetSurface2VolumeElement (sei, ei0, ei1);
         auto si = mesh.SurfaceElement(sei).GetIndex();
         auto & fd = mesh.GetFaceDescriptor(si);
 
-        if(ei0>0)
+        if(ei0.IsValid())
         {
-          int i0 = mesh.VolumeElement(ei0).GetIndex();
+          int i0 = mesh[ei0].GetIndex().Nr1();
           if(fd.DomainIn()!=i0)
             fd.SetDomainOut(i0);
         }
 
-        if(ei1>0)
+        if(ei1.IsValid())
         {
-          int i1 = mesh.VolumeElement(ei1).GetIndex();
+          int i1 = mesh[ei1].GetIndex().Nr1();
           if(fd.DomainIn()!=i1)
             fd.SetDomainOut(i1);
         }
       }
+      mesh.ReconstructEdgeDescriptors();
       return fn;
     }
 
@@ -751,15 +753,20 @@ namespace netgen
 
       int imax3 = 0;
       for(const auto & el : mesh.VolumeElements())
-        imax3 = max(imax3, el.GetIndex());
+        imax3 = max(imax3, el.GetIndex().Nr1());
 
       int imax2 = 0;
       for(const auto & el : mesh.SurfaceElements())
-        imax2 = max(imax2, el.GetIndex());
+        imax2 = max(imax2, el.GetIndex().Nr1());
 
+      auto seg_fdi = [&mesh](const Segment& s) -> int {
+          if (mesh.HasEdgeDescriptor(s))
+            return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+          return -1;
+      };
       int imax1 = 0;
       for(const auto & el : mesh.LineSegments())
-        imax1 = max(imax1, el.si);
+        imax1 = max(imax1, seg_fdi(el));
 
       int ne_written = 0;
       // int meshdim = mesh.GetDimension();

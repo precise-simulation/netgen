@@ -29,46 +29,60 @@ namespace ngcore
   using std::memory_order_relaxed;
   using std::make_tuple;
 
-  TaskManager * task_manager = nullptr;
+  struct TNestedTask
+  {
+    const function<void(TaskInfo&)> * func;
+    int mynr;
+    int total;
+    int producing_thread;
+    atomic<int> * endcnt;
+
+    TNestedTask () { ; }
+    TNestedTask (const function<void(TaskInfo&)> & _func,
+                 int _mynr, int _total,
+                 atomic<int> & _endcnt, int prod_tid)
+      : func(&_func), mynr(_mynr), total(_total), producing_thread(prod_tid), endcnt(&_endcnt)
+    {
+      ;
+    }
+  };
+
+  typedef moodycamel::ConcurrentQueue<TNestedTask> TQueue;
+  typedef moodycamel::ProducerToken TPToken;
+  typedef moodycamel::ConsumerToken TCToken;
+
+  thread_local TaskManager * task_manager = nullptr;
   bool TaskManager :: use_paje_trace = false;
   int TaskManager :: max_threads = getenv("NGS_NUM_THREADS") ? atoi(getenv("NGS_NUM_THREADS")) : std::thread::hardware_concurrency();
-  int TaskManager :: num_threads = 1;
 
+  static std::thread::id main_thread_id = std::this_thread::get_id();
   
   thread_local int TaskManager :: thread_id = 0;
+  thread_local int TaskManager :: timer_thread_id = std::this_thread::get_id() == main_thread_id ? -2 : -1;
+  thread_local WorkerData* TaskManager :: worker_data = nullptr;
   
-  const function<void(TaskInfo&)> * TaskManager::func;
-  const function<void()> * TaskManager::startup_function = nullptr;
-  const function<void()> * TaskManager::cleanup_function = nullptr;
+  #ifdef WIN32
+      TaskManager * GetTaskManager() { return task_manager; }
+  #endif
 
-  atomic<int> TaskManager::ntasks;
-  Exception * TaskManager::ex;
-  
-  atomic<int> TaskManager::jobnr;
-  
-  atomic<int> TaskManager::complete[8];   // max nodes
-  atomic<int> TaskManager::done;
-  atomic<int> TaskManager::active_workers;
-  atomic<int> TaskManager::workers_on_node[8];   // max nodes
-
-  
-  int TaskManager::sleep_usecs = 1000;
-  bool TaskManager::sleep = false;
-
-  TaskManager::NodeData *TaskManager::nodedata[8];
-  int TaskManager::num_nodes;
-  
-  static mutex copyex_mutex;
-
-  int EnterTaskManager ()
+  WorkerData :: ~WorkerData()
   {
+      delete ex;
+      delete static_cast<TPToken*>(produce_token);
+      delete static_cast<TCToken*>(consume_token);
+  }
+
+  int EnterTaskManager (int nthreads)
+  {
+    if(nthreads == 0) return 0;
+    if(nthreads == -1) nthreads = TaskManager::GetMaxThreads();
     if (task_manager)
       {
         // no task manager started
         return 0;
       }
 
-    task_manager = new TaskManager();
+    task_manager = new TaskManager(nthreads);
 
     GetLogger("TaskManager")->info("task-based parallelization (C++11 threads) using {} threads", task_manager->GetNumThreads());
 
@@ -124,9 +138,10 @@ namespace ngcore
     }
 
 
-  TaskManager :: TaskManager()
+  TaskManager :: TaskManager(int anthreads)
     {
-      num_threads = GetMaxThreads();
+      taskqueue_ptr = new TQueue;
+      num_threads = anthreads;
       // if (MyMPI_GetNTasks() > 1) num_threads = 1;
 
 #ifdef USE_NUMA
@@ -138,7 +153,7 @@ namespace ngcore
         {
           void * mem = numa_alloc_onnode (sizeof(NodeData), j);
           nodedata[j] = new (mem) NodeData;
-	  complete[j] = -1;
+          complete[j] = -1;
           workers_on_node[j] = 0;          
         }
 #else
@@ -162,6 +177,7 @@ namespace ngcore
 
   TaskManager :: ~TaskManager ()
   {
+    delete static_cast<TQueue*>(taskqueue_ptr);
     if (use_paje_trace)
       {
         delete trace;
@@ -174,6 +190,7 @@ namespace ngcore
 #else
       delete nodedata[0];
 #endif
+    task_manager = nullptr;
   }
 
 #ifdef WIN32
@@ -181,26 +198,34 @@ namespace ngcore
   {
     return thread_id;
   }
+  int TaskManager :: GetTimerThreadId()
+  {
+    return timer_thread_id;
+  }
+  WorkerData* TaskManager :: GetWorkerData()
+  {
+    return worker_data;
+  }
 #endif
   
   void TaskManager :: StartWorkers()
   {
     done = false;
 
-    for (int i = 1; i < num_threads; i++)
-      {
-        std::thread([this,i]() { this->Loop(i); }).detach();
-      }
     thread_id = 0;
-    
-    size_t alloc_size = num_threads*NgProfiler::SIZE;
-    NgProfiler::thread_times = new size_t[alloc_size];
-    for (size_t i = 0; i < alloc_size; i++)
-      NgProfiler::thread_times[i] = 0;
-    NgProfiler::thread_flops = new size_t[alloc_size];
-    for (size_t i = 0; i < alloc_size; i++)
-      NgProfiler::thread_flops[i] = 0;
+    timer_thread_id = 0;
+    workers.resize(num_threads);
+    auto &queue = *static_cast<TQueue*>(taskqueue_ptr);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i] = WorkerData();
+        workers[i].produce_token = new TPToken(queue);
+        workers[i].consume_token = new TCToken(queue);
+        if(i>0) workers[i].thread = std::thread([this,i]() { this->Loop(i); });
+    }
 
+    Loop(0); // sets all thread local variables
+    
     while (active_workers < num_threads-1)
       ;
   }
@@ -211,79 +236,53 @@ namespace ngcore
   
   void TaskManager :: StopWorkers()
   {
+    static std::mutex timers_mutex;
     done = true;
     double delta_tsc = GetTimeCounter()-calibrate_init_tsc;
     double delta_sec = std::chrono::duration<double>(TClock::now()-calibrate_init_clock).count();
     double frequ = (delta_sec != 0) ? delta_tsc/delta_sec : 2.7e9;
     
-    // cout << "cpu frequ = " << frequ << endl;
-    // collect timings
+    for(auto i : IntRange(1, workers.size()))
+        workers[i].thread.join();
+
+    std::lock_guard<std::mutex> guard(timers_mutex);
     for (size_t i = 0; i < num_threads; i++)
       for (size_t j = NgProfiler::SIZE; j-- > 0; )
         {
           if (!NgProfiler::timers[j].usedcounter) break;
-          NgProfiler::timers[j].tottime += 1.0/frequ * NgProfiler::thread_times[i*NgProfiler::SIZE+j];
-          NgProfiler::timers[j].flops += NgProfiler::thread_flops[i*NgProfiler::SIZE+j];
+          NgProfiler::timers[j].tottime += 1.0/frequ * workers[i].times[j];
+          NgProfiler::timers[j].flops += workers[i].flops[j];
         }
-    delete [] NgProfiler::thread_times;
-    NgProfiler::thread_times = NgProfiler::dummy_thread_times.data();
-    delete [] NgProfiler::thread_flops;
-    NgProfiler::thread_flops = NgProfiler::dummy_thread_flops.data();
-    
-    while (active_workers)
-      ;
+    workers.clear();
+    timer_thread_id = std::this_thread::get_id() == main_thread_id ? -2 : -1;
+    thread_id = 0;
   }
 
   /////////////////////// NEW: nested tasks using concurrent queue
 
-  struct TNestedTask
-  {
-    const function<void(TaskInfo&)> * func;
-    int mynr;
-    int total;
-    int producing_thread;
-    atomic<int> * endcnt;
-
-    TNestedTask () { ; }
-    TNestedTask (const function<void(TaskInfo&)> & _func,
-                 int _mynr, int _total,
-                 atomic<int> & _endcnt, int prod_tid)
-      : func(&_func), mynr(_mynr), total(_total), producing_thread(prod_tid), endcnt(&_endcnt)
-    {
-      ;
-    }
-  };
-
-  typedef moodycamel::ConcurrentQueue<TNestedTask> TQueue; 
-  typedef moodycamel::ProducerToken TPToken; 
-  typedef moodycamel::ConsumerToken TCToken; 
-  
-  static TQueue taskqueue;
-
-  void AddTask (const function<void(TaskInfo&)> & afunc,
+  void TaskManager :: AddTask (const function<void(TaskInfo&)> & afunc,
                 atomic<int> & endcnt)
                 
   {
-    TPToken ptoken(taskqueue); 
-
+    auto &taskqueue = *static_cast<TQueue*>(taskqueue_ptr);
     int num = endcnt;
     auto tid = TaskManager::GetThreadId();
     for (int i = 0; i < num; i++)
-      taskqueue.enqueue (ptoken, { afunc, i, num, endcnt, tid });
+      taskqueue.enqueue (*static_cast<TPToken*>(worker_data->produce_token), { afunc, i, num, endcnt, tid });
   }
 
   bool TaskManager :: ProcessTask()
   {
     // static Timer t("process task");
     TNestedTask task;
-    TCToken ctoken(taskqueue); 
-    
-    if (taskqueue.try_dequeue(ctoken, task))
+    auto &taskqueue = *static_cast<TQueue*>(taskqueue_ptr);
+    auto tid = TaskManager::GetThreadId();
+    if (taskqueue.try_dequeue(*static_cast<TCToken*>(worker_data->consume_token), task))
       {
         TaskInfo ti;
         ti.task_nr = task.mynr;
         ti.ntasks = task.total;
-        ti.thread_nr = TaskManager::GetThreadId();
+        ti.thread_nr = tid;
         ti.nthreads = TaskManager::GetNumThreads();
         /*
         {
@@ -308,9 +307,11 @@ namespace ngcore
   void TaskManager :: CreateJob (const function<void(TaskInfo&)> & afunc,
                                  int antasks)
   {
-    if (num_threads == 1 || !task_manager) //  || func)
+    auto *tm = GetTaskManager();
+    if (!tm || tm->num_threads == 1 ) //  || func)
       {
-        if (startup_function) (*startup_function)();
+        if (tm && tm->startup_function) (*tm->startup_function)();
+        if (antasks == -1) antasks = 1;
         
         TaskInfo ti;
         ti.ntasks = antasks;
@@ -319,15 +320,16 @@ namespace ngcore
         for (ti.task_nr = 0; ti.task_nr < antasks; ti.task_nr++)
           afunc(ti);
 
-        if (cleanup_function) (*cleanup_function)();        
+        if (tm && tm->cleanup_function) (*tm->cleanup_function)();
         return;
       }
 
 
-    if (func)
+    if (tm->func)
       { // we are already parallel, use nested tasks
         // startup for inner function not supported ...
         // if (startup_function) (*startup_function)();
+        if (antasks == -1) antasks = tm->GetNumThreads();
 
         if (antasks == 1)
           {
@@ -340,10 +342,10 @@ namespace ngcore
           }
         
         atomic<int> endcnt(antasks);
-        AddTask (afunc, endcnt);
+        tm->AddTask (afunc, endcnt);
         while (endcnt > 0)
           {
-            ProcessTask();
+            tm->ProcessTask();
           }
         
         // if (cleanup_function) (*cleanup_function)();
@@ -353,16 +355,17 @@ namespace ngcore
 
     class StartStop
     {
+      int index = -1;
     public:
       StartStop(const function<void(TaskInfo&)> & afunc)
       {
         if (trace)
-          trace->StartJob(jobnr, afunc.target_type());
+          index = trace->StartJob(GetTaskManager()->jobnr, afunc.target_type());
       }
       ~StartStop()
       {
         if (trace)
-          trace->StopJob();
+          trace->StopJob(index);
       }
     };
     
@@ -371,47 +374,49 @@ namespace ngcore
         StartStop startstop(afunc);
         //if (trace)
         // trace->StartJob(jobnr, afunc.target_type());
-        jobnr++;
-        if (startup_function) (*startup_function)();
+        tm->jobnr++;
+        if (tm->startup_function) (*tm->startup_function)();
         TaskInfo ti;
         ti.task_nr = 0;
         ti.ntasks = 1;
         ti.thread_nr = 0; ti.nthreads = 1;
         {
-          RegionTracer t(ti.thread_nr, jobnr, RegionTracer::ID_JOB, ti.task_nr);
+          RegionTracer t(ti.thread_nr, tm->jobnr, RegionTracer::ID_JOB, ti.task_nr);
           afunc(ti);
         }
-        if (cleanup_function) (*cleanup_function)();
+        if (tm->cleanup_function) (*tm->cleanup_function)();
         // if (trace)
         // trace->StopJob();
         return;
       }
 
+    if (antasks == -1) antasks = tm->GetNumThreads();
+
     StartStop startstop(afunc);    
     // if (trace)
     // trace->StartJob(jobnr, afunc.target_type());
 
-    func = &afunc;
+    tm->func = &afunc;
 
-    ntasks.store (antasks); // , memory_order_relaxed);
-    ex = nullptr;
+    tm->ntasks.store (antasks); // , memory_order_relaxed);
+    tm->ex = nullptr;
 
 
-    nodedata[0]->start_cnt.store (0, memory_order_relaxed);
+    tm->nodedata[0]->start_cnt.store (0, memory_order_relaxed);
 
-    jobnr++;
+    tm->jobnr++;
     
-    for (int j = 0; j < num_nodes; j++)
-      nodedata[j]->participate |= 1;
+    for (int j = 0; j < tm->num_nodes; j++)
+      tm->nodedata[j]->participate |= 1;
 
-    if (startup_function) (*startup_function)();
+    if (tm->startup_function) (*tm->startup_function)();
     
     int thd = 0;
-    int thds = GetNumThreads();
-    int mynode = num_nodes * thd/thds;
+    int thds = tm->GetNumThreads();
+    int mynode = tm->num_nodes * thd/thds;
 
-    IntRange mytasks = Range(int(ntasks)).Split (mynode, num_nodes);
-    NodeData & mynode_data = *(nodedata[mynode]);
+    IntRange mytasks = Range(int(tm->ntasks)).Split (mynode, tm->num_nodes);
+    NodeData & mynode_data = *((tm->nodedata)[mynode]);
 
     TaskInfo ti;
     ti.nthreads = thds;
@@ -427,11 +432,11 @@ namespace ngcore
             if (mytask >= mytasks.Size()) break;
             
             ti.task_nr = mytasks.First()+mytask;
-            ti.ntasks = ntasks;
+            ti.ntasks = tm->ntasks;
 
             {
-              RegionTracer t(ti.thread_nr, jobnr, RegionTracer::ID_JOB, ti.task_nr);
-              (*func)(ti); 
+              RegionTracer t(ti.thread_nr, tm->jobnr, RegionTracer::ID_JOB, ti.task_nr);
+              (*tm->func)(ti); 
             }
           }
 
@@ -439,19 +444,19 @@ namespace ngcore
     catch (Exception & e)
       {
         {
-          lock_guard<mutex> guard(copyex_mutex);
-          delete ex;
-          ex = new Exception (e);
+          lock_guard<mutex> guard(tm->copyex_mutex);
+          delete tm->ex;
+          tm->ex = new Exception (e);
           mynode_data.start_cnt = mytasks.Size();
         }
       }
 
-    if (cleanup_function) (*cleanup_function)();
+    if (tm->cleanup_function) (*tm->cleanup_function)();
     
-    for (int j = 0; j < num_nodes; j++)
-      if (workers_on_node[j])
+    for (int j = 0; j < tm->num_nodes; j++)
+      if (tm->workers_on_node[j])
         {
-          while (complete[j] != jobnr)
+          while (tm->complete[j] != tm->jobnr)
           {
 #ifdef NETGEN_ARCH_AMD64
             _mm_pause();
@@ -459,9 +464,9 @@ namespace ngcore
           }
         }
 
-    func = nullptr;
-    if (ex)
-      throw Exception (*ex);
+    tm->func = nullptr;
+    if (tm->ex)
+      throw Exception (*tm->ex);
 
     // if (trace)
     //    trace->StopJob();
@@ -478,15 +483,18 @@ namespace ngcore
     static Timer texit("exit zone");
     static Timer tdec("decrement");
     */
+    task_manager = this;
     thread_id = thd;
+    timer_thread_id = thd;
 
-    int thds = GetNumThreads();
+    worker_data = &workers[thd];
 
+    if(thd == 0)
+        return;
+
+    int thds = num_threads;
     int mynode = num_nodes * thd/thds;
-
     NodeData & mynode_data = *(nodedata[mynode]);
-
-
 
     TaskInfo ti;
     ti.nthreads = thds;
@@ -560,11 +568,10 @@ namespace ngcore
           
         try
           {
-            
             while (1)
               {
                 if (mynode_data.start_cnt >= mytasks.Size()) break;
-		int mytask = mynode_data.start_cnt.fetch_add(1, memory_order_relaxed);
+                int mytask = mynode_data.start_cnt.fetch_add(1, memory_order_relaxed);
                 if (mytask >= mytasks.Size()) break;
                 
                 ti.task_nr = mytasks.First()+mytask;
@@ -599,10 +606,10 @@ namespace ngcore
 
         mynode_data.participate-=2;
 
-	{
-	  int oldpart = 1;
-	  if (mynode_data.participate.compare_exchange_strong (oldpart, 0))
-	    {
+        {
+          int oldpart = 1;
+          if (mynode_data.participate.compare_exchange_strong (oldpart, 0))
+            {
               if (jobdone < jobnr.load())
                 { // reopen gate
                   mynode_data.participate |= 1;                  
@@ -613,8 +620,8 @@ namespace ngcore
                     mynode_data.start_cnt = 0;
                   complete[mynode] = jobnr.load(); 
                 }
-	    }	      
-	}
+            }         
+        }
       }
     
 

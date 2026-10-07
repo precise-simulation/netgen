@@ -2,13 +2,14 @@
 
 #include <mystdlib.h>
 #include "meshing.hpp"
+#include "boundarylayer.hpp"
 #include <core/register_archive.hpp>
 
 namespace netgen
 {
   struct PointTree
   {
-      std::map<int, BoxTree<3>> tree;
+      std::map<int, BoxTree<3, PointIndex>> tree;
       Box<3> bounding_box;
 
       PointTree( Box<3> bb ) : bounding_box(bb) {}
@@ -22,7 +23,7 @@ namespace netgen
 
       PointIndex Find(Point<3> p, int index) const
       {
-          ArrayMem<int, 1> points;
+          ArrayMem<PointIndex, 1> points;
           tree.at(index).GetIntersecting(p, p, points);
           if(points.Size()==0)
               throw Exception("cannot find mapped point " + ToString(p));
@@ -274,7 +275,7 @@ namespace netgen
           }
       };
 
-      auto tol = 1e-8 * bounding_box.Diam();
+      auto tol = 1e-6 * bounding_box.Diam();
       for(auto & f : faces)
         for(auto & ident: f->identifications)
           for(auto e : static_cast<GeometryFace*>(ident.from)->edges)
@@ -432,7 +433,7 @@ namespace netgen
                     auto t_new = edge->GetTangent(t);
                     t_new.Normalize();
                     auto cosalpha = fabs(t_old * t_new);
-                    if((i == sections) || (cosalpha < cos(10./180 * M_PI)))
+                    if((i == sections) || (cosalpha < 0.98480775301220805937)) // 10 degrees
                       {
                         auto index = lines.Append({p_old, p_new});
                         searchtree.Insert(p_old, p_new, index);
@@ -522,10 +523,16 @@ namespace netgen
     while (lam<1. && hvalue.Size() < 20000) {
       fine_params.Append(lam);
       auto h = mesh.GetH(old_p, layer);
-      auto step = safety * h/GetTangent(lam).Length();
-      lam += step;
-      lam = min2(lam, 1.0);
+      auto tanlen = GetTangent(lam).Length();
+      auto step = tanlen > 0 ? safety * h/tanlen : 1.0-lam;
+      lam = min2(lam+step, 1.0);
       p = GetPoint(lam);
+      for(int cnt = 0; (p-old_p).Length() > h && lam > fine_params.Last() && cnt < 30; cnt++)
+        {
+          step *= 0.5;
+          lam = min2(fine_params.Last()+step, 1.0);
+          p = GetPoint(lam);
+        }
       hvalue.Append((hvalue.Size()==0 ? 0.0 : hvalue.Last()) + 1./h * (p-old_p).Length());
       old_p = p;
     }
@@ -602,9 +609,9 @@ namespace netgen
         mesh[pi].Singularity(vert->properties.hpref);
         mesh[pi].SetType(FIXEDPOINT);
         
-        Element0d el(pi, pi-IndexBASE<PointIndex>()+1);
+        Element0d el(pi, VertexRegionIndex::FromNr1(pi.Nr1()));
         el.name = vert->properties.GetName();
-        mesh.SetCD3Name(pi-IndexBASE<PointIndex>()+1, el.name);
+        mesh.SetCD3Name(pi.Nr1(), el.name);
         mesh.pointelements.Append (el);
       }
 
@@ -619,6 +626,16 @@ namespace netgen
     auto nedges = edges.Size();
     Array<Array<PointIndex>> all_pnums(nedges);
     Array<Array<double>> all_params(nedges);
+
+    // Build edge→face mapping: for each edge, store the first two faces that use it (1-based)
+    Array<int> edge_first_face(edges.Size());
+    edge_first_face = -1;
+    for (int k = 0; k < (int)faces.Size(); k++)
+        for (auto * edge_ptr : faces[k]->edges)
+          {
+            if (edge_first_face[edge_ptr->nr] < 0)
+                edge_first_face[edge_ptr->nr] = k + 1;
+          }
 
     for (auto edgenr : Range(edges))
     {
@@ -734,26 +751,38 @@ namespace netgen
             pnums[i+1] = pi;
         }
 
+        // create edge descriptor for this geometric edge
+        EdgeRegion ed;
+        ed.SetEdgeNr(edgenr+1);
+        ed.SetName(edge->properties.GetName());
+        ed.SetSingEdgeLeft(edge->properties.hpref);
+        ed.SetSingEdgeRight(edge->properties.hpref);
+
+        // Populate surfnr/domin/domout from the faces array so that
+        // RebuildFDIndices() can reconstruct the index after load.
+        // (FaceDescriptors don't exist yet - they're created in MeshSurface.)
+        int fdi = (edgenr < edge_first_face.Size() && edge_first_face[edgenr] > 0)
+                  ? edge_first_face[edgenr] : edgenr + 1;
+        ed.SetSurfNr(0, edge->domin+1);
+        ed.SetSurfNr(1, edge->domout+1);
+        ed.SetDomainIn(edge->domin+1);
+        ed.SetDomainOut(edge->domout+1);
+        ed.SetIndex(FaceRegionIndex::FromNr1(fdi));
+        auto edsi = mesh.AddEdgeDescriptor(ed);
+
         for(auto i : Range(pnums.Size()-1))
         {
           // segnr++;
             Segment seg;
             seg[0] = pnums[i];
             seg[1] = pnums[i+1];
-            seg.edgenr = edgenr+1;
-            seg.index = edgenr+1;
-            seg.si = edgenr+1;
-            seg.epgeominfo[0].dist = params[i];
-            seg.epgeominfo[1].dist = params[i+1];
-            seg.epgeominfo[0].edgenr = edgenr;
-            seg.epgeominfo[1].edgenr = edgenr;
-            seg.singedge_left = edge->properties.hpref;
-            seg.singedge_right = edge->properties.hpref;
-            seg.domin = edge->domin+1;
-            seg.domout = edge->domout+1;
+            seg.SetIndex(edsi);
+            seg.EPGeomInfo(0).dist = params[i];
+            seg.EPGeomInfo(1).dist = params[i+1];
             mesh.AddSegment(seg);
         }
-        mesh.SetCD2Name(edgenr+1, edge->properties.GetName());
+        auto name = edge->properties.GetName();
+        mesh.GetEdgeDescriptor(edsi).SetName(name.empty() ? "default" : name);
     }
 
     for (auto & edge : edges)
@@ -808,7 +837,7 @@ namespace netgen
       }
     for(const auto& vert : GetFaceVertices(face))
       {
-        PointIndex pi = vert->nr + 1;
+        PointIndex pi = PointIndex::FromNr0(vert->nr);
         if(glob2loc[pi] == 0)
           {
             auto gi = face.Project(mesh[pi]);
@@ -823,13 +852,11 @@ namespace netgen
       {
         PointGeomInfo gi0, gi1;
         gi0.trignum = gi1.trignum = k+1;
-        gi0.u = seg.epgeominfo[0].u;
-        gi0.v = seg.epgeominfo[0].v;
-        gi1.u = seg.epgeominfo[1].u;
-        gi1.v = seg.epgeominfo[1].v;
-        meshing.AddBoundaryElement(glob2loc[seg[0]],
-                                   glob2loc[seg[1]],
-                                   gi0, gi1);
+        gi0.u = seg.GeomInfo(0).u;
+        gi0.v = seg.GeomInfo(0).v;
+        gi1.u = seg.GeomInfo(1).u;
+        gi1.v = seg.GeomInfo(1).v;
+        meshing.AddBoundaryElement(seg[0], seg[1], gi0, gi1);
       }
 
     // TODO Set max area 2* area of face
@@ -840,10 +867,8 @@ namespace netgen
     static Timer t("GenerateMesh"); RegionTimer reg(t);
     MESHING2_RESULT res = meshing.GenerateMesh(mesh, mparam, mparam.maxh, k+1, face.properties.layer);
 
-    for(auto i : Range(noldsurfels, mesh.GetNSE()))
-      {
-        mesh.SurfaceElements()[i].SetIndex(k+1);
-      }
+    for(SurfaceElementIndex sei : mesh.SurfaceElements().Range().Modify(noldsurfels, 0))
+      mesh[sei].SetIndex(FaceRegionIndex::FromNr0(k));
     return res != MESHING2_OK;
   }
 
@@ -855,16 +880,30 @@ namespace netgen
     multithread.task = "Mesh Surface";
     mesh.ClearFaceDescriptors();
 
+    for(auto k : Range(faces))
+    {
+        auto & face = *faces[k];
+        FaceRegion fd(k+1, face.domin+1, face.domout+1, k+1);
+        if(face.properties.col)
+          fd.SetSurfColour(*face.properties.col);
+        mesh.AddFaceDescriptor(fd);
+        mesh.SetBCName(k, face.properties.GetName());
+    }
+
+    int max_index = mesh.GetNFD();
+    for(const auto & sel : mesh.SurfaceElements())
+        max_index = max2(max_index, sel.GetIndex().Nr1());
+    while(mesh.GetNFD() < max_index)
+    {
+        FaceRegion fd(mesh.GetNFD()+1, 0, 0, -1);
+        mesh.AddFaceDescriptor(fd);
+    }
+
     size_t n_failed_faces = 0;
     Array<int, PointIndex> glob2loc(mesh.GetNP());
     for(auto k : Range(faces))
     {
         auto & face = *faces[k];
-        FaceDescriptor fd(k+1, face.domin+1, face.domout+1, k+1);
-        if(face.properties.col)
-          fd.SetSurfColour(*face.properties.col);
-        mesh.AddFaceDescriptor(fd);
-        mesh.SetBCName(k, face.properties.GetName());
         if(face.primary == &face)
         {
             // check if this face connects two identified closesurfaces
@@ -872,7 +911,7 @@ namespace netgen
             std::set<int> relevant_edges;
             auto segments = face.GetBoundary(mesh);
             for(const auto &s : segments)
-                relevant_edges.insert(s.edgenr-1);
+                relevant_edges.insert(mesh.GetEdgeDescriptor(s.GetIndex()).EdgeNr()-1);
 
             Array<bool, PointIndex> is_point_in_tree(mesh.Points().Size());
             is_point_in_tree = false;
@@ -901,9 +940,65 @@ namespace netgen
                     p2seg[s[0]].Append(si);
                     p2seg[s[1]].Append(si);
                 }
+
+                // the face might connect closesurfaces in more than one direction
+                // (e.g. thin box identified in y and z), generate connecting quads only for one of them
+                auto is_closesurface_ident = [&] (const ShapeIdentification & ident)
+                {
+                    return ident.type == Identifications::CLOSESURFACES &&
+                        relevant_edges.count(ident.from->nr) && relevant_edges.count(ident.to->nr);
+                };
+
+                auto same_trafo = [&] (const ShapeIdentification & a, const ShapeIdentification & b)
+                {
+                    if(!a.trafo || !b.trafo)
+                        return a.name == b.name;
+                    Point<3> p0 = bounding_box.PMin();
+                    double d = bounding_box.Diam();
+                    for(auto p : { p0, p0 + Vec<3>(d,0,0), p0 + Vec<3>(0,d,0), p0 + Vec<3>(0,0,d) })
+                        if(Dist((*a.trafo)(p), (*b.trafo)(p)) > 1e-8*d)
+                            return false;
+                    return true;
+                };
+
+                auto is_mapped = [&] (int edgenr, const ShapeIdentification & dir)
+                {
+                    for(auto & ident : edges[edgenr]->identifications)
+                        if(is_closesurface_ident(ident) && same_trafo(ident, dir))
+                            return true;
+                    return false;
+                };
+
+                Array<int> nsegs_on_edge(edges.Size());
+                nsegs_on_edge = 0;
+                for(const auto & s : segments)
+                    nsegs_on_edge[mesh.GetEdgeDescriptor(s.GetIndex()).EdgeNr()-1]++;
+
+                Array<const ShapeIdentification*> candidates;
+                for(auto edgenr : relevant_edges)
+                    for(auto & ident : edges[edgenr]->identifications)
+                        if(is_closesurface_ident(ident) && ident.from->nr == edgenr)
+                            candidates.Append(&ident);
+
+                // prefer a direction where all edges not mapped in this direction have a single segment,
+                // otherwise the connecting quads are not conforming
+                const ShapeIdentification * face_ident = candidates.Size() ? candidates[0] : nullptr;
+                for(auto cand : candidates)
+                {
+                    bool conforming = true;
+                    for(auto edgenr : relevant_edges)
+                        if(nsegs_on_edge[edgenr] > 1 && !is_mapped(edgenr, *cand))
+                            conforming = false;
+                    if(conforming)
+                    {
+                        face_ident = cand;
+                        break;
+                    }
+                }
+
                 for(const auto & s : segments)
                 {
-                    auto edgenr = s.edgenr-1;
+                    auto edgenr = mesh.GetEdgeDescriptor(s.GetIndex()).EdgeNr()-1;
                     auto & edge = *edges[edgenr];
                     // ShapeIdentification *edge_mapping;
 
@@ -916,7 +1011,8 @@ namespace netgen
                         {
                             if(edge_ident.type == Identifications::CLOSESURFACES &&
                                     edge_ident.from->nr == edgenr &&
-                                    relevant_edges.count(edge_ident.to->nr) > 0
+                                    relevant_edges.count(edge_ident.to->nr) > 0 &&
+                                    (!face_ident || same_trafo(edge_ident, *face_ident))
                               )
                             {
                                 trafo = edge_ident.trafo;
@@ -935,8 +1031,8 @@ namespace netgen
                         auto gis = sel.GeomInfo();
                         for(auto i : Range(2))
                         {
-                            gis[i].u = s.epgeominfo[i].u;
-                            gis[i].v = s.epgeominfo[i].v;
+                            gis[i].u = s.GeomInfo(i).u;
+                            gis[i].v = s.GeomInfo(i).v;
                         }
 
                         Point<3> p2 = mesh[s[1]];
@@ -967,11 +1063,11 @@ namespace netgen
                         for(auto i : Range(2))
                         {
                             auto i_other = sel[i+2] == s_other[i] ? i : 1-i;
-                            gis[i+2].u = s_other.epgeominfo[i_other].u;
-                            gis[i+2].v = s_other.epgeominfo[i_other].v;
+                            gis[i+2].u = s_other.GeomInfo(i_other).u;
+                            gis[i+2].v = s_other.GeomInfo(i_other).v;
                         }
 
-                        sel.SetIndex(face.nr+1);
+                        sel.SetIndex(FaceRegionIndex::FromNr0(face.nr));
                         mesh.AddSurfaceElement(sel);
                     }
                 }
@@ -1088,7 +1184,7 @@ namespace netgen
                 p = (*trafo)(p);
               else
                 for(auto& edge: dst.edges)
-                  if (edge->primary->nr == seg.edgenr-1)
+                  if (edge->primary->nr == mesh.GetEdgeDescriptor(seg.GetIndex()).EdgeNr()-1)
                     {
                       if (mesh[pi].Type() == FIXEDPOINT) {
                         if((edge->GetStartVertex().GetPoint() - p).Length2() >\
@@ -1115,8 +1211,8 @@ namespace netgen
               pmap[tree.Find(mesh[pi], -1)] = pi;
 
             // store uv values (might be different values for same point in case of internal edges)
-            double u = seg.epgeominfo[i].u;
-            double v = seg.epgeominfo[i].v;
+            double u = seg.GeomInfo(i).u;
+            double v = seg.GeomInfo(i).v;
             auto & vals = uv_values[pi];
             bool found = false;
             for(const auto & [u1,v1] : vals)
@@ -1134,11 +1230,11 @@ namespace netgen
     for(auto sei : mesh.SurfaceElements().Range())
       {
         auto sel = mesh[sei];
-        if(sel.GetIndex() != src.nr+1)
+        if(mesh.GetFaceDescriptor(sel).SurfNr() != src.nr+1)
           continue;
 
-        auto sel_new = sel;
-        sel_new.SetIndex(dst.nr+1);
+        Element2d sel_new (sel);
+        sel_new.SetIndex(FaceRegionIndex::FromNr0(dst.nr));
         for(auto i : Range(sel.PNums()))
           {
             auto pi = sel[i];
@@ -1227,10 +1323,10 @@ namespace netgen
     RegionTimer reg(timer_opt2d);
     auto meshopt = MeshOptimize2d(mesh);
     for(auto i : Range(mparam.optsteps2d))
-    for(auto k : Range(mesh.GetNFD()))
+    for(auto fi : mesh.Regions<2>().Range())
       {
         PrintMessage(3, "Optimization step ", i);
-        meshopt.SetFaceIndex(k+1);
+        meshopt.SetFaceIndex(fi);
         meshopt.SetMetricWeight (mparam.elsizeweight);
         int innerstep = 0;
         for(auto optstep : mparam.optimize2d)
@@ -1333,9 +1429,17 @@ namespace netgen
         return 0;
       }
 
+    Array<BoundaryLayer2dInfo> bl_infos;
     if (mparam.perfstepsstart <= MESHCONST_MESHSURFACE)
       {
+        if(dimension == 2)
+          bl_infos = InsertBoundaryLayers2d(*mesh, mparam);
         MeshSurface(*mesh, mparam);
+        if(dimension == 2)
+          {
+            FinalizeBoundaryLayers2d(*mesh, bl_infos);
+            mesh->PreviewResync();
+          }
       }
 
     if (multithread.terminate || mparam.perfstepsend <= MESHCONST_OPTSURFACE)
@@ -1366,10 +1470,10 @@ namespace netgen
 
     if (mparam.perfstepsstart <= MESHCONST_OPTVOLUME)
       {
-	multithread.task = "Volume optimization";
+        multithread.task = "Volume optimization";
 
-	OptimizeVolume (mparam, *mesh);
-	if (multithread.terminate) return 0;
+        OptimizeVolume (mparam, *mesh);
+        if (multithread.terminate) return 0;
       }
     FinalizeMesh(*mesh);
     return 0;

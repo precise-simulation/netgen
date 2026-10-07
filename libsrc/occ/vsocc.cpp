@@ -95,13 +95,13 @@ namespace netgen
       glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, matcoledge);
       glLineWidth (1.0f);
 
-      if (vispar.occshowedges) glCallList (linelists.Get(1));
-      if (vispar.occshowsurfaces) glCallList (trilists.Get(1));
+      if (vispar.occshowedges) glCallList (linelists[0]);
+      if (vispar.occshowsurfaces) glCallList (trilists[0]);
 
       glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, matcolhiedge);
       glLineWidth (5.0f);
 
-      if (vispar.occshowedges) glCallList (linelists.Get(2));
+      if (vispar.occshowedges) glCallList (linelists[1]);
 
       for (int i = 1; i <= occgeometry->vmap.Extent(); i++)
       if (occgeometry->vvispar[i-1].IsHighlighted())
@@ -274,8 +274,8 @@ namespace netgen
     mat_col[2] = 0.2;
     break;
     default:
-    //	  mat_col[0] = 1-(1.0/double(shapenr));
-    //	  mat_col[1] = 0.5;
+    //    mat_col[0] = 1-(1.0/double(shapenr));
+    //    mat_col[1] = 0.5;
     mat_col[0] = 0.5+double((shapenr*shapenr*shapenr*shapenr) % 10)/20.0;
     mat_col[1] = 0.5+double(int(shapenr*shapenr*shapenr*shapenr*sin(double(shapenr))) % 10)/20.0;
     mat_col[2] = 0.5+double((shapenr*shapenr*shapenr) % 10)/20.0;
@@ -418,12 +418,12 @@ namespace netgen
 
       // Clear lists
 
-      for (int i = 1; i <= linelists.Size(); i++)
-      glDeleteLists (linelists.Elem(i), 1);
+      for (int i = 0; i < linelists.Size(); i++)
+      glDeleteLists (linelists[i], 1);
       linelists.SetSize(0);
 
-      for (int i = 1; i <= trilists.Size(); i++)
-      glDeleteLists (trilists.Elem(i), 1);
+      for (int i = 0; i < trilists.Size(); i++)
+      glDeleteLists (trilists[i], 1);
       trilists.SetSize(0);
 
       // Total wireframe
@@ -607,7 +607,7 @@ namespace netgen
 #endif
                prop.SetParameters (uv.X(), uv.Y());
 
-               //	      surf->D0 (uv.X(), uv.Y(), pnt);
+               //             surf->D0 (uv.X(), uv.Y(), pnt);
 
                if (prop.IsNormalDefined())
                n = prop.Normal();
@@ -615,7 +615,7 @@ namespace netgen
                {
                   (*testout) << "Visualization of face " << i
                   << ": Normal vector not defined" << endl;
-                  //		  n = gp_Vec (0,0,0);
+                  //              n = gp_Vec (0,0,0);
                   gp_Vec a(p[0],p[1]);
                   gp_Vec b(p[0],p[2]);
                   n = b^a;
@@ -701,7 +701,7 @@ namespace netgen
          glEnd ();
       }
 
-      glCallList (trilists.Get(1));
+      glCallList (trilists[0]);
 
       glDisable (GL_POLYGON_OFFSET_FILL);
 

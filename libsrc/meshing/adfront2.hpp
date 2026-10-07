@@ -50,7 +50,7 @@ namespace netgen
 
     ///
     FrontPoint2 (const Point<3> & ap, PointIndex agi,
-		 MultiPointGeomInfo * amgi, bool aonsurface = true);
+                 MultiPointGeomInfo * amgi, bool aonsurface = true);
     ///
     ~FrontPoint2 () { ; }
 
@@ -68,7 +68,7 @@ namespace netgen
     {
       nlinetopoint--;
       if (nlinetopoint == 0)
-	nlinetopoint = -1;
+        nlinetopoint = -1;
     }
 
     ///
@@ -94,8 +94,8 @@ namespace netgen
   class FrontLine
   {
   private:
-    /// Point Indizes
-    INDEX_2 l;  // want to replace by std::array<int,2> l;
+    /// front point indizes
+    IVec<2,Front2PointIndex> l;
     /// quality class 
     int lineclass;      
     /// geometry specific data
@@ -108,7 +108,7 @@ namespace netgen
     }
 
     ///
-    FrontLine (const INDEX_2 & al)
+    FrontLine (const IVec<2,Front2PointIndex> & al)
       : l(al), lineclass(1) { } 
 
     ///
@@ -130,20 +130,20 @@ namespace netgen
     ///
     bool Valid () const
     {
-      return l[0] != -1;
+      return l[0].IsValid();
     }
     ///
     void Invalidate ()
     {
-      l[0] = -1;
-      l[1] = -1;
+      l[0] = Front2PointIndex::INVALID;
+      l[1] = Front2PointIndex::INVALID;
       lineclass = 1000;
     }
 
     void SetGeomInfo (const PointGeomInfo & gi1, const PointGeomInfo & gi2)
       {
-	geominfo[0] = gi1;
-	geominfo[1] = gi2;
+        geominfo[0] = gi1;
+        geominfo[1] = gi2;
       }
 
     const PointGeomInfo * GetGeomInfo () const
@@ -160,21 +160,21 @@ class AdFront2
 {
 
   ///
-  Array<FrontPoint2> points;  /// front points
+  Array<FrontPoint2, Front2PointIndex> points;  /// front points
   Array<FrontLine> lines;     /// front lines
 
   Box3d boundingbox;
   BoxTree<3> linesearchtree;       /// search tree for lines
-  Point3dTree pointsearchtree;    /// search tree for points
-  Point3dTree cpointsearchtree;   /// search tree for cone points (not used ???)
+  Point3dTree<Front2PointIndex> pointsearchtree;    /// search tree for points
+  Point3dTree<Front2PointIndex> cpointsearchtree;   /// search tree for cone points (not used ???)
 
-  Array<int> delpointl;     /// list of deleted front points
+  Array<Front2PointIndex> delpointl;     /// list of deleted front points
   Array<int> dellinel;      /// list of deleted front lines
 
   int nfl;                  /// number of front lines;
-  INDEX_2_HASHTABLE<int> * allflines; /// all front lines ever have been
+  unique_ptr<ClosedHashTable<PointIndices<2>, int>> allflines; /// all front lines ever have been
 
-  Array<int> invpindex;
+  Array<int, Front2PointIndex> invpindex;   // front -> local number (0/-1 markers)
 
   int minval;
   int starti;
@@ -187,7 +187,7 @@ public:
   ~AdFront2 ();
 
   ///
-  // void GetPoints (NgArray<Point<3> > & apoints) const;
+  // void GetPoints (Array<Point<3> > & apoints) const;
   ///
   void Print (ostream & ost) const;
 
@@ -200,35 +200,36 @@ public:
   int GetNFL () const { return nfl; }
 
   const FrontLine & GetLine (int nr) const { return lines[nr]; }
-  const FrontPoint2 & GetPoint (int nr) const { return points[nr]; }
+  const FrontPoint2 & GetPoint (Front2PointIndex nr) const { return points[nr]; }
   const auto & GetLines () const { return lines; }
 
   ///
   int SelectBaseLine (Point<3> & p1, Point<3> & p2, 
-		      const PointGeomInfo *& geominfo1,
-		      const PointGeomInfo *& geominfo2,
-		      int & qualclass);
+                      const PointGeomInfo *& geominfo1,
+                      const PointGeomInfo *& geominfo2,
+                      int & qualclass);
 
   ///
   int GetLocals (int baseline, 
-		 NgArray<Point<3>> & locpoints,
-		 NgArray<MultiPointGeomInfo> & pgeominfo,
-                 NgArray<INDEX_2> & loclines,   // local index
-                 NgArray<int> & pindex,
-                 NgArray<int> & lindex,
+                 Array<Point<3>, LocalPointIndex> & locpoints,
+                 Array<MultiPointGeomInfo, LocalPointIndex> & pgeominfo,
+                 Array<IVec<2,LocalPointIndex>> & loclines,
+                 Array<Front2PointIndex, LocalPointIndex> & pindex,   // local -> front
+                 Array<int> & lindex,
                  double xh);
 
   ///
   void DeleteLine (int li);
   ///
-  int AddPoint (const Point<3> & p, PointIndex globind, 
+  Front2PointIndex AddPoint (const Point<3> & p, PointIndex globind, 
                 MultiPointGeomInfo * mgi = NULL,
                 bool pointonsurface = true);
   ///
-  int AddLine (int pi1, int pi2, 
+  int AddLine (Front2PointIndex pi1, Front2PointIndex pi2, 
                const PointGeomInfo & gi1, const PointGeomInfo & gi2);
   ///
-  int ExistsLine (int gpi1, int gpi2);
+  /// gpi are mesh point numbers
+  int ExistsLine (PointIndex gpi1, PointIndex gpi2);
 
   ///
   void IncrementClass (int li)
@@ -247,7 +248,7 @@ public:
     { return lines[li].GetGeomInfo (lend); }
   ///
 
-  PointIndex GetGlobalIndex (int pi) const
+  PointIndex GetGlobalIndex (Front2PointIndex pi) const
   {
     return points[pi].GlobalIndex();
   }

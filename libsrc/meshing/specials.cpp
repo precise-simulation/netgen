@@ -14,107 +14,103 @@ void CutOffAndCombine (Mesh & mesh, const Mesh & othermesh)
   int nse = othermesh.GetNSE();
   int onp = othermesh.GetNP();
 
-  int ne = mesh.GetNE();
 
   PrintMessage (1, "other mesh has ",
-		othermesh.GetNP(), " points, ",
-		othermesh.GetNSE(), " surface elements.");
+                othermesh.GetNP(), " points, ",
+                othermesh.GetNSE(), " surface elements.");
 
-  NgArray<Box3d> otherbounds(nse);  
+  Array<Box3d> otherbounds(nse);  
   Box3d otherbox;
 
   double maxh = 0;
-  for (i = 1; i <= nse; i++)
+  for (SurfaceElementIndex i : T_Range<SurfaceElementIndex>(nse))
     {
-      const Element2d & sel = othermesh.SurfaceElement(i);
-      sel.GetBox(othermesh.Points(), otherbounds.Elem(i));
+      const Element2dRef & sel = othermesh[i];
+      sel.GetBox(othermesh.Points(), otherbounds[i.Nr1()-1]);
 
-      double loch = othermesh.GetH (othermesh.Point (sel.PNum(1)));
-      otherbounds.Elem(i).Increase(loch);
+      double loch = othermesh.GetH (othermesh.Point (sel[0]));
+      otherbounds[i.Nr1()-1].Increase(loch);
       if (loch > maxh) maxh = loch;
     }
 
-  otherbox.SetPoint (othermesh.Point(1));
-  for (i = 1; i <= othermesh.GetNP(); i++)
-    otherbox.AddPoint (othermesh.Point(i));
+  otherbox.SetPoint (othermesh[IndexBASE<PointIndex>()]);
+  for (PointIndex pi : othermesh.Points().Range())
+    otherbox.AddPoint (othermesh[pi]);
   otherbox.Increase (maxh);
 
-  for (i = 1; i <= ne; i++)
+  for (ElementIndex i : mesh.VolumeElements().Range())
     {
       Box3d box;
       int remove = 0;
 
-      const Element & el = mesh.VolumeElement(i);
+      auto el = mesh[i];
       el.GetBox(mesh.Points(), box);
 
-      if (i % 10000 == 0)
-	cout << "+" << flush;
+      if (i.Nr1() % 10000 == 0)
+        cout << "+" << flush;
 
       if (box.Intersect(otherbox))
-	{
-	  for (j = 1; j <= nse && !remove; j++)
-	    if (box.Intersect(otherbounds.Get(j)))
-	      remove = 1;
-	}
+        {
+          for (j = 1; j <= nse && !remove; j++)
+            if (box.Intersect(otherbounds[j-1]))
+              remove = 1;
+        }
 
       if (remove)
-	mesh.VolumeElement(i).Delete();
+        mesh[i].Delete();
     }
   cout << endl;
 
   TBitArray<PointIndex> connected(mesh.GetNP());
   connected.Clear();
-  for (i = 1; i <= mesh.GetNSE(); i++)
+  for (auto el : mesh.SurfaceElements())
     {
-      const Element2d & el = mesh.SurfaceElement(i);
       for (j = 1; j <= 3; j++)
-	connected.SetBit(el.PNum(j));
+        connected.SetBit(el.PNum(j));
     }
   
   bool changed;
   do
     {
       changed = 0;
-      for (i = 1; i <= mesh.GetNE(); i++)
-	{
-	  const Element & el = mesh.VolumeElement(i);
-	  int has = 0, hasnot = 0;
-	  if (el[0])
-	    {
-	      for (j = 0; j < 4; j++)
-		{
-		  if (connected.Test(el[j]))
-		    has = 1;
-		  else
-		    hasnot = 1;
-		}
-	      if (has && hasnot)
-		{
-		  changed = 1;
-		  for (j = 0; j < 4; j++)
-		    connected.SetBit (el[j]);
-		}
-	    }
-	}
+      for (auto el : mesh.VolumeElements())
+        {
+          int has = 0, hasnot = 0;
+          if (el[0].IsValid())
+            {
+              for (j = 0; j < 4; j++)
+                {
+                  if (connected.Test(el[j]))
+                    has = 1;
+                  else
+                    hasnot = 1;
+                }
+              if (has && hasnot)
+                {
+                  changed = 1;
+                  for (j = 0; j < 4; j++)
+                    connected.SetBit (el[j]);
+                }
+            }
+        }
       cout << "." << flush;
     }
   while (changed);
   cout << endl;
 
-  for (i = 1; i <= mesh.GetNE(); i++)
+  for (auto el : mesh.VolumeElements())
     {
-      const Element & el = mesh.VolumeElement(i);
       int hasnot = 0;
-      if (el[0])
-	{
-	  for (j = 0; j < 4; j++)
-	    {
-	      if (!connected.Test(el[j]))
-		hasnot = 1;
-	    }
-	  if (hasnot)
-	    mesh.VolumeElement(i).Delete();
-	}
+      if (el[0].IsValid())
+        {
+          for (j = 0; j < 4; j++)
+            {
+              if (!connected.Test(el[j]))
+                hasnot = 1;
+            }
+          if (hasnot)
+            el.Delete();
+        }
     }
 
   mesh.Compress();
@@ -130,31 +126,30 @@ void CutOffAndCombine (Mesh & mesh, const Mesh & othermesh)
   for (PointIndex i : locked.Range())
     if (locked.Test(i))
       {
-	mesh.AddLockedPoint (i);
+        mesh.AddLockedPoint (i);
       }
 
 
 
   
-  NgArray<PointIndex> pmat(onp);
-
-  for (i = 1; i <= onp; i++)
-    pmat.Elem(i) = mesh.AddPoint (othermesh.Point(i));
+  Array<PointIndex, PointIndex> pmat(onp);
+  for (PointIndex pi : othermesh.Points().Range())
+    pmat[pi] = mesh.AddPoint (othermesh[pi]);
 
   int fnum = 
-    mesh.AddFaceDescriptor (FaceDescriptor(0,0,1,0));
+    mesh.AddFaceDescriptor (FaceRegion(0,0,1,0)).Nr1();
 
-  for (i = 1; i <= othermesh.GetNSE(); i++)
+  for (auto sel : othermesh.SurfaceElements())
     {
-      Element2d tri = othermesh.SurfaceElement(i);
+      Element2d tri (sel);
       for (j = 1; j <= 3; j++)
-	tri.PNum(j) = pmat.Get(tri.PNum(j));
-      tri.SetIndex(fnum);
+        tri.PNum(j) = pmat[tri.PNum(j)];
+      tri.SetIndex(FaceRegionIndex::FromNr1(fnum));
       mesh.AddSurfaceElement (tri);
     }
 
-  for (i = 1; i <= onp; i++)
-    mesh.AddLockedPoint (pmat.Elem(i));
+  for (PointIndex pi : pmat.Range())
+    mesh.AddLockedPoint (pmat[pi]);
 
   mesh.CalcSurfacesOfNode();
   mesh.CalcLocalH(0.3);
@@ -178,9 +173,9 @@ void HelmholtzMesh (Mesh & mesh)
   double det = ri * ra * rinf - ri * ri * rinf;
   double a = (ri - rinf) / det;
   double b = (ri*ri - ra * rinf) / det;
-  for (i = 1; i <= mesh.GetNP(); i++)
+  for (PointIndex pi : mesh.Points().Range())
     {
-      Point<3> & p = mesh.Point(i);
+      Point<3> & p = mesh[pi];
       double rold = sqrt (sqr(p(0)) + sqr(p(1)) + sqr(p(2)));
       if (rold < ri) continue;
 

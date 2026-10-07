@@ -17,7 +17,7 @@ extern int usechartnormal;
 extern int chartdebug;
 
 extern int geomsearchtreeon;
-extern int AddPointIfNotExists(NgArray<Point3d>& ap, const Point3d& p, double eps = 1e-8);
+extern int AddPointIfNotExists(Array<Point<3>>& ap, const Point<3>& p, double eps = 1e-8);
 //get distance from line lp1-lp2 to point p
 extern double GetDistFromLine(const Point<3>& lp1, const Point<3>& lp2, Point<3>& p);
 extern double GetDistFromInfiniteLine(const Point<3>& lp1, const Point<3>& lp2, const Point<3>& p);
@@ -34,7 +34,7 @@ extern void FIOReadStringE(istream& ios, char* str, int len);
 extern void FIOWriteString(ostream& ios, char* str, int len);
 
 
-typedef NgArray <int> * ArrayINTPTR;
+typedef Array <int> * ArrayINTPTR;
 
 class STLGeometry;
 class STLParameters;
@@ -73,8 +73,8 @@ private:
   Array<STLTrigId> outertrigs; // trigs which belong to other charts
   BoxTree<3,STLTrigId> * searchtree; // ADT containing outer trigs
 
-  NgArray<twoint> olimit; //outer limit of outer chart
-  NgArray<twoint> ilimit; //outer limit of inner chart
+  Array<IVec<2>> olimit; //outer limit of outer chart
+  Array<IVec<2>> ilimit; //outer limit of inner chart
   const STLParameters& stlparam;
 
 
@@ -100,11 +100,11 @@ public:
   size_t GetNOuterT() const {return outertrigs.Size();}
   size_t GetNT() const {return charttrigs.Size()+outertrigs.Size(); }
 
-  void GetTrianglesInBox (const Point3d & pmin,
-			  const Point3d & pmax,
-			  NgArray<STLTrigId> & trias) const;
-  void AddOLimit(twoint l) {olimit.Append(l);}
-  void AddILimit(twoint l) {ilimit.Append(l);}
+  void GetTrianglesInBox (const Point<3> & pmin,
+                          const Point<3> & pmax,
+                          Array<STLTrigId> & trias) const;
+  void AddOLimit(IVec<2> l) {olimit.Append(l);}
+  void AddILimit(IVec<2> l) {ilimit.Append(l);}
 
   void ClearOLimit() {olimit.SetSize(0);}
   void ClearILimit() {ilimit.SetSize(0);}
@@ -112,12 +112,12 @@ public:
   size_t GetNOLimit() const {return olimit.Size();}
   size_t GetNILimit() const {return ilimit.Size();}
 
-  twoint GetOLimit(int i) const {return olimit.Get(i);}
-  twoint GetILimit(int i) const {return ilimit.Get(i);}
+  IVec<2> GetOLimit(int i) const {return olimit[i-1];}
+  IVec<2> GetILimit(int i) const {return ilimit[i-1];}
 
   //move triangles trigs (local chart-trig numbers) to outer chart
-  void MoveToOuterChart(const NgArray<int>& trigs);
-  void DelChartTrigs(const NgArray<int>& trigs);
+  void MoveToOuterChart(const Array<int>& trigs);
+  void DelChartTrigs(const Array<int>& trigs);
 
 
   // define local coordinate system, JS:
@@ -150,7 +150,7 @@ class STLBoundarySeg
 public:
   STLBoundarySeg () { ; }
   STLBoundarySeg (STLPointId ai1, STLPointId ai2, const Array<Point<3>,STLPointId> & points,
-		  const STLChart * chart)
+                  const STLChart * chart)
     : p1(points[ai1]), p2(points[ai2]),
       i1(ai1), i2(ai2)
   {
@@ -189,14 +189,14 @@ class STLBoundary
 private:
   STLGeometry * geometry;
   const STLChart * chart;
-  // NgArray<STLBoundarySeg> boundary;
-  NgClosedHashTable<INDEX_2, STLBoundarySeg> boundary_ht;
-  unique_ptr<BoxTree<2,INDEX_2>> searchtree;
+  // Array<STLBoundarySeg> boundary;
+  ClosedHashTable<IVec<2>, STLBoundarySeg> boundary_ht;
+  unique_ptr<BoxTree<2,IVec<2>>> searchtree;
 public:
   STLBoundary(STLGeometry * ageometry);
   ~STLBoundary() {}
 
-  void Clear() { /* boundary.SetSize(0); */ boundary_ht = NgClosedHashTable<INDEX_2,STLBoundarySeg>(); }
+  void Clear() { /* boundary.SetSize(0); */ boundary_ht = ClosedHashTable<IVec<2>,STLBoundarySeg>(); }
   void SetChart (const STLChart * achart) { chart = achart; }
   //don't check, if already exists!
   // void AddNewSegment(const STLBoundarySeg & seg) {boundary.Append(seg);};
@@ -213,7 +213,7 @@ public:
                double sinchartangle, int divisions, Array<Point<3>,STLPointId>& points,
                double eps);
   
-  bool TestSegChartNV(const Point3d& p1, const Point3d& p2, const Vec3d& sn);
+  bool TestSegChartNV(const Point<3>& p1, const Point<3>& p2, const Vec<3>& sn);
 };
 
 
@@ -311,7 +311,7 @@ inline ostream & operator<< (ostream & ost, const STLParameters & stlparam)
 
 
 void STLMeshing (STLGeometry & geom,
-		 Mesh & mesh,
+                 Mesh & mesh,
                  const MeshingParameters& mparam,
                  const STLParameters& stlpar);
 
@@ -322,8 +322,8 @@ int STLSurfaceMeshing (STLGeometry & geom,
                        const STLParameters& stlpar);
 
 void STLSurfaceOptimization (STLGeometry & geom,
-			     Mesh & mesh,
-			     const MeshingParameters & mparam);
+                             Mesh & mesh,
+                             const MeshingParameters & mparam);
 
 
 } // namespace netgen

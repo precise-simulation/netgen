@@ -7,7 +7,7 @@ namespace netgen
 {
 
   Polyhedra::Face::Face (int pi1, int pi2, int pi3,
-                         const NgArray<Point<3> > & points,
+                         const Array<Point<3> > & points,
                          int ainputnr)
   {
     inputnr = ainputnr;
@@ -87,8 +87,8 @@ namespace netgen
 
         double dist2 = MinDistTP2 (p1, p2, p3, box.Center());
         //(*testout) << "p1 " << p1 << " p2 " << p2 << " p3 " << p3 << endl
-        //		 << " box.Center " << box.Center() << " box.Diam() " << box.Diam() << endl
-        //	 << " dist2 " << dist2 << " sqr(box.Diam()/2) " << sqr(box.Diam()/2) << endl;
+        //               << " box.Center " << box.Center() << " box.Diam() " << box.Diam() << endl
+        //       << " dist2 " << dist2 << " sqr(box.Diam()/2) " << sqr(box.Diam()/2) << endl;
         if (dist2 < sqr (box.Diam()/2))
           {
             //(*testout) << "DOES_INTERSECT" << endl;
@@ -131,7 +131,7 @@ namespace netgen
             if (lam3 < 0) continue;    // ray goes not in direction of face
 
             Vec<3> rs = v0 + lam3 * n;
-	  
+          
             double lam1 = face.w1 * rs;
             double lam2 = face.w2 * rs;
             if (lam1 >= 0 && lam2 >= 0 && lam1+lam2 <= 1)
@@ -146,7 +146,7 @@ namespace netgen
 
 
   void Polyhedra :: GetTangentialSurfaceIndices (const Point<3> & p, 
-                                                 NgArray<int> & surfind, double eps) const
+                                                 Array<int> & surfind, double eps) const
   {
     for (int i = 0; i < faces.Size(); i++)
       {
@@ -172,7 +172,7 @@ namespace netgen
                                            const Vec<3> & v,
                                            double eps) const
   {
-    NgArray<int> point_on_faces;
+    Array<int> point_on_faces;
     INSOLID_TYPE res(DOES_INTERSECT);
 
     Vec<3> vn = v;
@@ -196,7 +196,7 @@ namespace netgen
             point_on_faces.Append(i);
 
             double scal = vn * faces[i].nn; // n->nn
-	
+        
             res = DOES_INTERSECT;
             if (scal > eps_base1) res = IS_OUTSIDE;
             if (scal < -eps_base1) res = IS_INSIDE;
@@ -204,7 +204,7 @@ namespace netgen
       }
   
     //(*testout) << "point_on_faces.Size() " << point_on_faces.Size() 
-    //	     << " res " << res << endl;
+    //       << " res " << res << endl;
 
     if (point_on_faces.Size() == 0)
       return PointInSolid (p, 0);
@@ -334,7 +334,7 @@ namespace netgen
             if (lamn < 0) continue;    // ray goes not in direction of face
 
             Vec<3> rs = v0 + lamn * n;
-	  
+          
             double lam1 = face.w1 * rs;
             double lam2 = face.w2 * rs;
             double lam3 = 1-lam1-lam2;
@@ -623,7 +623,7 @@ namespace netgen
             if (lamn < 0) continue;    // ray goes not in direction of face
 
             Vec<3> rs = v0 + lamn * n;
-	  
+          
             double lam1 = face.w1 * rs;
             double lam2 = face.w2 * rs;
             double lam3 = 1-lam1-lam2;
@@ -668,7 +668,7 @@ namespace netgen
   
 
   void Polyhedra :: GetTangentialVecSurfaceIndices2 (const Point<3> & p, const Vec<3> & v1, const Vec<3> & v2,
-                                                     NgArray<int> & surfind, double eps) const
+                                                     Array<int> & surfind, double eps) const
   {
     Vec<3> v1n = v1;
     v1n.Normalize();
@@ -727,7 +727,7 @@ namespace netgen
 
 
   void Polyhedra :: GetPrimitiveData (const char *& classname, 
-                                      NgArray<double> & coeffs) const
+                                      Array<double> & coeffs) const
   {
     classname = "Polyhedra";
     coeffs.SetSize(0);
@@ -751,7 +751,7 @@ namespace netgen
     */
   }
 
-  void Polyhedra :: SetPrimitiveData (NgArray<double> & /* coeffs */)
+  void Polyhedra :: SetPrimitiveData (Array<double> & /* coeffs */)
   {
     ;
   }
@@ -812,8 +812,8 @@ namespace netgen
     //   for (int i = 0; i < planes.Size(); i++)
     //     if (pl.IsIdentic (*planes[i], inverse, 1e-9*max3(v1.Length(),v2.Length(),Dist(p2,p3))))
     //       {
-    // 	if (!inverse)
-    // 	  identicto = i;
+    //  if (!inverse)
+    //    identicto = i;
     //       }
     //   //  cout << "is identic = " << identicto << endl;
     //   identicto = -1;    // changed April 10, JS
@@ -870,7 +870,7 @@ namespace netgen
   }
 
 
-  void Polyhedra :: GetPolySurfs(NgArray < NgArray<int> * > & polysurfs)
+  void Polyhedra :: GetPolySurfs(Array < Array<int> * > & polysurfs)
   {
     int maxnum = -1;
   
@@ -882,14 +882,14 @@ namespace netgen
   
     polysurfs.SetSize(maxnum+1);
     for(int i=0; i<polysurfs.Size(); i++)
-      polysurfs[i] = new NgArray<int>;
+      polysurfs[i] = new Array<int>;
 
     for(int i = 0; i<faces.Size(); i++)
       polysurfs[faces[i].inputnr]->Append(faces[i].planenr);
   }
 
 
-  void Polyhedra::CalcSpecialPoints (NgArray<Point<3> > & pts) const
+  void Polyhedra::CalcSpecialPoints (Array<Point<3> > & pts) const
   {
     for (int i = 0; i < points.Size(); i++)
       pts.Append (points[i]);
@@ -897,7 +897,7 @@ namespace netgen
 
 
   void Polyhedra :: AnalyzeSpecialPoint (const Point<3> & /* pt */, 
-                                         NgArray<Point<3> > & /* specpts */) const
+                                         Array<Point<3> > & /* specpts */) const
   {
     ;
   }
@@ -915,7 +915,7 @@ namespace netgen
           if (surfaceids[si1] != s1 || surfaceids[si2] != s2) continue;
 
           //(*testout) << "check pair fi1/fi2 " << fi1 << "/" << fi2 << endl;
-	
+        
           Vec<3> n1 = GetSurface(si1) . GetNormalVector (p);
           Vec<3> n2 = GetSurface(si2) . GetNormalVector (p);
           Vec<3> t = Cross (n1, n2);
@@ -927,7 +927,7 @@ namespace netgen
             int samepts = 0;
             for (int j = 0; j < 3; j++)
             for (int k = 0; k < 3; k++)
-	    if (Dist(points[faces[fi1].pnums[j]],
+            if (Dist(points[faces[fi1].pnums[j]],
             points[faces[fi2].pnums[k]]) < eps)
             samepts++;
             if (samepts < 2) continue;
@@ -939,7 +939,7 @@ namespace netgen
               Vec<3> v1 = points[faces[fi1].pnums[(j+1)%3]] - points[faces[fi1].pnums[j]];
               double smax = v1.Length();
               v1 *= 1./smax;
-	    
+            
               int pospos;
               if(fabs(v1(0)) > 0.5)
                 pospos = 0;
@@ -960,7 +960,7 @@ namespace netgen
                     v2 -= v1;
                   else
                     v2 += v1;
-		 
+                 
                   //(*testout) << "v2.Length2() " << v2.Length2() << endl;
 
                   if(v2.Length2() > 1e-18)
@@ -970,7 +970,7 @@ namespace netgen
 
                   sa = (points[faces[fi2].pnums[k]](pospos) - points[faces[fi1].pnums[j]](pospos)) / v1(pospos);
                   sb = (points[faces[fi2].pnums[(k+1)%3]](pospos) - points[faces[fi1].pnums[j]](pospos)) / v1(pospos);
-		 
+                 
 
                   if(Dist(points[faces[fi1].pnums[j]] + sa*v1, points[faces[fi2].pnums[k]]) > eps)
                     continue;
@@ -999,14 +999,14 @@ namespace netgen
                     shareedge = (t * v1 > 0);
                   else if (sp > sb-eps)
                     shareedge = (t * v1 < 0);
-		   
+                   
                 }
             }
           if (!shareedge) continue;
 
           t.Normalize();
-	  
-	
+          
+        
           return t;
         }
 

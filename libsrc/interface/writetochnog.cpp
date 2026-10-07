@@ -20,7 +20,7 @@ namespace netgen
 
 
 void WriteTochnogFormat (const Mesh & mesh,
-			 const filesystem::path & filename)
+                         const filesystem::path & filename)
 {
   cout << "\nWrite Tochnog Volume Mesh" << endl;
 
@@ -35,14 +35,14 @@ void WriteTochnogFormat (const Mesh & mesh,
 
   int np = mesh.GetNP();
   int ne = mesh.GetNE();
-  int i, j;
+  int j;
 
-  for (i = 1; i <= np; i++)
+  for (PointIndex pi : mesh.Points().Range())
     {
-      outfile << "node " << " " << i << " ";
-      outfile << mesh.Point(i)(0) << " ";
-      outfile << mesh.Point(i)(1) << " ";
-      outfile << mesh.Point(i)(2) << "\n";
+      outfile << "node " << " " << pi.Nr1() << " ";
+      outfile << mesh[pi](0) << " ";
+      outfile << mesh[pi](1) << " ";
+      outfile << mesh[pi](2) << "\n";
     }
 
   int elemcnt = 0; //element counter
@@ -52,51 +52,51 @@ void WriteTochnogFormat (const Mesh & mesh,
   while (!finished)
     {
       int actcnt = 0;
-      const Element & el1 = mesh.VolumeElement(1);
+      auto el1 = mesh[ElementIndex::FromNr1(1)];
       int non = el1.GetNP();
       if (non == 4)
-	{
-	  outfile << "(Elements, type=-tet4)" << endl;
-	} 
+        {
+          outfile << "(Elements, type=-tet4)" << endl;
+        } 
       else
-	{
-	  cout << "unsupported Element type!!!" << endl;	  
-	}
+        {
+          cout << "unsupported Element type!!!" << endl;          
+        }
 
-      for (i = 1; i <= ne; i++)
-	{
-	  const Element & el = mesh.VolumeElement(i);
-	      
-	  if (el.GetIndex() == indcnt)
-	    {
-	      actcnt++;
-	      if (el.GetNP() != non) 
-		{
-		  cout << "different element-types in a subdomain are not possible!!!" << endl;
-		  continue;
-		}
-		  
-	      elemcnt++;
-	      outfile << "element " << elemcnt << " -tet4 ";
-	      if (non == 4)
-		{
-		  outfile << el.PNum(1) << " ";
-		  outfile << el.PNum(2) << " ";
-		  outfile << el.PNum(4) << " ";
-		  outfile << el.PNum(3) << "\n";
-		}
-	      else
-		{
-		  cout << "unsupported Element type!!!" << endl;
-		  for (j = 1; j <= el.GetNP(); j++)
-		    {
-		      outfile << el.PNum(j);
-		      if (j != el.GetNP()) outfile << ", ";
-		    }
-		  outfile << "\n";
-		}
-	    }
-	}	  
+      for (ElementIndex i : T_Range<ElementIndex>(ne))
+        {
+          auto el = mesh[i];
+              
+          if (el.GetIndex().Nr1() == indcnt)
+            {
+              actcnt++;
+              if (el.GetNP() != non) 
+                {
+                  cout << "different element-types in a subdomain are not possible!!!" << endl;
+                  continue;
+                }
+                  
+              elemcnt++;
+              outfile << "element " << elemcnt << " -tet4 ";
+              if (non == 4)
+                {
+                  outfile << el[0] << " ";
+                  outfile << el[1] << " ";
+                  outfile << el[3] << " ";
+                  outfile << el[2] << "\n";
+                }
+              else
+                {
+                  cout << "unsupported Element type!!!" << endl;
+                  for (j = 1; j <= el.GetNP(); j++)
+                    {
+                      outfile << el.PNum(j);
+                      if (j != el.GetNP()) outfile << ", ";
+                    }
+                  outfile << "\n";
+                }
+            }
+        }         
       indcnt++;
       if (elemcnt == ne) {finished = 1; cout << "all elements found by Index!" << endl;}
       if (actcnt == 0) {finished = 1;}

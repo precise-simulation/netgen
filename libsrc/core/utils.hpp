@@ -130,7 +130,7 @@ namespace ngcore
   }
 
   template <class T>
-  NETGEN_INLINE void Swap (T & a, T & b)
+  NETGEN_INLINE constexpr void Swap (T & a, T & b)
   {
       T temp = std::move(a);
       a = std::move(b);
@@ -218,15 +218,37 @@ namespace ngcore
     return reinterpret_cast<std::atomic<T>&> (d);
   }
 
+  
   NETGEN_INLINE double AtomicAdd( double & sum, double val )
   {
-      std::atomic<double> & asum = AsAtomic(sum);
-      double current = asum.load();
-      while (!asum.compare_exchange_weak(current, current + val))
-          ;
-      return current;
+#if defined(__cpp_lib_atomic_ref)
+    std::atomic_ref<double> asum(sum);
+    return asum.fetch_add(val); // Returns the old value of 'sum'
+#else
+    std::atomic<double> & asum = AsAtomic(sum);
+    double current = asum.load();
+    while (!asum.compare_exchange_weak(current, current + val))
+      ;
+    return current;
+#endif
   }
-
+  
+  NETGEN_INLINE float AtomicAdd( float & sum, float val )
+  {
+#if defined(__cpp_lib_atomic_ref)
+    std::atomic_ref<float> asum(sum);
+    return asum.fetch_add(val); // Returns the old value of 'sum'
+#else
+    std::atomic<float> & asum = AsAtomic(sum);
+    float current = asum.load();
+    while (!asum.compare_exchange_weak(current, current + val))
+      ;
+    return current;
+#endif
+  }
+  
+  
+  
   template<typename T>
   NETGEN_INLINE T AtomicMin( T & minval, T val )
   {
@@ -251,6 +273,37 @@ namespace ngcore
 
   
   template <int N> using IC = std::integral_constant<int,N>;  // needed for Iterate
+
+  /// integral, and IC<N> counts as integral too (usable as index type)
+  template <typename T>
+  struct my_is_integral : std::is_integral<T> {};
+  template <int N>
+  struct my_is_integral<IC<N>> : std::true_type {};
+
+  template <typename T>
+  NETGEN_INLINE T RemoveConst (const T & x) { return x; }
+}
+
+// stack array of run-time size: VLA where available, aligned alloca otherwise
+#define aligned_alloca(size,align)  (( (size_t)alloca(size+align-1)+align-1) & -align)
+#if defined(NETGEN_VLA) || defined(VLA)
+#define STACK_ARRAY(TYPE,VAR,SIZE) TYPE VAR[SIZE]
+#else
+#define STACK_ARRAY(TYPE,VAR,SIZE) TYPE * VAR = (TYPE*)aligned_alloca((SIZE)*sizeof(TYPE), alignof(TYPE))
+#endif
+
+namespace std
+{
+  template <int I1, int I2>
+  constexpr NETGEN_INLINE integral_constant<int,I1+I2>
+  operator+ (integral_constant<int,I1>, integral_constant<int,I2>)
+  {
+    return integral_constant<int,I1+I2>();
+  }
+}
+
+namespace ngcore
+{
 
   
   namespace detail {

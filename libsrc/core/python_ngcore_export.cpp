@@ -3,6 +3,7 @@
 #include "bitarray.hpp"
 #include "taskmanager.hpp"
 #include "mpi_wrapper.hpp"
+#include "memtracer.hpp"
 
 using namespace ngcore;
 using namespace std;
@@ -216,25 +217,25 @@ PYBIND11_MODULE(pyngcore, m) // NOLINT
     })
     .def("__getitem__", [](Flags & self, const string& name) -> py::object {
 
-	  if(self.NumListFlagDefined(name))
-	    return py::cast(self.GetNumListFlag(name));
+          if(self.NumListFlagDefined(name))
+            return py::cast(self.GetNumListFlag(name));
 
-	  if(self.StringListFlagDefined(name))
-	    return py::cast(self.GetStringListFlag(name));
-	 
-	  if(self.NumFlagDefined(name))
-	    return py::cast(*self.GetNumFlagPtr(name));
-	  
-	  if(self.StringFlagDefined(name))
-	    return py::cast(self.GetStringFlag(name));
+          if(self.StringListFlagDefined(name))
+            return py::cast(self.GetStringListFlag(name));
+         
+          if(self.NumFlagDefined(name))
+            return py::cast(*self.GetNumFlagPtr(name));
+          
+          if(self.StringFlagDefined(name))
+            return py::cast(self.GetStringFlag(name));
 
-	  if(self.FlagsFlagDefined(name))
-	    return py::cast(self.GetFlagsFlag(name));
+          if(self.FlagsFlagDefined(name))
+            return py::cast(self.GetFlagsFlag(name));
 
           if(self.AnyFlagDefined(name))
             return CastAnyToPy(self.GetAnyFlag(name));
 
-	  return py::cast(self.GetDefineFlag(name));
+          return py::cast(self.GetDefineFlag(name));
       }, py::arg("name"), "Return flag by given name")
     .def("ToDict", [](const Flags& flags)
     {
@@ -301,6 +302,9 @@ threads : int
 
 )raw_string");
 
+  m.def("GetNumThreads", &TaskManager::GetNumThreads,
+        "Number of threads of the active TaskManager (1 if none is active)");
+
   // local TaskManager class to be used as context manager in Python
   class ParallelContextManager {
       int num_threads;
@@ -341,7 +345,7 @@ threads : int
   py::class_<PajeTrace>(m, "PajeTrace")
     .def(py::init( [] (string filename, size_t size_mb, bool threads, bool thread_counter, bool memory)
           {
-              PajeTrace::SetMaxTracefileSize(size_mb*1014*1024);
+              PajeTrace::SetMaxTracefileSize(size_mb*1024*1024);
               PajeTrace::SetTraceThreads(threads);
               PajeTrace::SetTraceMemory(memory);
               PajeTrace::SetTraceThreadCounter(thread_counter);
@@ -353,18 +357,16 @@ threads : int
               "size in Megabytes"
         )
     .def("__enter__", [](PajeTrace & self) { })
-    .def("__exit__", [](PajeTrace & self, py::args) { trace = nullptr; })
+    .def("__exit__", [](PajeTrace & self, py::args) { trace = nullptr; memtrace = nullptr; })
     .def_static("SetTraceThreads", &PajeTrace::SetTraceThreads)
     .def_static("SetTraceThreadCounter", &PajeTrace::SetTraceThreadCounter)
     .def_static("SetMaxTracefileSize", &PajeTrace::SetMaxTracefileSize)
-#ifdef NETGEN_TRACE_MEMORY
-    .def_static("WriteMemoryChart", [](string filename){ if(trace) trace->WriteMemoryChart(filename); }, py::arg("filename")="memory" )
-#endif // NETGEN_TRACE_MEMORY
+    .def_static("SetTraceMemory", &PajeTrace::SetTraceMemory)
+    .def_static("SetMemoryTraceThreshold", &PajeTrace::SetMemoryTraceThreshold, py::arg("bytes"),
+                "host allocations below this size (bytes) are not traced, default 4096")
     ;
 
-    m.def("GetTotalMemory", MemoryTracer::GetTotalMemory);
-    m.def("GetTotalMemory", MemoryTracer::GetTotalMemory);
-    m.def("GetRSSMemory", MemoryTracer::GetRSSMemory);
+    m.def("GetRSSMemory", GetRSSMemory);
     m.def("PrintMemoryUsage", [](std::filesystem::path log_file = "", std::string msg = "", int n_frames=0) {
         auto inspect = py::module::import("inspect");
         auto frame = inspect.attr("currentframe")();
@@ -375,10 +377,10 @@ threads : int
         if(log_file != "")
         {
             ofstream out(log_file, std::ios::app);
-            MemoryTracer::PrintMemoryUsage(filename.c_str(), line, msg, out);
+            PrintMemoryUsage(filename.c_str(), line, msg, out);
         }
         else
-            MemoryTracer::PrintMemoryUsage(filename.c_str(), line, msg);
+            PrintMemoryUsage(filename.c_str(), line, msg);
     }, py::arg("log_file") = "", py::arg("msg") = "", py::arg("n_frames") = 0,
         "Parameters:\n\nlog_file : str\n    If given, memory usage information is appended to this file, otherwise printed to stdout\nmsg : str\n    Additional message to be printed together with memory usage information\nn_frames : int\n    Number of stack frames to go back to get the filename and line number for the log message, set it to 1 if you have a wrapper function that calls this function");
 
@@ -395,11 +397,11 @@ threads : int
     ;
   
   m.def("Timers",
-	  []() 
-	   {
-	     py::list timers;
-	     for (int i = 0; i < NgProfiler::SIZE; i++)
-	       if (!NgProfiler::timers[i].name.empty())
+          []() 
+           {
+             py::list timers;
+             for (int i = 0; i < NgProfiler::SIZE; i++)
+               if (!NgProfiler::timers[i].name.empty())
                {
                  py::dict timer;
                  timer["name"] = py::str(NgProfiler::timers[i].name);
@@ -409,9 +411,9 @@ threads : int
                  timer["Gflop/s"] = py::float_(NgProfiler::GetFlops(i)/NgProfiler::GetTime(i)*1e-9);
                  timers.append(timer);
                }
-	     return timers;
-	   }, "Returns list of timers"
-	   );
+             return timers;
+           }, "Returns list of timers"
+           );
   m.def("ResetTimers", &NgProfiler::Reset);
 
   py::class_<NgMPI_Comm> (m, "MPI_Comm")
@@ -438,7 +440,7 @@ threads : int
           { procs[i] = proc_list[i]; }
         if (!procs.Contains(c.Rank()))
           { throw Exception("rank "+ToString(c.Rank())+" not in subcomm"); }
-	return c.SubCommunicator(procs);
+        return c.SubCommunicator(procs);
       }, py::arg("procs"));
   ;
 
@@ -451,9 +453,7 @@ threads : int
             (uintptr_t)info.creator,
             (uintptr_t)info.upcaster,
             (uintptr_t)info.downcaster,
-            (uintptr_t)info.cargs_archiver,
-            (uintptr_t)info.anyToPyCaster,
-            (uintptr_t)info.pyToAnyCaster
+            (uintptr_t)info.cargs_archiver
         );
       }
       return class_dict;

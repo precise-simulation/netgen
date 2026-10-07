@@ -13,6 +13,15 @@ class MeshOptimize3d
   OPTIMIZEGOAL goal = OPT_QUALITY;
   double min_badness = 0;
 
+  /// element badness, valid only during an optimization pass; NaN = not computed
+  Array<float, ElementIndex> badness;
+  void EnsureBadnessSize ();
+  float GetBadness (ElementIndex ei);
+  void SetBadness (ElementIndex ei, float bad) { EnsureBadnessSize(); badness[ei] = bad; }
+  void InvalidateBadness (ElementIndex ei) { if (badness.Range().Contains(ei)) badness[ei] = NAN; }
+  /// mesh.Compress(), keeping the badness array aligned with the elements
+  void CompressMesh ();
+
   bool HasBadElement(FlatArray<ElementIndex> els);
   bool HasIllegalElement(FlatArray<ElementIndex> els);
   bool NeedsOptimization(FlatArray<ElementIndex> els);
@@ -35,27 +44,27 @@ public:
   void CombineImprove ();
 
   void SplitImprove ();
-  double SplitImproveEdge (Table<ElementIndex,PointIndex> & elementsonnode, NgArray<PointIndices<3>> &locfaces, double badmax, PointIndex pi1, PointIndex pi2, PointIndex ptmp, bool check_only=false);
+  double SplitImproveEdge (Table<ElementIndex,PointIndex> & elementsonnode, Array<PointIndices<3>> &locfaces, double badmax, PointIndex pi1, PointIndex pi2, PointIndex ptmp, bool check_only=false);
 
   void SplitImprove2 ();
   double SplitImprove2Element (ElementIndex ei, const Table<ElementIndex, PointIndex> & elements_of_point, bool check_only);
   
 
-  double SwapImproveEdge (const TBitArray<ElementIndex> * working_elements, Table<ElementIndex,PointIndex> & elementsonnode, INDEX_3_HASHTABLE<int> & faces, PointIndex pi1, PointIndex pi2, bool check_only=false);
+  double SwapImproveEdge (const TBitArray<ElementIndex> * working_elements, Table<ElementIndex,PointIndex> & elementsonnode, ClosedHashTable<SortedPointIndices<3>, int> & faces, PointIndex pi1, PointIndex pi2, bool check_only=false);
   void SwapImprove (const TBitArray<ElementIndex> * working_elements = NULL);
   void SwapImproveSurface (const TBitArray<ElementIndex> * working_elements = NULL,
-			   const NgArray< idmap_type* > * idmaps = NULL);
+                           const Array< idmap_type* > * idmaps = NULL);
   void SwapImprove2 (bool conform_segments = false);
   double SwapImprove2 (ElementIndex eli1, int face, Table<ElementIndex, PointIndex> & elementsonnode, DynamicTable<SurfaceElementIndex, PointIndex> & belementsonnode, bool conform_segments, bool check_only=false );
 
   void ImproveMesh() { mesh.ImproveMesh(mp, goal); }
 
   double 
-  CalcBad (const Mesh::T_POINTS & points, const Element & elem, double h)
+  CalcBad (const Mesh::T_POINTS & points, const ElementRef & elem, double h)
   {
     if (elem.GetType() == TET)
       return CalcTetBadness (points[elem[0]], points[elem[1]],  
-			     points[elem[2]], points[elem[3]], h, mp);  
+                             points[elem[2]], points[elem[3]], h, mp);  
     return 0;
   }
 
@@ -69,17 +78,17 @@ public:
 
 
 inline double 
-CalcBad (const Mesh::T_POINTS & points, const Element & elem, double h, const MeshingParameters & mp)
+CalcBad (const Mesh::T_POINTS & points, const ElementRef & elem, double h, const MeshingParameters & mp)
 {
   if (elem.GetType() == TET)
     return CalcTetBadness (points[elem[0]], points[elem[1]],  
-			   points[elem[2]], points[elem[3]], h, mp);  
+                           points[elem[2]], points[elem[3]], h, mp);  
   return 0;
 }
 
 
 
-extern int WrongOrientation (const Mesh::T_POINTS & points, const Element & el);
+extern int WrongOrientation (const Mesh::T_POINTS & points, const ElementRef & el);
 
 
 /* Functional depending of inner point inside triangular surface */
@@ -88,7 +97,7 @@ extern int WrongOrientation (const Mesh::T_POINTS & points, const Element & el);
 class MinFunctionSum : public MinFunction
 {
 protected:
-  NgArray<MinFunction*> functions;
+  Array<MinFunction*> functions;
  
 public:
   
@@ -108,14 +117,14 @@ public:
 class PointFunction1 : public MinFunction
 {
   Mesh::T_POINTS & points;
-  const NgArray<PointIndices<3>> & faces;
+  const Array<PointIndices<3>> & faces;
   const MeshingParameters & mp;
   double h;
 public:
   PointFunction1 (Mesh::T_POINTS & apoints, 
-		  const NgArray<PointIndices<3>> & afaces,
-		  const MeshingParameters & amp,
-		  double ah);
+                  const Array<PointIndices<3>> & afaces,
+                  const MeshingParameters & amp,
+                  double ah);
   
   virtual double Func (const Vector & x) const;
   virtual double FuncDeriv (const Vector & x, const Vector & dir, double & deriv) const;
@@ -127,8 +136,8 @@ class JacobianPointFunction : public MinFunction
 {
 public:
   Mesh::T_POINTS & points;
-  const Array<Element, ElementIndex> & elements;
-  TABLE<INDEX> elementsonpoint;
+  const T_VOLELEMENTS & elements;
+  Table<ElementIndex, PointIndex> elementsonpoint;
   PointIndex actpind;
 
   bool onplane;
@@ -136,7 +145,7 @@ public:
   
 public:
   JacobianPointFunction (Mesh::T_POINTS & apoints, 
-			 const Array<Element, ElementIndex> & aelements);
+                         const T_VOLELEMENTS & aelements);
   virtual ~JacobianPointFunction () { ; }
   virtual void SetPointIndex (PointIndex aactpind);
   virtual double Func (const Vector & x) const;

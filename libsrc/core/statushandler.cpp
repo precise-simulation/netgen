@@ -1,3 +1,4 @@
+#include <mutex>
 #include "array.hpp"
 #include "statushandler.hpp"
 
@@ -24,6 +25,7 @@ namespace ngcore
   static Array<std::string> msgstatus_stack(0);
   static Array<double> threadpercent_stack(0);
   static std::string msgstatus = "";
+  static std::mutex status_mutex;
 
 
   void ResetStatus()
@@ -41,6 +43,7 @@ namespace ngcore
 
   void PushStatus(const std::string& s)
   {
+    std::lock_guard<std::mutex> lock(status_mutex);
     msgstatus_stack.Append(s);  
     SetStatMsg(s);
     threadpercent_stack.Append(0);
@@ -49,6 +52,7 @@ namespace ngcore
   
   void PopStatus()
   {
+    std::lock_guard<std::mutex> lock(status_mutex);
     if (msgstatus_stack.Size())
       {
         if (msgstatus_stack.Size() > 1)
@@ -73,13 +77,6 @@ namespace ngcore
   
 
 
-  /*
-    void SetStatMsgF(const MyStr& s)
-    {
-    PrintFnStart(s);
-    SetStatMsg(s);
-    }
-  */
 
   void SetStatMsg(const std::string& s)
   {
@@ -105,7 +102,7 @@ namespace ngcore
     if ( msgstatus_stack.Size() )
       s = msgstatus_stack.Last();
     else
-      s = "idle";     
+      s = (multithread.task && multithread.task[0]) ? multithread.task : "idle";
   }
 }
 

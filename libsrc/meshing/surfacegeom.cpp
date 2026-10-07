@@ -108,7 +108,7 @@ namespace netgen
   }
   
   void SurfaceGeometry :: ProjectPointEdge (int surfind, int surfind2, Point<3> & p,
-                                            EdgePointGeomInfo* gi) const
+                                            EdgePointGeomInfo* gi, int /*edgenr*/) const
   {
     if (gi == nullptr)
       throw Exception("In SurfaceGeometry::ProjectPointEdge: gi is nullptr");
@@ -198,15 +198,13 @@ namespace netgen
   }
 
   
-  void  SurfaceGeometry :: PointBetweenEdge(const Point<3> & p1, const Point<3> & p2, double secpoint, int surfi1, int surfi2, const EdgePointGeomInfo & ap1, const EdgePointGeomInfo & ap2, Point<3> & newp, EdgePointGeomInfo & newgi) const
+  void  SurfaceGeometry :: PointBetweenEdge(const Point<3> & p1, const Point<3> & p2, double secpoint, int surfi1, int surfi2, const EdgePointGeomInfo & ap1, const EdgePointGeomInfo & ap2, Point<3> & newp, EdgePointGeomInfo & newgi, int /*edgenr*/) const
   {
-    newgi.u = ap1.u+secpoint*(ap2.u-ap1.u);
-    newgi.v = ap1.v+secpoint*(ap2.v-ap1.v);
-    newgi.edgenr = ap1.edgenr;
-    newgi.body = -1;
+    newgi.gi.u = ap1.gi.u+secpoint*(ap2.gi.u-ap1.gi.u);
+    newgi.gi.v = ap1.gi.v+secpoint*(ap2.gi.v-ap1.gi.v);
     newgi.dist = -1.0;
 
-    newp = Point<3>(func(Point<2>(newgi.u, newgi.v)));
+    newp = Point<3>(func(Point<2>(newgi.gi.u, newgi.gi.v)));
   }
 
     void CheckForBBBPnt(const Array<Point<3>>& bbbpts, const Point<3>& pnt, Array<bool>& found, Array<PointIndex>& indbbbpts, const Array<PointIndex>& pids)
@@ -297,7 +295,7 @@ namespace netgen
 
       for(int l=0; l < layer_thickness[0].Size(); l++,j++)
         {
-	  AddPoint(offsetx+layer_thickness[0][l]*double(j-l), offsety, pids, pgis);
+          AddPoint(offsetx+layer_thickness[0][l]*double(j-l), offsety, pids, pgis);
           offsetx += layer_thickness[0][l];
         }
       
@@ -309,7 +307,7 @@ namespace netgen
       int startj = j;
       for(int l=0; l < layer_thickness[2].Size(); l++, j++)
         {
-	  AddPoint(offsetx+layer_thickness[2][layer_thickness[2].Size()-1-l]*double(j-startj-l+1), offsety, pids, pgis);
+          AddPoint(offsetx+layer_thickness[2][layer_thickness[2].Size()-1-l]*double(j-startj-l+1), offsety, pids, pgis);
 
           offsetx += layer_thickness[2][layer_thickness[2].Size()-1-l];
         }
@@ -323,28 +321,28 @@ namespace netgen
 
     for(int k=0; k < layer_thickness[1].Size(); k++,i++)
       {
-	InternalLoop(offsety, pids, pgis);
-	offsety += layer_thickness[1][k];
+        InternalLoop(offsety, pids, pgis);
+        offsety += layer_thickness[1][k];
       }
 
     for(; i <= ny-total_layer_el[3]; i++)
       {
         InternalLoop(offsety, pids, pgis);        
-	offsety +=  interior_y/(ny-total_layer_el[1]-total_layer_el[3]);
+        offsety +=  interior_y/(ny-total_layer_el[1]-total_layer_el[3]);
       }
     offsety -=  interior_y/(ny-total_layer_el[1]-total_layer_el[3]);
 
     for(int k=0; k < layer_thickness[3].Size(); k++,i++)
       {
-	offsety += layer_thickness[3][layer_thickness[3].Size()-1-k];
-	InternalLoop(offsety, pids, pgis); 
+        offsety += layer_thickness[3][layer_thickness[3].Size()-1-k];
+        InternalLoop(offsety, pids, pgis); 
       }
 
     for (bool f : found)
       if (!f)
         throw Exception("In SurfaceGeometry :: GenerateMesh: bbbpts not resolved in mesh.");
 
-    FaceDescriptor fd;
+    FaceRegion fd;
     fd.SetSurfNr(1);
     fd.SetDomainIn(1);
     fd.SetDomainOut(0);
@@ -366,7 +364,7 @@ namespace netgen
                     el[i] = pids[pnum[i]];
                     el.GeomInfoPi(i+1) = pgis[pnum[i]];
                   }
-                el.SetIndex(1);
+                el.SetIndex(FaceRegionIndex::FromNr1(1));
             
                 mesh->AddSurfaceElement(el);
               }
@@ -399,7 +397,7 @@ namespace netgen
                     el[i] = pids[pnum1[i]];
                     el.GeomInfoPi(i+1) = pgis[pnum1[i]];
                   }
-                el.SetIndex(1);
+                el.SetIndex(FaceRegionIndex::FromNr1(1));
             
                 mesh->AddSurfaceElement(el);
                 for (int i = 0; i < 3; i++)
@@ -413,143 +411,160 @@ namespace netgen
       }
 
     Segment seg;
-    seg.si = 1;
-    seg.edgenr = 1;
-    seg.epgeominfo[0].edgenr = 0;
-    seg.epgeominfo[1].edgenr = 0;
     //for hp refinement
-    seg.singedge_left = 0;
-    seg.singedge_right = 0;
+    double singedge_left_val = 0;
+    double singedge_right_val = 0;
     for (size_t i=0; i < hpbnd.Size(); i++)
       {
         if (hpbnd[i] == "bottom")
           {
-            seg.singedge_left = hpbndfac[i];
-            seg.singedge_right = hpbndfac[i];
+            singedge_left_val = hpbndfac[i];
+            singedge_right_val = hpbndfac[i];
           }
       }
     // needed for codim2 in 3d
-    seg.edgenr = 1;
+    {
+      EdgeRegion ed;
+      ed.SetEdgeNr(1);
+      ed.SetSurfNr(0, -1);
+      ed.SetSurfNr(1, -1);
+      ed.SetSingEdgeLeft(singedge_left_val);
+      ed.SetSingEdgeRight(singedge_right_val);
+
+      auto edsi = mesh->AddEdgeDescriptor(ed);
+      mesh->GetEdgeDescriptor(edsi).SetIndex(FaceRegionIndex::FromNr1(1));
+      seg.SetIndex(edsi);
+    }
     for(int i=0; i < numx; i++)
       {
         seg[0] = pids[i];
         seg[1] = pids[i+1];
         
-        seg.geominfo[0] = pgis[i];
-        seg.geominfo[1] = pgis[i+1];
-        seg.epgeominfo[0].u = pgis[i].u;
-        seg.epgeominfo[0].v = pgis[i].v;
-        seg.epgeominfo[0].edgenr = seg.edgenr;
-        seg.epgeominfo[1].u = pgis[i+1].u;
-        seg.epgeominfo[1].v = pgis[i+1].v;
-        seg.epgeominfo[1].edgenr = seg.edgenr;
+        seg.GeomInfo(0) = pgis[i];
+        seg.GeomInfo(1) = pgis[i+1];
+
         
         mesh->AddSegment(seg);
       }
 
-    seg.si = 2;
-    seg.edgenr = 2;
-    seg.singedge_left = 0;
-    seg.singedge_right = 0;
+    singedge_left_val = 0;
+    singedge_right_val = 0;
 
     for (size_t i=0; i < hpbnd.Size(); i++)
       {
         if (hpbnd[i] == "right")
           {
-            seg.singedge_left = hpbndfac[i];
-            seg.singedge_right = hpbndfac[i];
+            singedge_left_val = hpbndfac[i];
+            singedge_right_val = hpbndfac[i];
           }
       }
 
+    {
+      EdgeRegion ed;
+      ed.SetEdgeNr(2);
+      ed.SetSurfNr(0, -1);
+      ed.SetSurfNr(1, -1);
+      ed.SetSingEdgeLeft(singedge_left_val);
+      ed.SetSingEdgeRight(singedge_right_val);
+
+      auto edsi = mesh->AddEdgeDescriptor(ed);
+      mesh->GetEdgeDescriptor(edsi).SetIndex(FaceRegionIndex::FromNr1(2));
+      seg.SetIndex(edsi);
+    }
     for(int i=0; i<numy; i++)
       {
         seg[0] = pids[i*(numx+1)+numx];
         seg[1] = pids[(i+1)*(numx+1)+numx];
 
-        seg.geominfo[0] = pgis[i*(numx+1)+numx];
-        seg.geominfo[1] = pgis[(i+1)*(numx+1)+numx];
-        seg.epgeominfo[0].u = pgis[i*(numx+1)+numx].u;
-        seg.epgeominfo[0].v = pgis[i*(numx+1)+numx].v;
-        seg.epgeominfo[0].edgenr = seg.edgenr;
-        seg.epgeominfo[1].u = pgis[(i+1)*(numx+1)+numx].u;
-        seg.epgeominfo[1].v = pgis[(i+1)*(numx+1)+numx].v;
-        seg.epgeominfo[1].edgenr = seg.edgenr;
+        seg.GeomInfo(0) = pgis[i*(numx+1)+numx];
+        seg.GeomInfo(1) = pgis[(i+1)*(numx+1)+numx];
+
 
         mesh->AddSegment(seg);
       }
 
-    seg.si = 3;
-    seg.edgenr = 3;
-    seg.singedge_left = 0;
-    seg.singedge_right = 0;
+    singedge_left_val = 0;
+    singedge_right_val = 0;
 
     for (size_t i=0; i < hpbnd.Size(); i++)
       {
         if (hpbnd[i] == "top")
           {
-            seg.singedge_left = hpbndfac[i];
-            seg.singedge_right = hpbndfac[i];
+            singedge_left_val = hpbndfac[i];
+            singedge_right_val = hpbndfac[i];
           }
       }
 
+    {
+      EdgeRegion ed;
+      ed.SetEdgeNr(3);
+      ed.SetSurfNr(0, -1);
+      ed.SetSurfNr(1, -1);
+      ed.SetSingEdgeLeft(singedge_left_val);
+      ed.SetSingEdgeRight(singedge_right_val);
+
+      auto edsi = mesh->AddEdgeDescriptor(ed);
+      mesh->GetEdgeDescriptor(edsi).SetIndex(FaceRegionIndex::FromNr1(3));
+      seg.SetIndex(edsi);
+    }
     for(int i=0; i<numx; i++)
       {
         seg[0] = pids[numy*(numx+1)+i+1];
         seg[1] = pids[numy*(numx+1)+i];
 
-        seg.geominfo[0] = pgis[numy*(numx+1)+i+1];
-        seg.geominfo[1] = pgis[numy*(numx+1)+i];
-        seg.epgeominfo[0].u = pgis[numy*(numx+1)+i+1].u;
-        seg.epgeominfo[0].v = pgis[numy*(numx+1)+i+1].v;
-        seg.epgeominfo[0].edgenr = seg.edgenr;
-        seg.epgeominfo[1].u = pgis[numy*(numx+1)+i].u;
-        seg.epgeominfo[1].v = pgis[numy*(numx+1)+i].v;
-        seg.epgeominfo[1].edgenr = seg.edgenr;
+        seg.GeomInfo(0) = pgis[numy*(numx+1)+i+1];
+        seg.GeomInfo(1) = pgis[numy*(numx+1)+i];
+
         
         mesh->AddSegment(seg);
       }
 
-    seg.si = 4;
-    seg.edgenr = 4;
-    seg.singedge_left = 0;
-    seg.singedge_right = 0;
+    singedge_left_val = 0;
+    singedge_right_val = 0;
     for (size_t i=0; i < hpbnd.Size(); i++)
       {
         if (hpbnd[i] == "left")
           {
-            seg.singedge_left = hpbndfac[i];
-            seg.singedge_right = hpbndfac[i];
+            singedge_left_val = hpbndfac[i];
+            singedge_right_val = hpbndfac[i];
           }
       }
 
 
+    {
+      EdgeRegion ed;
+      ed.SetEdgeNr(4);
+      ed.SetSurfNr(0, -1);
+      ed.SetSurfNr(1, -1);
+      ed.SetSingEdgeLeft(singedge_left_val);
+      ed.SetSingEdgeRight(singedge_right_val);
+
+      auto edsi = mesh->AddEdgeDescriptor(ed);
+      mesh->GetEdgeDescriptor(edsi).SetIndex(FaceRegionIndex::FromNr1(4));
+      seg.SetIndex(edsi);
+    }
     for(int i=0; i<numy; i++)
       {
         seg[0] = pids[(i+1)*(numx+1)];
         seg[1] = pids[i*(numx+1)];
 
-        seg.geominfo[0] = pgis[(i+1)*(numx+1)];
-        seg.geominfo[1] = pgis[i*(numx+1)];
-        seg.epgeominfo[0].u = pgis[(i+1)*(numx+1)].u;
-        seg.epgeominfo[0].v = pgis[(i+1)*(numx+1)].v;
-        seg.epgeominfo[0].edgenr = seg.edgenr;
-        seg.epgeominfo[1].u = pgis[i*(numx+1)].u;
-        seg.epgeominfo[1].v = pgis[i*(numx+1)].v;
-        seg.epgeominfo[1].edgenr = seg.edgenr;
+        seg.GeomInfo(0) = pgis[(i+1)*(numx+1)];
+        seg.GeomInfo(1) = pgis[i*(numx+1)];
+
 
         mesh->AddSegment(seg);
       }
 
-    mesh->SetCD2Name(1, "bottom");
-    mesh->SetCD2Name(2, "right");
-    mesh->SetCD2Name(3, "top");
-    mesh->SetCD2Name(4, "left");
+    mesh->EnsureEdgeDescriptor(1).SetName("bottom");
+    mesh->EnsureEdgeDescriptor(2).SetName("right");
+    mesh->EnsureEdgeDescriptor(3).SetName("top");
+    mesh->EnsureEdgeDescriptor(4).SetName("left");
 
     for (int i = 0; i < bbbpts.Size(); i++)
       {
         Element0d el;
         el.pnum = indbbbpts[i];
-        el.index = i+1;
+        el.SetIndex(VertexRegionIndex::FromNr0(i));
         mesh->pointelements.Append(el);
         mesh->SetCD3Name(i+1, bbbnames[i]);
       }

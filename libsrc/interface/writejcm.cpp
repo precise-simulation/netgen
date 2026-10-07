@@ -42,9 +42,9 @@ void WriteJCMFormat (const Mesh & mesh,
   int ne = mesh.GetNE();
   int ntets = 0;
   int nprisms = 0;
-  for (i = 1; i <= ne; i++)
+  for (ElementIndex i : T_Range<ElementIndex>(ne))
   {
-    Element el = mesh.VolumeElement(i);
+    Element el (mesh[i]);
     if (el.GetNP() == 4)
     {
       ntets++;
@@ -97,23 +97,22 @@ void WriteJCMFormat (const Mesh & mesh,
   int nbquad = 0;
   // array with 1 if point on any tetra, 0 else 
   // this is needed in order to arrange the prism points in the right order
-  NgArray<int,1> pointsOnTetras;
-  pointsOnTetras.SetSize (mesh.GetNP());
+  Array<int, PointIndex> pointsOnTetras(mesh.GetNP());
   pointsOnTetras = 0;
-  for (i = 1; i <= ne; i++)
+  for (ElementIndex i : T_Range<ElementIndex>(ne))
   {
-    Element el = mesh.VolumeElement(i);
+    Element el (mesh[i]);
     if (el.GetNP() == 4)
     {
       for (j = 1; j <= 4; j++)
-        pointsOnTetras.Set(int (el.PNum(j)),1);     
+        pointsOnTetras[el.PNum(j)] = 1;     
     }
   }
 
   // number of boundary triangles and boundary quadrilaterals
-  for (i = 1; i <= nse; i++)
+  for (SurfaceElementIndex i : T_Range<SurfaceElementIndex>(nse))
   {
-    Element2d el = mesh.SurfaceElement(i);
+    Element2d el (mesh[i]);
     if (el.GetNP() == 3 &&
         ( mesh.GetFaceDescriptor (el.GetIndex()).DomainIn()==0  ||
           mesh.GetFaceDescriptor (el.GetIndex()).DomainOut()==0 ) )
@@ -154,10 +153,10 @@ void WriteJCMFormat (const Mesh & mesh,
 
   outfile << "# Points\n";
   cout << " Please note: The unit of length in the .geo file is assumed to be 'microns'."<<endl; 
-  for (i = 1; i <= np; i++)
+  for (PointIndex pi : mesh.Points().Range())
   {
-    const Point<3> & p = mesh.Point(i);
-    outfile << i << "\n";
+    const Point<3> & p = mesh[pi];
+    outfile << pi.Nr1() << "\n";
     outfile << p(0) << "e-6\n";
     outfile << p(1) << "e-6\n";
     outfile << p(2) << "e-6\n\n";
@@ -166,21 +165,21 @@ void WriteJCMFormat (const Mesh & mesh,
   outfile << "\n";
   outfile << "# Tetrahedra\n";
   counter = 0;
-  for (i = 1; i <= ne; i++)
+  for (ElementIndex i : T_Range<ElementIndex>(ne))
   {
-    Element el = mesh.VolumeElement(i);
+    Element el (mesh[i]);
     if (el.GetNP() == 4)
     {
       counter++;
-      dx1 = mesh.Point(el.PNum(2))(0) - mesh.Point(el.PNum(1))(0);
-      dx2 = mesh.Point(el.PNum(3))(0) - mesh.Point(el.PNum(1))(0);
-      dx3 = mesh.Point(el.PNum(4))(0) - mesh.Point(el.PNum(1))(0);
-      dy1 = mesh.Point(el.PNum(2))(1) - mesh.Point(el.PNum(1))(1);
-      dy2 = mesh.Point(el.PNum(3))(1) - mesh.Point(el.PNum(1))(1);
-      dy3 = mesh.Point(el.PNum(4))(1) - mesh.Point(el.PNum(1))(1);
-      dz1 = mesh.Point(el.PNum(2))(2) - mesh.Point(el.PNum(1))(2);
-      dz2 = mesh.Point(el.PNum(3))(2) - mesh.Point(el.PNum(1))(2);
-      dz3 = mesh.Point(el.PNum(4))(2) - mesh.Point(el.PNum(1))(2);
+      dx1 = mesh.Point(el[1])(0) - mesh.Point(el[0])(0);
+      dx2 = mesh.Point(el[2])(0) - mesh.Point(el[0])(0);
+      dx3 = mesh.Point(el[3])(0) - mesh.Point(el[0])(0);
+      dy1 = mesh.Point(el[1])(1) - mesh.Point(el[0])(1);
+      dy2 = mesh.Point(el[2])(1) - mesh.Point(el[0])(1);
+      dy3 = mesh.Point(el[3])(1) - mesh.Point(el[0])(1);
+      dz1 = mesh.Point(el[1])(2) - mesh.Point(el[0])(2);
+      dz2 = mesh.Point(el[2])(2) - mesh.Point(el[0])(2);
+      dz3 = mesh.Point(el[3])(2) - mesh.Point(el[0])(2);
       vol = (dy1*dz2-dz1*dy2)*dx3 + (dz1*dx2-dx1*dz2)*dy3 + (dx1*dy2-dy1*dx2)*dz3;
 
       if ( vol > 0 )
@@ -205,26 +204,26 @@ void WriteJCMFormat (const Mesh & mesh,
   outfile << "\n";
   outfile << "# Prisms\n";
   counter = 0;
-  for (i = 1; i <= ne; i++)
+  for (ElementIndex i : T_Range<ElementIndex>(ne))
   {
-    Element el = mesh.VolumeElement(i);
+    Element el (mesh[i]);
     if (el.GetNP() == 6)
     {
       counter++;
-      dx1 = mesh.Point(el.PNum(2))(0) - mesh.Point(el.PNum(1))(0);
-      dx2 = mesh.Point(el.PNum(3))(0) - mesh.Point(el.PNum(1))(0);
-      dx3 = mesh.Point(el.PNum(4))(0) - mesh.Point(el.PNum(1))(0);
-      dy1 = mesh.Point(el.PNum(2))(1) - mesh.Point(el.PNum(1))(1);
-      dy2 = mesh.Point(el.PNum(3))(1) - mesh.Point(el.PNum(1))(1);
-      dy3 = mesh.Point(el.PNum(4))(1) - mesh.Point(el.PNum(1))(1);
-      dz1 = mesh.Point(el.PNum(2))(2) - mesh.Point(el.PNum(1))(2);
-      dz2 = mesh.Point(el.PNum(3))(2) - mesh.Point(el.PNum(1))(2);
-      dz3 = mesh.Point(el.PNum(4))(2) - mesh.Point(el.PNum(1))(2);
+      dx1 = mesh.Point(el[1])(0) - mesh.Point(el[0])(0);
+      dx2 = mesh.Point(el[2])(0) - mesh.Point(el[0])(0);
+      dx3 = mesh.Point(el[3])(0) - mesh.Point(el[0])(0);
+      dy1 = mesh.Point(el[1])(1) - mesh.Point(el[0])(1);
+      dy2 = mesh.Point(el[2])(1) - mesh.Point(el[0])(1);
+      dy3 = mesh.Point(el[3])(1) - mesh.Point(el[0])(1);
+      dz1 = mesh.Point(el[1])(2) - mesh.Point(el[0])(2);
+      dz2 = mesh.Point(el[2])(2) - mesh.Point(el[0])(2);
+      dz3 = mesh.Point(el[3])(2) - mesh.Point(el[0])(2);
       vol = (dy1*dz2-dz1*dy2)*dx3 + (dz1*dx2-dx1*dz2)*dy3 + (dx1*dy2-dy1*dx2)*dz3;
 
-      if (pointsOnTetras.Get(el.PNum(1)) &&
-          pointsOnTetras.Get(el.PNum(2)) &&
-          pointsOnTetras.Get(el.PNum(3)))
+      if (pointsOnTetras[el[0]] &&
+          pointsOnTetras[el[1]] &&
+          pointsOnTetras[el[2]])
       {
         if (vol > 0)
           for (j = 1; j <= 6; j++)
@@ -237,9 +236,9 @@ void WriteJCMFormat (const Mesh & mesh,
             outfile << el.PNum(j)<<"\n";
         }
       }
-      else if ( pointsOnTetras.Get(el.PNum(4)) &&
-                pointsOnTetras.Get(el.PNum(5)) &&
-                pointsOnTetras.Get(el.PNum(6))    )
+      else if ( pointsOnTetras[el[3]] &&
+                pointsOnTetras[el[4]] &&
+                pointsOnTetras[el[5]]    )
       {
         if ( vol < 0 )
         {
@@ -293,9 +292,9 @@ void WriteJCMFormat (const Mesh & mesh,
   outfile << "# Number of identified points in 1-direction: " << npid1 << "\n";
   outfile << "# Number of identified points in 2-direction: " << npid2 << "\n";
   outfile << "# Number of identified points in 3-direction: " << npid3 << "\n";
-  for (i = 1; i <= nse; i++)
+  for (SurfaceElementIndex i : T_Range<SurfaceElementIndex>(nse))
   {
-    Element2d el = mesh.SurfaceElement(i);
+    Element2d el (mesh[i]);
     if (el.GetNP() == 3
         && (mesh.GetFaceDescriptor (el.GetIndex()).DomainIn()==0
             || mesh.GetFaceDescriptor (el.GetIndex()).DomainOut()==0))
@@ -309,27 +308,27 @@ void WriteJCMFormat (const Mesh & mesh,
         outfile << mesh.GetFaceDescriptor (el.GetIndex()).BCProperty() << "\n";      
       if (mesh.GetFaceDescriptor (el.GetIndex()).BCProperty() == bc_at_infinity)
         outfile << "-2\n\n";
-      else if (identmap1[el.PNum(1)].IsValid()
-               &&identmap1[el.PNum(2)].IsValid()
-               &&identmap1[el.PNum(3)].IsValid())
+      else if (identmap1[el[0]].IsValid()
+               &&identmap1[el[1]].IsValid()
+               &&identmap1[el[2]].IsValid())
       {
         outfile << "-1\n";
         for (j = 1; j <= 3; j++)
           outfile << identmap1[el.PNum(j)]<<"\n";
         outfile << "\n";
       }
-      else if (identmap2[el.PNum(1)].IsValid()
-               &&identmap2[el.PNum(2)].IsValid()
-               &&identmap2[el.PNum(3)].IsValid())
+      else if (identmap2[el[0]].IsValid()
+               &&identmap2[el[1]].IsValid()
+               &&identmap2[el[2]].IsValid())
       {
         outfile << "-1\n";
         for (j = 1; j <= 3; j++)
           outfile << identmap2[el.PNum(j)]<<"\n";
         outfile << "\n";
       }
-      else if (identmap3[el.PNum(1)].IsValid()
-               &&identmap3[el.PNum(2)].IsValid()
-               &&identmap3[el.PNum(3)].IsValid())
+      else if (identmap3[el[0]].IsValid()
+               &&identmap3[el[1]].IsValid()
+               &&identmap3[el[2]].IsValid())
       {
         outfile << "-1\n";
         for (j = 1; j <= 3; j++)
@@ -344,25 +343,25 @@ void WriteJCMFormat (const Mesh & mesh,
 
   outfile << "\n";
   outfile << "# Boundary quadrilaterals\n";
-  for (i = 1; i <= nse; i++)
+  for (SurfaceElementIndex i : T_Range<SurfaceElementIndex>(nse))
   {
-    Element2d el = mesh.SurfaceElement(i);
+    Element2d el (mesh[i]);
 
     if (el.GetNP() == 4
         && (mesh.GetFaceDescriptor (el.GetIndex()).DomainIn()==0
             || mesh.GetFaceDescriptor (el.GetIndex()).DomainOut()==0))
     {
-      if      (pointsOnTetras.Get(el.PNum(1)) &&
-               pointsOnTetras.Get(el.PNum(2)))
+      if      (pointsOnTetras[el[0]] &&
+               pointsOnTetras[el[1]])
         ct = 0;
-      else if (pointsOnTetras.Get(el.PNum(2)) &&
-               pointsOnTetras.Get(el.PNum(3)))
+      else if (pointsOnTetras[el[1]] &&
+               pointsOnTetras[el[2]])
         ct = 1;
-      else if (pointsOnTetras.Get(el.PNum(3)) &&
-               pointsOnTetras.Get(el.PNum(4)))
+      else if (pointsOnTetras[el[2]] &&
+               pointsOnTetras[el[3]])
         ct = 2;
-      else if (pointsOnTetras.Get(el.PNum(4)) &&
-               pointsOnTetras.Get(el.PNum(1)))
+      else if (pointsOnTetras[el[3]] &&
+               pointsOnTetras[el[0]])
         ct = 3;
       else
         cout << "\nWarning: Quadrilateral with inconsistent points found!"<<endl;
@@ -380,10 +379,10 @@ void WriteJCMFormat (const Mesh & mesh,
         outfile << "-2\n\n";
         cout << "\nWarning: Quadrilateral at infinity found (this should not occur)!"<<endl;
       }
-      else if ( identmap1[el.PNum(1)].IsValid() &&
-                identmap1[el.PNum(2)].IsValid() &&
-                identmap1[el.PNum(3)].IsValid() &&
-                identmap1[el.PNum(4)].IsValid())
+      else if ( identmap1[el[0]].IsValid() &&
+                identmap1[el[1]].IsValid() &&
+                identmap1[el[2]].IsValid() &&
+                identmap1[el[3]].IsValid())
       {
         outfile << "-1\n";
         for (j = 1; j <= 4; j++)
@@ -395,10 +394,10 @@ void WriteJCMFormat (const Mesh & mesh,
         }
         outfile << "\n";
       }
-      else if ( identmap2[el.PNum(1)].IsValid() &&
-                identmap2[el.PNum(2)].IsValid() &&
-                identmap2[el.PNum(3)].IsValid() &&
-                identmap2[el.PNum(4)].IsValid() )
+      else if ( identmap2[el[0]].IsValid() &&
+                identmap2[el[1]].IsValid() &&
+                identmap2[el[2]].IsValid() &&
+                identmap2[el[3]].IsValid() )
       {
         outfile << "-1\n";
         for (j = 1; j <= 4; j++)
@@ -410,10 +409,10 @@ void WriteJCMFormat (const Mesh & mesh,
         }
         outfile << "\n";
       }
-      else if ( identmap3[el.PNum(1)].IsValid() &&
-                identmap3[el.PNum(2)].IsValid() &&
-                identmap3[el.PNum(3)].IsValid() &&
-                identmap3[el.PNum(4)].IsValid() )
+      else if ( identmap3[el[0]].IsValid() &&
+                identmap3[el[1]].IsValid() &&
+                identmap3[el[2]].IsValid() &&
+                identmap3[el[3]].IsValid() )
       {
         outfile << "-1\n";
         for (j = 1; j <= 4; j++)

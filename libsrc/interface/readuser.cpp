@@ -41,29 +41,29 @@ namespace netgen
       
         in >> reco;
         in >> np;
-        for (int i = 1; i <= np; i++)
+        for (int i = 0; i < np; i++)
           {
-            Point3d p;
-            in >> p.X() >> p.Y() >> p.Z();
+            Point<3> p;
+            in >> p(0) >> p(1) >> p(2);
             mesh.AddPoint (p);
           }
 
         mesh.ClearFaceDescriptors();
-        mesh.AddFaceDescriptor (FaceDescriptor(1,1,0,0));
+        mesh.AddFaceDescriptor (FaceRegion(1,1,0,0));
       
         in >> nbe;
         //      int invert = globflags.GetDefineFlag ("invertsurfacemesh");
-        for (int i = 1; i <= nbe; i++)
+        for (int i = 0; i < nbe; i++)
           {
             Element2d el;
-            el.SetIndex(1);
+            el.SetIndex(FaceRegionIndex::FromNr1(1));
 
             for (int j = 1; j <= 3; j++)
               {
                 in >> el.PNum(j);
                 // el.PNum(j)++;
-                if (el.PNum(j) < PointIndex(1) || 
-                    el.PNum(j) > PointIndex(np))
+                if (el.PNum(j) < IndexBASE<PointIndex>() ||
+                    el.PNum(j) > PointIndex::FromNr1(np))
                   {
                     cerr << "Point Number " << el.PNum(j) << " out of range 1..."
                          << np << endl;
@@ -72,9 +72,9 @@ namespace netgen
               }
             /*
               if (invert)
-              swap (el.PNum(2), el.PNum(3));
+              swap (el[1], el[2]);
             */
-	  
+          
             mesh.AddSurfaceElement (el);
           }
       
@@ -87,22 +87,22 @@ namespace netgen
       {  
         char reco[100];
         // int invert;
-	// read files that are stored with D instead of E as exponent prefix
-	// such files are for example exported by GMSH
-	bool Dnotation;
-	bool DnotationSet = false;
+        // read files that are stored with D instead of E as exponent prefix
+        // such files are for example exported by GMSH
+        bool Dnotation;
+        bool DnotationSet = false;
       
         ifstream in(filename);
 
         mesh.ClearFaceDescriptors();
-        mesh.AddFaceDescriptor (FaceDescriptor(0,1,0,0));
-        mesh.GetFaceDescriptor(1).SetBCProperty (1);
+        mesh.AddFaceDescriptor (FaceRegion(0,1,0,0));
+        mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(1)).SetBCProperty (1);
         // map from unv element nr to our element number + an index if it is vol (0), bnd(1), ...
         std::map<size_t, std::tuple<size_t, int>> element_map;
-	int dim = 3;
-	int bccounter = 0;
+        int dim = 3;
+        int bccounter = 0;
 
-        NgArray<Segment> tmp_segments;
+        Array<Segment> tmp_segments;
         while (in.good())
           {
             in >> reco;
@@ -116,58 +116,58 @@ namespace netgen
                 while (1)
                   {
                     int pi, hi;
-		    Point<3> p;
-		    string p1tmp, p2tmp, p3tmp;
+                    Point<3> p;
+                    string p1tmp, p2tmp, p3tmp;
 
                     in >> pi;
                     if (pi == -1)
                       break;
-		    
+                    
                     in >> hi >> hi >> hi;
-		    // check if D in first line
-		    if (DnotationSet == false) {
-			in >> p1tmp >> p2tmp >> p3tmp;
-			if (p1tmp.find("D") != std::string::npos){
-			    Dnotation = true;
-			    cout << IM(3) << "Attention: in your UNV file, D is used as an exponent prefix instead of E" << endl;
-			    std::replace(p1tmp.begin(), p1tmp.end(), 'D', 'E');
-			    std::replace(p2tmp.begin(), p2tmp.end(), 'D', 'E');
-			    std::replace(p3tmp.begin(), p3tmp.end(), 'D', 'E');
-			}
-			p(0) = std::stod(p1tmp);
-			p(1) = std::stod(p2tmp);
-			p(2) = std::stod(p3tmp);
-		    	mesh.AddPoint(p);
+                    // check if D in first line
+                    if (DnotationSet == false) {
+                        in >> p1tmp >> p2tmp >> p3tmp;
+                        if (p1tmp.find("D") != std::string::npos){
+                            Dnotation = true;
+                            cout << IM(3) << "Attention: in your UNV file, D is used as an exponent prefix instead of E" << endl;
+                            std::replace(p1tmp.begin(), p1tmp.end(), 'D', 'E');
+                            std::replace(p2tmp.begin(), p2tmp.end(), 'D', 'E');
+                            std::replace(p3tmp.begin(), p3tmp.end(), 'D', 'E');
+                        }
+                        p(0) = std::stod(p1tmp);
+                        p(1) = std::stod(p2tmp);
+                        p(2) = std::stod(p3tmp);
+                        mesh.AddPoint(p);
 
-			DnotationSet = true;
-			continue;
-		    }
+                        DnotationSet = true;
+                        continue;
+                    }
 
-		    if (Dnotation == true) {
-		        in >> p1tmp >> p2tmp >> p3tmp;
-			std::replace(p1tmp.begin(), p1tmp.end(), 'D', 'E');
-			std::replace(p2tmp.begin(), p2tmp.end(), 'D', 'E');
-			std::replace(p3tmp.begin(), p3tmp.end(), 'D', 'E');
-			p(0) = std::stod(p1tmp);
-			p(1) = std::stod(p2tmp);
-			p(2) = std::stod(p3tmp);
-		    }
-		    else{
-			in >> p(0) >> p(1) >> p(2);
-		    }
-		    mesh.AddPoint(p);
+                    if (Dnotation == true) {
+                        in >> p1tmp >> p2tmp >> p3tmp;
+                        std::replace(p1tmp.begin(), p1tmp.end(), 'D', 'E');
+                        std::replace(p2tmp.begin(), p2tmp.end(), 'D', 'E');
+                        std::replace(p3tmp.begin(), p3tmp.end(), 'D', 'E');
+                        p(0) = std::stod(p1tmp);
+                        p(1) = std::stod(p2tmp);
+                        p(2) = std::stod(p3tmp);
+                    }
+                    else{
+                        in >> p(0) >> p(1) >> p(2);
+                    }
+                    mesh.AddPoint(p);
                   }
-		cout << IM(3) << "read " << mesh.GetNP() << " points" << endl;
-                Point3d pmin, pmax;
-		cout << IM(5) << "Get Box" << endl;
+                cout << IM(3) << "read " << mesh.GetNP() << " points" << endl;
+                Point<3> pmin, pmax;
+                cout << IM(5) << "Get Box" << endl;
                 mesh.GetBox (pmin, pmax);
-		cout << IM(5)  << "Pmin: " << pmin << " Pmax: " << pmax << endl;
-                if(fabs(pmin.Z() - pmax.Z()) < 1e-10 * Dist(pmin, pmax))
+                cout << IM(5)  << "Pmin: " << pmin << " Pmax: " << pmax << endl;
+                if(fabs(pmin(2) - pmax(2)) < 1e-10 * Dist(pmin, pmax))
                 {
                        cout << IM(5)  << "Set Dimension to 2." << endl;
                        mesh.SetDimension(2);
                        dim = 2 ;
-		}
+                }
 
               }
 
@@ -177,29 +177,29 @@ namespace netgen
 
                 while (1)
                   {
-		    int label, fe_id, phys_prop, mat_prop, color, nnodes;
-		    int nodes[100];
-		    int hi;
+                    int label, fe_id, phys_prop, mat_prop, color, nnodes;
+                    int nodes[100];
+                    int hi;
 
-		    in >> label;
-		    if (label == -1) break;
-		    in >> fe_id >> phys_prop >> mat_prop >> color >> nnodes;
-		    
-		    if (fe_id >= 11 && fe_id <= 32)
-		      in >> hi >> hi >> hi;
-		      
+                    in >> label;
+                    if (label == -1) break;
+                    in >> fe_id >> phys_prop >> mat_prop >> color >> nnodes;
+                    
+                    if (fe_id >= 11 && fe_id <= 32)
+                      in >> hi >> hi >> hi;
+                      
 
-		    for (int j = 0; j < nnodes; j++)
-		      in >> nodes[j];
-		    
-		    switch (fe_id)
-		      {
+                    for (int j = 0; j < nnodes; j++)
+                      in >> nodes[j];
+                    
+                    switch (fe_id)
+                      {
                       case 11: // (Rod) SEGM
                         {
                           Segment el;
-                          el[0] = nodes[0];
-                          el[1] = nodes[1];
-                          el[2] = -1;
+                          el[0] = PointIndex::FromNr1(nodes[0]);
+                          el[1] = PointIndex::FromNr1(nodes[1]);
+                          el[2] = PointIndex::INVALID;
 
                           if(dim == 3){
                             auto nr = tmp_segments.Size();
@@ -207,9 +207,9 @@ namespace netgen
                             element_map[label] = std::make_tuple(nr+1, 2);
                           }
                           else if(dim == 2){
-		            el.si = -1; // add label to segment, will be changed later when BC's are assigned
+                            el.SetIndex(EdgeRegionIndex::INVALID);
                             auto nr = mesh.AddSegment(el);
-                            element_map[label] = std::make_tuple(nr+1, 2);
+                            element_map[label] = std::make_tuple(nr.Nr1(), 2);
                           }
                           break;
                         }
@@ -217,9 +217,9 @@ namespace netgen
                       case 22: // (Tapered beam) SEGM
                         {
                           Segment el;
-                          el[0] = nodes[0];
-                          el[1] = nodes[2];
-                          el[2] = nodes[1];
+                          el[0] = PointIndex::FromNr1(nodes[0]);
+                          el[1] = PointIndex::FromNr1(nodes[2]);
+                          el[2] = PointIndex::FromNr1(nodes[1]);
                           
                           if(dim == 3){
                             auto nr = tmp_segments.Size();
@@ -227,59 +227,59 @@ namespace netgen
                             element_map[label] = std::make_tuple(nr+1, 2);
                           }
                           else if(dim == 2){
-		            el.si = -1; // add label to segment, will be changed later when BC's are assigned
+                            el.SetIndex(EdgeRegionIndex::INVALID);
                             auto nr = mesh.AddSegment(el);
-                            element_map[label] = std::make_tuple(nr+1, 2);
+                            element_map[label] = std::make_tuple(nr.Nr1(), 2);
                           }
 
                           break;
                         }
-		      case 41: // TRIG
-			{
-			  Element2d el (TRIG);
-			  el.SetIndex (1);
-			  for (int j = 0; j < nnodes; j++)
-			    el[j] = nodes[j];
-			  auto nr = mesh.AddSurfaceElement (el);
-                          element_map[label] = std::make_tuple(nr+1, 1);
-			  break;
-			}
+                      case 41: // TRIG
+                        {
+                          Element2d el (TRIG);
+                          el.SetIndex (FaceRegionIndex::FromNr1(1));
+                          for (int j = 0; j < nnodes; j++)
+                            el[j] = PointIndex::FromNr1(nodes[j]);
+                          auto nr = mesh.AddSurfaceElement (el);
+                          element_map[label] = std::make_tuple(nr.Nr1(), 1);
+                          break;
+                        }
                       case 42: // TRIG6
                         {
                           Element2d el(TRIG6);
-                          el.SetIndex(1);
+                          el.SetIndex(FaceRegionIndex::FromNr1(1));
                           int jj = 0;
                           for(auto j : {0,2,4,3,5,1})
-                              el[jj++] = nodes[j];
+                              el[jj++] = PointIndex::FromNr1(nodes[j]);
                           auto nr = mesh.AddSurfaceElement(el);
-                          element_map[label] = std::make_tuple(nr+1, 1);
+                          element_map[label] = std::make_tuple(nr.Nr1(), 1);
                           break;
                         }
-		      case 111: // TET
-			{
-			  Element el (TET);
-			  el.SetIndex (1);
-			  for (int j = 0; j < nnodes; j++)
-			    el[j] = nodes[j];
-			  auto nr = mesh.AddVolumeElement (el);
-			  element_map[label] = std::make_tuple(nr+1, 0);
-			  break;
-			}
+                      case 111: // TET
+                        {
+                          Element el (TET);
+                          el.SetIndex (VolumeRegionIndex::FromNr1(1));
+                          for (int j = 0; j < nnodes; j++)
+                            el[j] = PointIndex::FromNr1(nodes[j]);
+                          auto nr = mesh.AddVolumeElement (el);
+                          element_map[label] = std::make_tuple(nr.Nr1(), 0);
+                          break;
+                        }
                       case 118: // TET10
                         {
                           Element el(TET10);
-                          el.SetIndex(1);
+                          el.SetIndex(VolumeRegionIndex::FromNr1(1));
                           int jj = 0;
                           for(auto j : {0,2,4,9,1,5,6,3,7,8})
-                            el[jj++] = nodes[j];
+                            el[jj++] = PointIndex::FromNr1(nodes[j]);
                           auto nr = mesh.AddVolumeElement(el);
-                          element_map[label] = std::make_tuple(nr+1, 0);
+                          element_map[label] = std::make_tuple(nr.Nr1(), 0);
                           break;
                         }
                       default:
                         cout << IM(3)  << "Do not know fe_id = " << fe_id << ", skipping it." << endl;
                         break;
-		      }
+                      }
                   }
                 cout << IM(3)  << mesh.GetNE() << " elements found" << endl;
                 cout << IM(3)  << mesh.GetNSE() << " surface elements found" << endl;
@@ -301,7 +301,8 @@ namespace netgen
                     in >> name;
                     cout << IM(3)  << len << " element are in group " << name << endl;
                     int hi, index;
-                    int fdnr=-1, ednr=-1;
+                    int fdnr=-1;
+                    // int ednr = -1;
 
                     in >> hi >> index >> hi >> hi;
                     int codim = get<1>(element_map[index]);
@@ -312,7 +313,7 @@ namespace netgen
                       case 0:
                         {
                           mesh.SetMaterial(++matnr, name);
-                          mesh.VolumeElement(get<0>(element_map[index])).SetIndex(matnr);
+                          mesh[ElementIndex::FromNr1(get<0>(element_map[index]))].SetIndex(VolumeRegionIndex::FromNr1(matnr));
                           break;
                         }
                       case 1:
@@ -320,19 +321,19 @@ namespace netgen
                           if(dim == 3)
                           {
                             int bcpr = mesh.GetNFD();
-                            fdnr = mesh.AddFaceDescriptor(FaceDescriptor(bcpr, 0,0,0));
-                            mesh.GetFaceDescriptor(fdnr).SetBCProperty(bcpr+1);
+                            fdnr = mesh.AddFaceDescriptor(FaceRegion(bcpr, 0,0,0)).Nr1();
+                            mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(fdnr)).SetBCProperty(bcpr+1);
                             mesh.SetBCName(bcpr, name);
-                            mesh.SurfaceElement(get<0>(element_map[index])).SetIndex(fdnr);
+                            mesh[SurfaceElementIndex::FromNr1(get<0>(element_map[index]))].SetIndex(FaceRegionIndex::FromNr1(fdnr));
                             bccounter++;
                           }
                           else if(dim == 2)
                           {
+                            fdnr = mesh.AddFaceDescriptor(FaceRegion(matnr, 0,0,0)).Nr1();
                             mesh.SetMaterial(matnr, name);
-                            fdnr = mesh.AddFaceDescriptor(FaceDescriptor(matnr, 0,0,0));
-                            mesh.SurfaceElement(get<0>(element_map[index])).SetIndex(matnr);
-                            mesh.GetFaceDescriptor(fdnr).SetBCProperty(matnr);
-			    matnr++;
+                            mesh[SurfaceElementIndex::FromNr1(get<0>(element_map[index]))].SetIndex(FaceRegionIndex::FromNr1(matnr));
+                            mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(fdnr)).SetBCProperty(matnr);
+                            matnr++;
                           }
                           break;
 
@@ -341,20 +342,20 @@ namespace netgen
                         {
                          if(dim == 3)
                           {
-                            int bcpr = mesh.GetNCD2Names()+1;
-                            auto ed = EdgeDescriptor();
+                            int bcpr = mesh.GetNED()+1;
+                            auto ed = EdgeRegion();
                             ed.SetSurfNr(0,bcpr);//?
-                            ednr = mesh.AddEdgeDescriptor(ed);
-                            mesh.SetCD2Name(bcpr, name);
-                            auto nr = mesh.AddSegment(tmp_segments[get<0>(element_map[index])-1]);
-                            mesh[nr].edgenr = ednr+1;
+                            ed.SetName(name);
+                            mesh.AddEdgeDescriptor(ed);
+                            // auto nr = 
+                            mesh.AddSegment(tmp_segments[get<0>(element_map[index])-1]);
                           }
                           else if(dim == 2)
                           {
-                            Segment & seg = mesh.LineSegment(get<0>(element_map[index]));
-			    seg.si = bccounter + 1;
-			    mesh.SetBCName(bccounter, name);
-		            bccounter++;
+                            Segment & seg = mesh[SegmentIndex::FromNr1(get<0>(element_map[index]))];
+                            seg.SetIndex(EdgeRegionIndex::FromNr0(bccounter));
+                            mesh.SetBCName(bccounter, name);
+                            bccounter++;
                           }
                           break;
 
@@ -371,26 +372,26 @@ namespace netgen
                         switch (codim)
                           {
                           case 0:
-                            mesh.VolumeElement(get<0>(element_map[index])).SetIndex(matnr);
+                            mesh[ElementIndex::FromNr1(get<0>(element_map[index]))].SetIndex(VolumeRegionIndex::FromNr1(matnr));
                             break;
                           case 1:
-			    if(dim == 3) mesh.SurfaceElement(get<0>(element_map[index])).SetIndex(fdnr);
-			    else if (dim == 2){
-                                    mesh.SurfaceElement(get<0>(element_map[index])).SetIndex(matnr-1);
-				    mesh.GetFaceDescriptor(fdnr).SetBCProperty(matnr);
-			    }
+                            if(dim == 3) mesh[SurfaceElementIndex::FromNr1(get<0>(element_map[index]))].SetIndex(FaceRegionIndex::FromNr1(fdnr));
+                            else if (dim == 2){
+                                    mesh[SurfaceElementIndex::FromNr1(get<0>(element_map[index]))].SetIndex(FaceRegionIndex::FromNr1(matnr-1));
+                                    mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(fdnr)).SetBCProperty(matnr);
+                            }
                             break;
                           case 2:
-	   		    if(dim == 3)
+                            if(dim == 3)
+                              {
+                                // auto nr =
+                                mesh.AddSegment(tmp_segments[get<0>(element_map[index])-1]);
+                              }
+                            else if(dim == 2)
                             {
-                              auto nr = mesh.AddSegment(tmp_segments[get<0>(element_map[index])-1]);
-                              mesh[nr].edgenr = ednr+1;
+                                    Segment & seg = mesh[SegmentIndex::FromNr1(get<0>(element_map[index]))];
+                                    seg.SetIndex(EdgeRegionIndex::FromNr1(bccounter));
                             }
-			    else if(dim == 2)
-			    {
-	 			    Segment & seg = mesh.LineSegment(get<0>(element_map[index]));
-			            seg.si = bccounter;
-			    }
                             break;
                           default:
                             break;
@@ -410,38 +411,40 @@ namespace netgen
               }
           }
 
-	if(dim == 2){
-		// loop through segments to assign default BC to unmarked edges
-		int bccounter_tmp = bccounter;
-		for(int index=1; index <= mesh.GetNSeg(); index++){
-                	Segment & seg = mesh.LineSegment(index);
-			if(seg.si == -1){
-			  seg.si = bccounter + 1;
-			  if(bccounter_tmp == bccounter) mesh.SetBCName(bccounter, "default"); // could be more efficient
-			  bccounter_tmp++;
-			}
-		}
-		if(bccounter_tmp > bccounter) bccounter++;
-	}
+        if(dim == 2){
+                // loop through segments to assign default BC to unmarked edges
+                int bccounter_tmp = bccounter;
+                for (auto & seg : mesh.LineSegments()){
+                        if(!seg.GetIndex().IsValid()){
+                                  seg.SetIndex(EdgeRegionIndex::FromNr0(bccounter));
+                          if(bccounter_tmp == bccounter) mesh.SetBCName(bccounter, "default"); // could be more efficient
+                          bccounter_tmp++;
+                        }
+                }
+                if(bccounter_tmp > bccounter) bccounter++;
+        }
       
 
-	cout << IM(5)  << "Finalize mesh" << endl;
-        Point3d pmin, pmax;
-	cout << IM(5)  << "ComputeNVertices" << endl;
+        if(dim == 2)
+                mesh.ReconstructEdgeDescriptors();
+
+        cout << IM(5)  << "Finalize mesh" << endl;
+        Point<3> pmin, pmax;
+        cout << IM(5)  << "ComputeNVertices" << endl;
         mesh.ComputeNVertices();
-	cout << IM(5)  << "RebuildSurfaceElementLists" << endl;
+        cout << IM(5)  << "RebuildSurfaceElementLists" << endl;
         mesh.RebuildSurfaceElementLists();
-	cout << IM(5)  << "GetBox" << endl;
+        cout << IM(5)  << "GetBox" << endl;
         mesh.GetBox (pmin, pmax);
-	cout << IM(5)  << "UpdateTopology" << endl;
+        cout << IM(5)  << "UpdateTopology" << endl;
         mesh.UpdateTopology();
-	cout << IM(5)  << "increment bccounter" << endl;
+        cout << IM(5)  << "increment bccounter" << endl;
         if(dim == 3) bccounter++;
         cout << IM(5)  << "bounding-box = " << pmin << "-" << pmax << endl;
-	cout << IM(5)  << "Created " << bccounter << " boundaries." << endl;
-	for(int i=0; i<bccounter; i++){
-		cout << IM(5)  << mesh.GetBCName(i) << endl;
-	}
+        cout << IM(5)  << "Created " << bccounter << " boundaries." << endl;
+        for(int i=0; i<bccounter; i++){
+                cout << IM(5)  << mesh.GetBCName(i) << endl;
+        }
       }
 
 
@@ -473,7 +476,7 @@ namespace netgen
             int mat, nelp;
             in >> mat >> nelp;
             Element2d el (nelp == 3 ? TRIG : QUAD);
-            el.SetIndex (mat);
+            el.SetIndex (FaceRegionIndex::FromNr1(mat));
             for (j = 1; j <= nelp; j++)
               in >> el.PNum(j);
             mesh.AddSurfaceElement (el);
@@ -482,8 +485,8 @@ namespace netgen
         in >> np;
         for (i = 1; i <= np; i++)
           {
-            Point3d p(0,0,0);
-            in >> p.X() >> p.Y();
+            Point<3> p(0,0,0);
+            in >> p(0) >> p(1);
             mesh.AddPoint (p);
           }
       }
@@ -505,24 +508,24 @@ namespace netgen
 
             for (i = 1; i <= np; i++)
               {
-                Point3d p(0,0,0);
-                in >> p.X() >> p.Y() >> p.Z();
+                Point<3> p(0,0,0);
+                in >> p(0) >> p(1) >> p(2);
                 mesh.AddPoint (p);
               }
-	  
+          
             in >> ne;
             for (i = 1; i <= ne; i++)
               {
                 int mat;
                 in >> mat;
                 Element el (4);
-                el.SetIndex (mat);
+                el.SetIndex (VolumeRegionIndex::FromNr1(mat));
                 for (j = 1; j <= 4; j++)
                   in >> el.PNum(j);
                 mesh.AddVolumeElement (el);
               }
 
-            mesh.AddFaceDescriptor (FaceDescriptor (1, 1, 0, 0));
+            mesh.AddFaceDescriptor (FaceRegion (1, 1, 0, 0));
             int nfd = 1;
 
             in >> nse;
@@ -531,11 +534,11 @@ namespace netgen
                 int mat; // , nelp;
                 in >> mat;
                 Element2d el (TRIG);
-                el.SetIndex (mat);
+                el.SetIndex (FaceRegionIndex::FromNr1(mat));
                 while(nfd<mat)
                   {
                     ++nfd;
-                    mesh.AddFaceDescriptor(FaceDescriptor(nfd,nfd,0,0));
+                    mesh.AddFaceDescriptor(FaceRegion(nfd,nfd,0,0));
                   }
                 for (j = 1; j <= 3; j++)
                   in >> el.PNum(j);
@@ -573,26 +576,26 @@ namespace netgen
         int bcprop;
         ifstream inpkt (pktfile);
         inpkt >> np;
-        NgArray<double> values(np);
+        Array<double> values(np);
         for (i = 1; i <= np; i++)
           {
-            Point3d p(0,0,0);
-            inpkt >> p.X() >> p.Y() >> p.Z()
-                  >> bcprop >> values.Elem(i);
+            Point<3> p(0,0,0);
+            inpkt >> p(0) >> p(1) >> p(2)
+                  >> bcprop >> values[i-1];
             mesh.AddPoint (p);
           }      
 
         mesh.ClearFaceDescriptors();
-        mesh.AddFaceDescriptor (FaceDescriptor(0,1,0,0));
-        mesh.GetFaceDescriptor(1).SetBCProperty (1);
-        mesh.AddFaceDescriptor (FaceDescriptor(0,1,0,0));
-        mesh.GetFaceDescriptor(2).SetBCProperty (2);
-        mesh.AddFaceDescriptor (FaceDescriptor(0,1,0,0));
-        mesh.GetFaceDescriptor(3).SetBCProperty (3);
-        mesh.AddFaceDescriptor (FaceDescriptor(0,1,0,0));
-        mesh.GetFaceDescriptor(4).SetBCProperty (4);
-        mesh.AddFaceDescriptor (FaceDescriptor(0,1,0,0));
-        mesh.GetFaceDescriptor(5).SetBCProperty (5);
+        mesh.AddFaceDescriptor (FaceRegion(0,1,0,0));
+        mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(1)).SetBCProperty (1);
+        mesh.AddFaceDescriptor (FaceRegion(0,1,0,0));
+        mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(2)).SetBCProperty (2);
+        mesh.AddFaceDescriptor (FaceRegion(0,1,0,0));
+        mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(3)).SetBCProperty (3);
+        mesh.AddFaceDescriptor (FaceRegion(0,1,0,0));
+        mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(4)).SetBCProperty (4);
+        mesh.AddFaceDescriptor (FaceRegion(0,1,0,0));
+        mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(5)).SetBCProperty (5);
 
         int p1, p2, p3;
         double value;
@@ -612,25 +615,25 @@ namespace netgen
               }
 
             if (i > 110354) Swap (p2, p3);
-            if (mesh.Point(p1)(0) < 0.25)
+            if (mesh.Point(PointIndex::FromNr1(p1))(0) < 0.25)
               Swap (p2,p3);
 
             Element2d el(TRIG);
 
             if (bcprop == 1)
               {
-                if (values.Get(p1) < -69999)
-                  el.SetIndex(1);
+                if (values[p1-1] < -69999)
+                  el.SetIndex(FaceRegionIndex::FromNr1(1));
                 else
-                  el.SetIndex(2);
+                  el.SetIndex(FaceRegionIndex::FromNr1(2));
               }
             else
-              el.SetIndex(3);
+              el.SetIndex(FaceRegionIndex::FromNr1(3));
 
 
-            el.PNum(1) = p1;
-            el.PNum(2) = p2;
-            el.PNum(3) = p3;
+            el[0] = PointIndex::FromNr1(p1);
+            el[1] = PointIndex::FromNr1(p2);
+            el[2] = PointIndex::FromNr1(p3);
             mesh.AddSurfaceElement (el);
           }
 
@@ -641,8 +644,8 @@ namespace netgen
         cout << IM(3) << "npcyl = " << npcyl << endl;
         for (i = 1; i <= npcyl; i++)
           {
-            Point3d p(0,0,0);
-            incyl >> p.X() >> p.Y() >> p.Z();
+            Point<3> p(0,0,0);
+            incyl >> p(0) >> p(1) >> p(2);
             mesh.AddPoint (p);
           }
         incyl >> nsecyl;
@@ -654,10 +657,10 @@ namespace netgen
             p2 += np;
             p3 += np;
             Element2d el(TRIG);
-            el.SetIndex(5);
-            el.PNum(1) = p1;
-            el.PNum(2) = p2;
-            el.PNum(3) = p3;
+            el.SetIndex(FaceRegionIndex::FromNr1(5));
+            el[0] = PointIndex::FromNr1(p1);
+            el[1] = PointIndex::FromNr1(p2);
+            el[2] = PointIndex::FromNr1(p3);
             mesh.AddSurfaceElement (el);
           }
       }
@@ -689,19 +692,20 @@ namespace netgen
         for (auto & p : points)
           mesh.AddPoint(MeshPoint(p));
 
-        mesh.AddFaceDescriptor (FaceDescriptor (1, 1, 0, 1));
+        mesh.AddFaceDescriptor (FaceRegion (1, 1, 0, 1));
 
         for (auto ti : IntRange(geom->GetNT()))
         {
           Element2d el(TRIG);
           for (auto i : IntRange(3))
-            el[i] = int((*geom)[STLTrigId(ti+IndexBASE<netgen::STLTrigId>())][i]);
+            el[i] = PointIndex::FromNr1(int((*geom)[STLTrigId(ti+IndexBASE<netgen::STLTrigId>())][i]));
 
-          el.SetIndex(1);
+          el.SetIndex(FaceRegionIndex::FromNr1(1));
 
           mesh.AddSurfaceElement(el);
         }
       }
+    mesh.ReconstructEdgeDescriptors();
   }
 
   void ReadUserFormat(Mesh & mesh, const filesystem::path & filename, const string & format)

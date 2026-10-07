@@ -16,7 +16,7 @@
 #include "ngcore_api.hpp"       // for NGCORE_API
 #include "type_traits.hpp"      // for all_of_tmpl
 #include "localheap.hpp"
-#include "memtracer.hpp"
+#include "memtrace.hpp"
 #include "utils.hpp"
 
 namespace ngcore
@@ -93,12 +93,12 @@ namespace ngcore
   class BaseArrayObject
   {
   public:
-    NETGEN_INLINE BaseArrayObject() { ; }
+    constexpr BaseArrayObject() = default;
 
-    NETGEN_INLINE const T & Spec() const { return static_cast<const T&> (*this); }
-    NETGEN_INLINE size_t Size() const { return Spec().Size(); }
+    NETGEN_INLINE constexpr const T & Spec() const { return static_cast<const T&> (*this); }
+    NETGEN_INLINE constexpr size_t Size() const { return Spec().Size(); }
     template <typename T2>
-    NETGEN_INLINE bool Contains(const T2 & el) const
+    NETGEN_INLINE constexpr bool Contains(const T2 & el) const
     {
       for (size_t i = 0; i < Size(); i++)
         if (Spec()[i] == el)
@@ -214,8 +214,18 @@ namespace ngcore
   };
 
 
+  // index classes provide their own base via a static Base(); everything else starts at 0
+  template <typename T, typename = void>
+  struct has_index_base : std::false_type { };
+  template <typename T>
+  struct has_index_base<T, std::void_t<decltype(T::Base())>> : std::true_type { };
+
   template <typename  T>
-  constexpr T IndexBASE () { return T(0); }
+  constexpr T IndexBASE ()
+  {
+    if constexpr (has_index_base<T>::value) return T::Base();
+    else return T(0);
+  }
 
   template <typename  T>
   constexpr T IndexBASE (T ind) { return IndexBASE<T>(); }
@@ -227,13 +237,24 @@ namespace ngcore
     ptrdiff_t i;
   public:
     constexpr IndexFromEnd (ptrdiff_t ai) : i(ai) { }
-    IndexFromEnd operator+ (ptrdiff_t inc) const { return i+inc; }
-    IndexFromEnd operator- (ptrdiff_t dec) const { return i-dec; }
+    constexpr IndexFromEnd operator+ (ptrdiff_t inc) const { return i+inc; }
+    constexpr IndexFromEnd operator- (ptrdiff_t dec) const { return i-dec; }
     // operator ptrdiff_t () const { return i; }
-    ptrdiff_t Value() const { return i; }
+    constexpr ptrdiff_t Value() const { return i; }
   };
 
   constexpr IndexFromEnd END(0);
+
+  class IndexFromBegin
+  {
+    ptrdiff_t i;
+  public:
+    constexpr IndexFromBegin (ptrdiff_t ai) : i(ai) { }
+    constexpr IndexFromBegin operator+ (ptrdiff_t inc) const { return i+inc; }
+    constexpr ptrdiff_t Value() const { return i; }
+  };
+
+  constexpr IndexFromBegin BEGIN(0);
   
   
   template <class T, class IndexType = size_t> class FlatArray;
@@ -266,14 +287,14 @@ namespace ngcore
   {
     TSIZE ind;
   public:
-    NETGEN_INLINE ArrayRangeIterator (TSIZE ai) : ind(ai) { ; }
-    NETGEN_INLINE ArrayRangeIterator operator++ (int) { return ind++; }
-    NETGEN_INLINE ArrayRangeIterator operator++ () { return ++ind; }
-    NETGEN_INLINE TSIZE operator*() const { return ind; }
-    NETGEN_INLINE TSIZE Index() { return ind; }
-    NETGEN_INLINE operator TSIZE () const { return ind; }
-    NETGEN_INLINE bool operator != (ArrayRangeIterator d2) { return ind != d2.ind; }
-    NETGEN_INLINE bool operator == (ArrayRangeIterator d2) { return ind == d2.ind; }
+    NETGEN_INLINE constexpr ArrayRangeIterator (TSIZE ai) : ind(ai) { ; }
+    NETGEN_INLINE constexpr ArrayRangeIterator operator++ (int) { return ind++; }
+    NETGEN_INLINE constexpr ArrayRangeIterator operator++ () { return ++ind; }
+    NETGEN_INLINE constexpr TSIZE operator*() const { return ind; }
+    NETGEN_INLINE constexpr TSIZE Index() { return ind; }
+    NETGEN_INLINE constexpr operator TSIZE () const { return ind; }
+    NETGEN_INLINE constexpr bool operator != (ArrayRangeIterator d2) { return ind != d2.ind; }
+    NETGEN_INLINE constexpr bool operator == (ArrayRangeIterator d2) { return ind == d2.ind; }
   };
 
   /// a range of integers
@@ -284,23 +305,23 @@ namespace ngcore
   public: 
     NETGEN_INLINE T_Range () { ; }
     // NETGEN_INLINE T_Range (T n) : first(0), next(n) {;}
-    NETGEN_INLINE explicit T_Range (size_t n) : first(IndexBASE<T>()), next(IndexBASE<T>()+n) {;}    
-    NETGEN_INLINE T_Range (T f, T n) : first(f), next(n) {;}
+    NETGEN_INLINE constexpr explicit T_Range (size_t n) : first(IndexBASE<T>()), next(IndexBASE<T>()+n) {;}    
+    NETGEN_INLINE constexpr T_Range (T f, T n) : first(f), next(n) {;}
     template <typename T2>
-      NETGEN_INLINE T_Range(T_Range<T2> r2) : first(r2.First()), next(r2.Next()) { ; }
-    NETGEN_INLINE T First() const { return first; }
-    NETGEN_INLINE T Next() const { return next; }
-    NETGEN_INLINE T & First() { return first; }
-    NETGEN_INLINE T & Next() { return next; }
-    NETGEN_INLINE auto Size() const { return next-first; }
-    NETGEN_INLINE T operator[] (size_t i) const { return first+i; }
-    NETGEN_INLINE bool Contains (T i) const { return ((i >= first) && (i < next)); }
-    NETGEN_INLINE T_Range Modify(int inc_beg, int inc_end) const
+      NETGEN_INLINE constexpr T_Range(T_Range<T2> r2) : first(r2.First()), next(r2.Next()) { ; }
+    NETGEN_INLINE constexpr T First() const { return first; }
+    NETGEN_INLINE constexpr T Next() const { return next; }
+    NETGEN_INLINE constexpr T & First() { return first; }
+    NETGEN_INLINE constexpr T & Next() { return next; }
+    NETGEN_INLINE constexpr auto Size() const { return next-first; }
+    NETGEN_INLINE constexpr T operator[] (size_t i) const { return first+i; }
+    NETGEN_INLINE constexpr bool Contains (T i) const { return ((i >= first) && (i < next)); }
+    NETGEN_INLINE constexpr T_Range Modify(int inc_beg, int inc_end) const
     { return T_Range(first+inc_beg, next+inc_end); }
-    NETGEN_INLINE ArrayRangeIterator<T> begin() const { return first; }
-    NETGEN_INLINE ArrayRangeIterator<T> end() const { return next; }
+    NETGEN_INLINE constexpr ArrayRangeIterator<T> begin() const { return first; }
+    NETGEN_INLINE constexpr ArrayRangeIterator<T> end() const { return next; }
 
-    NETGEN_INLINE T_Range Split (size_t nr, int tot) const
+    NETGEN_INLINE constexpr T_Range Split (size_t nr, int tot) const
     {
       auto diff = next-first;
       return T_Range (first + nr * diff / tot,
@@ -312,30 +333,37 @@ namespace ngcore
   using IntRange = T_Range<size_t>;
 
   template <typename T>
-  NETGEN_INLINE T_Range<T> Range (T a, T b)
+  NETGEN_INLINE constexpr T_Range<T> Range (T a, T b)
   {
     return T_Range<T>(a,b);
   }
 
+  /// range from the first index of type T (plus offset) to next
+  template <typename T>
+  NETGEN_INLINE constexpr T_Range<T> Range (IndexFromBegin b, T next)
+  {
+    return T_Range<T>(T(IndexBASE<T>()+int(b.Value())), next);
+  }
+
   template<typename T>
-  NETGEN_INLINE auto Range (const T& ao)
+  NETGEN_INLINE constexpr auto Range (const T& ao)
     -> typename std::enable_if<has_range<T>, decltype(std::declval<T>().Range())>::type
   { return ao.Range(); }
 
   template <typename T>
-  NETGEN_INLINE auto Range (FlatArray<T> fa)
+  NETGEN_INLINE constexpr auto Range (FlatArray<T> fa)
   {
     return fa.Range();
   }
   
   template <typename T>
-  NETGEN_INLINE T_Range<T> Range_impl (T n, std::true_type)
+  NETGEN_INLINE constexpr T_Range<T> Range_impl (T n, std::true_type)
   {
     return T_Range<T> (0, n);
   }
 
   template <typename TA>
-  NETGEN_INLINE auto Range_impl (const TA & ao, std::false_type)
+  NETGEN_INLINE constexpr auto Range_impl (const TA & ao, std::false_type)
     -> T_Range<index_type<TA>>
   {
     return T_Range<index_type<TA>> (IndexBASE<index_type<TA>>(),
@@ -430,7 +458,7 @@ namespace ngcore
     NETGEN_INLINE IndirectArray operator= (const BaseArrayObject<T2> & a2) 
     {
       for (auto i : Range(Size()))
-	(*this)[i] = a2[i];
+        (*this)[i] = a2[i];
       return IndirectArray (ba, ia);
     }
 
@@ -468,8 +496,13 @@ namespace ngcore
     FlatArray (const FlatArray & a2) = default;
     // : size(a2.Size()), data(a2.data) { ; } 
 
+    /// a non-const view converts to a const view (never the reverse)
+    template <typename T2, typename = std::enable_if_t<std::is_same_v<T, const T2>>>
+    NETGEN_INLINE constexpr FlatArray (FlatArray<T2,IndexType> a2)
+      : size(a2.Size()), data(a2.Data()) { }
+
     /// provide size and memory
-    NETGEN_INLINE FlatArray (size_t asize, T * adata) 
+    NETGEN_INLINE constexpr FlatArray (size_t asize, T * adata) 
       : size(asize), data(adata) { ; }
     
     /// memory from local heap
@@ -482,14 +515,14 @@ namespace ngcore
     { ; }
 
     template <size_t N>
-    NETGEN_INLINE FlatArray(std::array<T,N> & a)
+    NETGEN_INLINE constexpr FlatArray(std::array<T,N> & a)
       : size(N), data(&a[0]) { }
     
     /// the size
-    NETGEN_INLINE size_t Size() const { return size; }
+    NETGEN_INLINE constexpr size_t Size() const { return size; }
 
     /// the data
-    NETGEN_INLINE T* Data() const { return data; }
+    NETGEN_INLINE constexpr T* Data() const { return data; }
 
     /// Fill array with value val
     NETGEN_INLINE const FlatArray & operator= (const T & val) const
@@ -550,25 +583,31 @@ namespace ngcore
     }
 
     /// Access array. range check by macro NETGEN_CHECK_RANGE
-    NETGEN_INLINE T & operator[] (IndexType i) const
+    NETGEN_INLINE constexpr T & operator[] (IndexType i) const
     {
       NETGEN_CHECK_RANGE(i,BASE,size+BASE);
       return data[i-BASE]; 
     }
   
-    NETGEN_INLINE T_Range<index_type> Range () const
+    NETGEN_INLINE constexpr T_Range<index_type> Range () const
     {
       return T_Range<index_type> (BASE, size+BASE);
     }
     
-    NETGEN_INLINE const CArray<T> Addr (size_t pos) const
+    NETGEN_INLINE constexpr const CArray<T> Addr (size_t pos) const
     {
-      return CArray<T> (data+pos-BASE);
+      return CArray<T> (data+pos-detail::GetRawInteger(BASE));
+    }
+
+    /// 0-based position of an index
+    NETGEN_INLINE constexpr static size_t Ind0 (IndexType i)
+    {
+      return detail::GetRawInteger(i) - detail::GetRawInteger(BASE);
     }
 
     // const CArray<T> operator+ (int pos)
     // { return CArray<T> (data+pos); }
-    NETGEN_INLINE T * operator+ (size_t pos) const { return data+pos; }
+    NETGEN_INLINE constexpr T * operator+ (size_t pos) const { return data+pos; }
 
     /// access first element. check by macro NETGEN_CHECK_RANGE
     T & First () const
@@ -585,39 +624,75 @@ namespace ngcore
     }
 
     /// takes sub-array starting from position pos
-    NETGEN_INLINE const FlatArray<T> Part (size_t pos)
+    NETGEN_INLINE constexpr const FlatArray<T> Part (size_t pos)
     {
       return FlatArray<T> (size-pos, data+pos);
     }
 
     /// takes subsize elements starting from position pos
-    NETGEN_INLINE const FlatArray<T> Part (size_t pos, size_t subsize)
+    NETGEN_INLINE constexpr const FlatArray<T> Part (size_t pos, size_t subsize)
     {
       return FlatArray<T> (subsize, data+pos);
     }
 
     /// takes range starting from position start of end-start elements
-    NETGEN_INLINE FlatArray<T> Range (size_t start, size_t end) const
+    NETGEN_INLINE constexpr FlatArray<T> Range (size_t start, size_t end) const
     {
       return FlatArray<T> (end-start, data+start);
     }
 
     /// takes range starting from position start of end-start elements
-    NETGEN_INLINE FlatArray<T> Range (size_t start, IndexFromEnd indend) const
+    NETGEN_INLINE constexpr FlatArray<T> Range (size_t start, IndexFromEnd indend) const
     {
       return this->Range(start, size_t(Size()+indend.Value()));
     }
     
     /// takes range starting from position start of end-start elements
-    NETGEN_INLINE FlatArray<T> Range (T_Range<size_t> range) const
+    NETGEN_INLINE constexpr FlatArray<T> Range (T_Range<size_t> range) const
     {
       return FlatArray<T> (range.Size(), data+range.First());
     }
 
-    /// takes range starting from position start of end-start elements
-    NETGEN_INLINE const FlatArray<T> operator[] (T_Range<IndexType> range) const
+    /// a range of own index type gives a 0-based sub-array
+    template <typename TI = IndexType,
+              typename = std::enable_if_t<!std::is_same_v<TI,size_t>>>
+    NETGEN_INLINE constexpr FlatArray<T> Range (T_Range<IndexType> range) const
     {
-      return FlatArray<T> (range.Size(), data+range.First());
+      return FlatArray<T> (range.Size(), data+Ind0(range.First()));
+    }
+
+    /// indices [from,next) of own index type give a 0-based sub-array
+    template <typename TI = IndexType,
+              typename = std::enable_if_t<!std::is_same_v<TI,size_t>>>
+    NETGEN_INLINE constexpr FlatArray<T> Range (IndexType from, IndexType next) const
+    {
+      return Range(T_Range<IndexType>(from, next));
+    }
+
+    /// indices [from, end+indend) of own index type give a 0-based sub-array
+    template <typename TI = IndexType,
+              typename = std::enable_if_t<!std::is_same_v<TI,size_t>>>
+    NETGEN_INLINE constexpr FlatArray<T> Range (IndexType from, IndexFromEnd indend) const
+    {
+      return Range(from, Range().Next()+int(indend.Value()));
+    }
+
+    /// from the first index (plus offset) to next
+    NETGEN_INLINE constexpr FlatArray<T> Range (IndexFromBegin b, IndexType next) const
+    {
+      return Range(T_Range<IndexType>(IndexType(BASE+int(b.Value())), next));
+    }
+
+    /// from the first index (plus offset) to the end (plus offset)
+    NETGEN_INLINE constexpr FlatArray<T> Range (IndexFromBegin b, IndexFromEnd indend) const
+    {
+      return Range(IndexType(BASE+int(b.Value())), indend);
+    }
+
+    /// takes range starting from position start of end-start elements
+    NETGEN_INLINE constexpr const FlatArray<T> operator[] (T_Range<IndexType> range) const
+    {
+      return FlatArray<T> (range.Size(), data+Ind0(range.First()));
     }
     
     template <typename TI1>
@@ -627,7 +702,7 @@ namespace ngcore
     }
 
     /// first position of element elem, returns -1 if element not contained in array 
-    NETGEN_INLINE size_t Pos(const T & el) const
+    NETGEN_INLINE constexpr size_t Pos(const T & el) const
     {
       for (size_t i = 0; i < Size(); i++)
         if (data[i] == el)
@@ -636,15 +711,15 @@ namespace ngcore
     }
 
     /// does the array contain element elem ?
-    NETGEN_INLINE bool Contains(const T & elem) const
+    NETGEN_INLINE constexpr bool Contains(const T & elem) const
     {
       return Pos(elem) != ILLEGAL_POSITION;
     }
     
     //auto begin() const { return ArrayIterator<T,IndexType> (*this, BASE); }
     // auto end() const { return ArrayIterator<T,IndexType> (*this, size+BASE); }
-    NETGEN_INLINE auto begin() const { return data; }
-    NETGEN_INLINE auto end() const { return data+Size(); }
+    NETGEN_INLINE constexpr auto begin() const { return data; }
+    NETGEN_INLINE constexpr auto end() const { return data+Size(); }
   };
 
   template <typename T>
@@ -685,7 +760,7 @@ namespace ngcore
       if (a1[i] != a2[i]) return false;
     return true;
   }
-		 
+                 
   template <class T1, class T2>
   inline bool operator!= (const FlatArray<T1> & a1,
                           const FlatArray<T2> & a2)
@@ -710,8 +785,6 @@ namespace ngcore
     size_t allocsize;
     /// that's the data we have to delete, nullptr for not owning the memory
     T * mem_to_delete;
-    MemoryTracer mt;
-
 
     using FlatArray<T,IndexType>::size;
     using FlatArray<T,IndexType>::data;
@@ -732,19 +805,19 @@ namespace ngcore
     {
       allocsize = asize; 
       mem_to_delete = data;
-      mt.Alloc(sizeof(T)*asize);
+      MemTraceAlloc(data, sizeof(T)*asize);
     }
 
 
     /// Generate array in user data
     NETGEN_INLINE Array(size_t asize, T* adata, bool ownMemory = false)
-      : FlatArray<T> (asize, adata)
+      : FlatArray<T,IndexType> (asize, adata)
     {
       allocsize = asize;
       if(ownMemory)
       {
         mem_to_delete = adata;
-        mt.Alloc(sizeof(T)*asize);
+        MemTraceAlloc(data, sizeof(T)*asize);
       }
       else
         mem_to_delete = nullptr;
@@ -753,7 +826,7 @@ namespace ngcore
     /// Generate array in user data
     template <typename ALLOCATOR>
     NETGEN_INLINE Array(size_t asize, ALLOCATOR & lh)
-      : FlatArray<T> (asize, lh)
+      : FlatArray<T,IndexType> (asize, lh)
     {
       allocsize = asize; 
       mem_to_delete = nullptr;
@@ -761,7 +834,6 @@ namespace ngcore
 
     NETGEN_INLINE Array (Array && a2) 
     {
-      mt = std::move(a2.mt);
       size = a2.size; 
       data = a2.data;
       allocsize = a2.allocsize;
@@ -780,7 +852,7 @@ namespace ngcore
         {
           allocsize = size;
           mem_to_delete = data;
-          mt.Alloc(sizeof(T)*size);
+          MemTraceAlloc(data, sizeof(T)*size);
           for (size_t i = 0; i < size; i++)
             data[i] = a2.data[i];
         }
@@ -800,7 +872,7 @@ namespace ngcore
     {
       allocsize = size;
       mem_to_delete = data;
-      mt.Alloc(sizeof(T)*size);
+      MemTraceAlloc(data, sizeof(T)*size);
       /*
       for (size_t i = 0; i < size; i++)
         data[i] = a2[i];
@@ -812,12 +884,12 @@ namespace ngcore
     }
 
     Array (std::initializer_list<T> list) 
-      : FlatArray<T> (list.size(), 
-                      list.size() ? new T[list.size()] : NULL)
+      : FlatArray<T,IndexType> (list.size(), 
+                                list.size() ? new T[list.size()] : NULL)
     {
       allocsize = size;
       mem_to_delete = data;
-      mt.Alloc(sizeof(T)*size);
+      MemTraceAlloc(data, sizeof(T)*size);
       size_t cnt = 0;
       for (auto val : list)
         data[cnt++] = val;
@@ -825,12 +897,12 @@ namespace ngcore
 
     /// array merge-copy
     explicit Array (const Array<T> & a2, const Array<T> & a3)
-      : FlatArray<T> (a2.Size()+a3.Size(), 
-                      a2.Size()+a3.Size() ? new T[a2.Size()+a3.Size()] : 0)
+      : FlatArray<T,IndexType> (a2.Size()+a3.Size(), 
+                                a2.Size()+a3.Size() ? new T[a2.Size()+a3.Size()] : 0)
     {
       allocsize = size;
       mem_to_delete = data;
-      mt.Alloc(sizeof(T)*size);
+      MemTraceAlloc(data, sizeof(T)*size);
       for(size_t i = 0; i <  a2.Size(); i++)
         data[i] = a2[i];
       for (size_t i = a2.Size(), j=0; i < size; i++,j++)
@@ -841,7 +913,7 @@ namespace ngcore
     NETGEN_INLINE ~Array()
     {
       if(mem_to_delete)
-        mt.Free(sizeof(T)*allocsize);
+        MemTraceFree(mem_to_delete, sizeof(T)*allocsize);
       delete [] mem_to_delete;
     }
 
@@ -864,10 +936,9 @@ namespace ngcore
     /// we tell the compiler that there is no need for deleting the array ..
     NETGEN_INLINE void NothingToDelete () 
     { 
+      if(mem_to_delete)
+        MemTraceFree(mem_to_delete, sizeof(T)*allocsize);
       mem_to_delete = nullptr;
-
-      // this memory is not managed by the Array anymore, so set the memory usage to 0
-      mt.Free(sizeof(T)*allocsize);
     }
 
     /// Change logical size. If necessary, do reallocation. Keeps contents.
@@ -901,7 +972,7 @@ namespace ngcore
     NETGEN_INLINE const Array & Assign (size_t asize, LocalHeap & lh)
     {
       if(mem_to_delete)
-        mt.Free(sizeof(T)*allocsize);
+        MemTraceFree(mem_to_delete, sizeof(T)*allocsize);
       delete [] mem_to_delete;
       size = allocsize = asize;
       data = lh.Alloc<T> (asize);
@@ -994,7 +1065,7 @@ namespace ngcore
     {
       NETGEN_CHECK_RANGE(i, BASE, BASE+size);
       for(size_t j = i-BASE; j+1 < this->size; j++)
-	this->data[j] = this->data[j+1];
+        this->data[j] = this->data[j+1];
       this->size--;
     }
 
@@ -1026,7 +1097,7 @@ namespace ngcore
     NETGEN_INLINE void DeleteAll ()
     {
       if(mem_to_delete)
-        mt.Free(sizeof(T)*allocsize);
+        MemTraceFree(mem_to_delete, sizeof(T)*allocsize);
       delete [] mem_to_delete;
       mem_to_delete = NULL;
       data = 0;
@@ -1061,7 +1132,6 @@ namespace ngcore
     /// steal array 
     NETGEN_INLINE Array & operator= (Array && a2)
     {
-      mt = std::move(a2.mt);
       ngcore::Swap (size, a2.size);
       ngcore::Swap (data, a2.data);
       ngcore::Swap (allocsize, a2.allocsize);
@@ -1135,20 +1205,11 @@ namespace ngcore
     
     NETGEN_INLINE void Swap (Array & b)
     {
-      mt = std::move(b.mt);
       ngcore::Swap (size, b.size);
       ngcore::Swap (data, b.data);
       ngcore::Swap (allocsize, b.allocsize);
       ngcore::Swap (mem_to_delete, b.mem_to_delete);
     }
-
-    NETGEN_INLINE void StartMemoryTracing () const
-    {
-      if(mem_to_delete)
-        mt.Alloc(sizeof(T) * allocsize);
-    }
-
-    const MemoryTracer& GetMemoryTracer() const { return mt; }
 
   private:
 
@@ -1166,7 +1227,7 @@ namespace ngcore
     
     T * hdata = data;
     data = new T[nsize];
-    mt.Alloc(sizeof(T) * nsize);
+    MemTraceAlloc(data, sizeof(T) * nsize);
 
     if (hdata)
       {
@@ -1180,7 +1241,7 @@ namespace ngcore
           for (size_t i = 0; i < mins; i++) data[i] = std::move(hdata[i]);
 #endif
         if(mem_to_delete)
-          mt.Free(sizeof(T) * allocsize);
+          MemTraceFree(mem_to_delete, sizeof(T) * allocsize);
         delete [] mem_to_delete;
       }
 
@@ -1197,22 +1258,21 @@ namespace ngcore
      If the dynamic size fits into the static size, use static memory, 
      otherwise perform dynamic allocation
   */
-  template <class T, int S> 
-  class ArrayMem : public Array<T>
+  template <class T, int S, typename TIND = size_t> 
+  class ArrayMem : public Array<T,TIND>
   {
     T mem[S];    
 
-    using Array<T>::size;
-    using Array<T>::allocsize;
-    using Array<T>::data;
-    using Array<T>::mem_to_delete;
-    using Array<T>::mt;
-    // using Array<T>::ownmem;
+    using Array<T,TIND>::size;
+    using Array<T,TIND>::allocsize;
+    using Array<T,TIND>::data;
+    using Array<T,TIND>::mem_to_delete;
+    // using Array<T,TIND>::ownmem;
 
   public:
     /// Generate array of logical and physical size asize
     explicit ArrayMem(size_t asize = 0)    
-      : Array<T> (S, mem)
+      : Array<T,TIND> (S, mem)
     {
       size = asize;
       if (asize > S)
@@ -1220,28 +1280,27 @@ namespace ngcore
           data = new T[asize];
           allocsize = size;
           mem_to_delete = data;
-          mt.Alloc(sizeof(T)*asize);
+          MemTraceAlloc(data, sizeof(T)*asize);
         }
     }
 
     /// copies from Array a2
     explicit ArrayMem(const Array<T> & a2)
-      : Array<T> (S, (T*)mem)
+      : Array<T,TIND> (S, (T*)mem)
     {
-      Array<T>::operator= (a2);
+      Array<T,TIND>::operator= (a2);
     }
 
     /// copies from ArrayMem a2
     explicit ArrayMem(const ArrayMem & a2)
-      : Array<T> (S, (T*)mem)
+      : Array<T,TIND> (S, (T*)mem)
     {
-      Array<T>::operator= (a2);
+      Array<T,TIND>::operator= (a2);
     }
   
     ArrayMem(ArrayMem && a2)
-      : Array<T> (a2.Size(), (T*)mem)
+      : Array<T,TIND> (a2.Size(), (T*)mem)
     {
-      mt = std::move(a2.mt);
       if (a2.mem_to_delete)
         {
           mem_to_delete = a2.mem_to_delete;
@@ -1278,13 +1337,12 @@ namespace ngcore
     
     ArrayMem & operator= (const T & val)
     {
-      FlatArray<T>::operator= (val);
+      FlatArray<T,TIND>::operator= (val);
       return *this;
     }
 
     ArrayMem & operator= (ArrayMem && a2)
     {
-      mt = std::move(a2.mt);
       ngcore::Swap (mem_to_delete, a2.mem_to_delete);
       ngcore::Swap (allocsize, a2.allocsize);
       ngcore::Swap (size, a2.size);
@@ -1303,10 +1361,10 @@ namespace ngcore
 
 
     /// array copy
-    ArrayMem & operator= (const FlatArray<T> & a2)
+    ArrayMem & operator= (const FlatArray<T,TIND> & a2)
     {
       this->SetSize (a2.Size());
-      for (size_t i = 0; i < size; i++)
+      for (auto i : a2.Range())
         (*this)[i] = a2[i];
       return *this;
     }
@@ -1446,16 +1504,16 @@ namespace ngcore
   {
     for (size_t i = 0; i < data.Size(); i++)
       for (size_t j = i+1; j < data.Size(); j++)
-	if (data[i] > data[j])
-	  {
-	    T hv = data[i];
-	    data[i] = data[j];
-	    data[j] = hv;
+        if (data[i] > data[j])
+          {
+            T hv = data[i];
+            data[i] = data[j];
+            data[j] = hv;
 
-	    S hvs = index[i];
-	    index[i] = index[j];
-	    index[j] = hvs;
-	  }
+            S hvs = index[i];
+            index[i] = index[j];
+            index[j] = hvs;
+          }
   }
 
 
@@ -1494,7 +1552,7 @@ namespace ngcore
 
         if (i <= j)
           {
-	    Swap (data[i], data[j]);
+            Swap (data[i], data[j]);
             i++; j--;
           }
       }
@@ -1547,7 +1605,7 @@ namespace ngcore
 
         if (i <= j)
           {
-	    Swap (index[i], index[j]);
+            Swap (index[i], index[j]);
             i++; j--;
           }
       }
@@ -1563,6 +1621,40 @@ namespace ngcore
   {
     QuickSortI (data, index, DefaultLessCl<T>());
   }
+
+  /// sort data, and apply the same permutation to index
+  template <class T, class S>
+  inline void QuickSortPairRec (FlatArray<T> data, FlatArray<S> index,
+                            int left, int right)
+  {
+    int i = left;
+    int j = right;
+    T midval = data[(left+right)/2];
+
+    do
+      {
+        while (data[i] < midval) i++;
+        while (midval < data[j]) j--;
+
+        if (i <= j)
+          {
+            Swap (data[i], data[j]);
+            Swap (index[i], index[j]);
+            i++; j--;
+          }
+      }
+    while (i <= j);
+    if (left < j) QuickSortPairRec (data, index, left, j);
+    if (i < right) QuickSortPairRec (data, index, i, right);
+  }
+
+  template <class T, class S>
+  inline void QuickSortPair (FlatArray<T> data, FlatArray<S> index)
+  {
+    if (data.Size() > 1)
+      QuickSortPairRec (data, index, 0, data.Size()-1);
+  }
+
 
 
 
@@ -1624,13 +1716,13 @@ namespace ngcore
     
     HTArray & operator= (const HTArray &) = default;
 
-    T * Ptr () { return tail.Ptr(); }
-    T & operator[] (size_t i) { return Ptr()[i]; }
+    NETGEN_INLINE T * Ptr () { return tail.Ptr(); }
+    NETGEN_INLINE T & operator[] (size_t i) { return Ptr()[i]; }
 
-    const T * Ptr () const { return tail.Ptr(); }
-    const T & operator[] (size_t i) const { return Ptr()[i]; }
+    NETGEN_INLINE const T * Ptr () const { return tail.Ptr(); }
+    NETGEN_INLINE const T & operator[] (size_t i) const { return Ptr()[i]; }
     template <int NR>
-    T & Elem() { return (NR==S-1) ? head : tail.template Elem<NR>(); }
+    NETGEN_INLINE T & Elem() { return (NR==S-1) ? head : tail.template Elem<NR>(); }
 
     auto Tail() const { return tail; }
     auto Head() const { return head; }
@@ -1653,13 +1745,13 @@ namespace ngcore
     
     HTArray & operator= (const HTArray &) = default;
 
-    T * Ptr () { return &head; }
-    T & operator[] (size_t i) { return Ptr()[i]; }
+    NETGEN_INLINE T * Ptr () { return &head; }
+    NETGEN_INLINE T & operator[] (size_t i) { return Ptr()[i]; }
 
-    const T * Ptr () const { return &head; }
-    const T & operator[] (size_t i) const { return Ptr()[i]; }
-    template <int NR>    
-    T & Elem()
+    NETGEN_INLINE const T * Ptr () const { return &head; }
+    NETGEN_INLINE const T & operator[] (size_t i) const { return Ptr()[i]; }
+    template <int NR>
+    NETGEN_INLINE T & Elem()
     {
       // assert(NR==0, "HTArray index error");
       return head;
@@ -1694,11 +1786,11 @@ namespace ngcore
     }
     */
     // T * Ptr () { return (T*)(void*)&head; }
-    T * Ptr () { return (T*)(void*)this; }
-    T & operator[] (size_t i) { return Ptr()[i]; }
+    NETGEN_INLINE T * Ptr () { return (T*)(void*)this; }
+    NETGEN_INLINE T & operator[] (size_t i) { return Ptr()[i]; }
     // const T * Ptr () const { return (const T*)(const void*)&head; }
-    const T * Ptr () const { return (const T*)(const void*)this; }
-    const T & operator[] (size_t i) const { return Ptr()[i]; }
+    NETGEN_INLINE const T * Ptr () const { return (const T*)(const void*)this; }
+    NETGEN_INLINE const T & operator[] (size_t i) const { return Ptr()[i]; }
     template <int NR>        
     T & Elem()
     {

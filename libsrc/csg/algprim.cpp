@@ -69,8 +69,7 @@ namespace netgen
 
   Point<3> QuadraticSurface :: GetSurfacePoint () const
   {
-    MyError ("GetSurfacePoint called for QuadraticSurface");
-    return Point<3> (0, 0, 0);
+    throw Exception ("GetSurfacePoint called for QuadraticSurface");
   }
 
 
@@ -117,26 +116,26 @@ namespace netgen
 
 
   void Plane :: GetPrimitiveData (const char *& classname, 
-                                  NgArray<double> & coeffs) const
+                                  Array<double> & coeffs) const
   {
     classname = "plane";
     coeffs.SetSize (6);
-    coeffs.Elem(1) = p(0);
-    coeffs.Elem(2) = p(1);
-    coeffs.Elem(3) = p(2);
-    coeffs.Elem(4) = n(0);
-    coeffs.Elem(5) = n(1);
-    coeffs.Elem(6) = n(2);
+    coeffs[0] = p(0);
+    coeffs[1] = p(1);
+    coeffs[2] = p(2);
+    coeffs[3] = n(0);
+    coeffs[4] = n(1);
+    coeffs[5] = n(2);
   }
 
-  void Plane :: SetPrimitiveData (NgArray<double> & coeffs)
+  void Plane :: SetPrimitiveData (Array<double> & coeffs)
   {
-    p(0) = coeffs.Elem(1);
-    p(1) = coeffs.Elem(2);
-    p(2) = coeffs.Elem(3);
-    n(0) = coeffs.Elem(4);
-    n(1) = coeffs.Elem(5);
-    n(2) = coeffs.Elem(6);
+    p(0) = coeffs[0];
+    p(1) = coeffs[1];
+    p(2) = coeffs[2];
+    n(0) = coeffs[3];
+    n(1) = coeffs[4];
+    n(2) = coeffs[5];
 
     CalcData();
   }
@@ -368,22 +367,22 @@ namespace netgen
     c1 = (c(0) * c(0) + c(1) * c(1) + c(2) * c(2)) / (2 * r) - r / 2;
   }
 
-  void Sphere :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+  void Sphere :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "sphere";
     coeffs.SetSize (4);
-    coeffs.Elem(1) = c(0);
-    coeffs.Elem(2) = c(1);
-    coeffs.Elem(3) = c(2);
-    coeffs.Elem(4) = r;
+    coeffs[0] = c(0);
+    coeffs[1] = c(1);
+    coeffs[2] = c(2);
+    coeffs[3] = r;
   }
 
-  void Sphere :: SetPrimitiveData (NgArray<double> & coeffs)
+  void Sphere :: SetPrimitiveData (Array<double> & coeffs)
   {
-    c(0) = coeffs.Elem(1);
-    c(1) = coeffs.Elem(2);
-    c(2) = coeffs.Elem(3);
-    r = coeffs.Elem(4);
+    c(0) = coeffs[0];
+    c(1) = coeffs[1];
+    c(2) = coeffs[2];
+    r = coeffs[3];
 
     invr = 1.0/r;
     cxx = cyy = czz = 0.5 / r;
@@ -643,7 +642,7 @@ namespace netgen
     cz = v(2);
   }
 
-  void Ellipsoid :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+  void Ellipsoid :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "ellipsoid";
     coeffs.SetSize (12);
@@ -656,7 +655,7 @@ namespace netgen
       }
   }
 
-  void Ellipsoid :: SetPrimitiveData (NgArray<double> & coeffs)
+  void Ellipsoid :: SetPrimitiveData (Array<double> & coeffs)
   {
     for(auto i : Range(3))
       {
@@ -758,7 +757,7 @@ namespace netgen
 
 
 
-  Cylinder :: Cylinder (NgArray<double> & coeffs)
+  Cylinder :: Cylinder (Array<double> & coeffs)
   {
     SetPrimitiveData(coeffs);
   }
@@ -800,28 +799,28 @@ namespace netgen
 
 
 
-  void Cylinder :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+  void Cylinder :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "cylinder";
     coeffs.SetSize (7);
-    coeffs.Elem(1) = a(0);
-    coeffs.Elem(2) = a(1);
-    coeffs.Elem(3) = a(2);
-    coeffs.Elem(4) = b(0);
-    coeffs.Elem(5) = b(1);
-    coeffs.Elem(6) = b(2);
-    coeffs.Elem(7) = r;
+    coeffs[0] = a(0);
+    coeffs[1] = a(1);
+    coeffs[2] = a(2);
+    coeffs[3] = b(0);
+    coeffs[4] = b(1);
+    coeffs[5] = b(2);
+    coeffs[6] = r;
   }
 
-  void Cylinder :: SetPrimitiveData (NgArray<double> & coeffs)
+  void Cylinder :: SetPrimitiveData (Array<double> & coeffs)
   {
-    a(0) = coeffs.Elem(1);
-    a(1) = coeffs.Elem(2);
-    a(2) = coeffs.Elem(3);
-    b(0) = coeffs.Elem(4);
-    b(1) = coeffs.Elem(5);
-    b(2) = coeffs.Elem(6);
-    r = coeffs.Elem(7);
+    a(0) = coeffs[0];
+    a(1) = coeffs[1];
+    a(2) = coeffs[2];
+    b(0) = coeffs[3];
+    b(1) = coeffs[4];
+    b(2) = coeffs[5];
+    r = coeffs[6];
 
 
     vab = (b - a);
@@ -1156,14 +1155,14 @@ namespace netgen
     CalcData();
   }
 
-  EllipticCylinder :: EllipticCylinder (NgArray<double> & coeffs)
+  EllipticCylinder :: EllipticCylinder (Array<double> & coeffs)
   {
     SetPrimitiveData(coeffs);
   }
 
 
 
-  void EllipticCylinder :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+  void EllipticCylinder :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "ellipticcylinder";
     coeffs.SetSize (9);
@@ -1178,7 +1177,7 @@ namespace netgen
     coeffs[8] = vs(2);
   }
 
-  void EllipticCylinder :: SetPrimitiveData (NgArray<double> & coeffs)
+  void EllipticCylinder :: SetPrimitiveData (Array<double> & coeffs)
   {
     a(0) = coeffs[0];
     a(1) = coeffs[1];
@@ -1217,7 +1216,7 @@ namespace netgen
     cyz = 2 * (hvl(1) * hvl(2) + hvs(1) * hvs(2));
 
     Vec<3> va (a);
-    c1 = pow(va * hvl,2) + pow(va * hvs,2) - 1;
+    c1 = sqr(va * hvl) + sqr(va * hvs) - 1;
   
     Vec<3> v = -2 * (va * hvl) * hvl - 2 * (va * hvs) * hvs;
     cx = v(0);
@@ -1341,30 +1340,30 @@ namespace netgen
 
 
 
-  void Cone :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+  void Cone :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "cone";
     coeffs.SetSize (8);
-    coeffs.Elem(1) = a(0);
-    coeffs.Elem(2) = a(1);
-    coeffs.Elem(3) = a(2);
-    coeffs.Elem(4) = b(0);
-    coeffs.Elem(5) = b(1);
-    coeffs.Elem(6) = b(2);
-    coeffs.Elem(7) = ra;
-    coeffs.Elem(8) = rb;
+    coeffs[0] = a(0);
+    coeffs[1] = a(1);
+    coeffs[2] = a(2);
+    coeffs[3] = b(0);
+    coeffs[4] = b(1);
+    coeffs[5] = b(2);
+    coeffs[6] = ra;
+    coeffs[7] = rb;
   }
 
-  void Cone :: SetPrimitiveData (NgArray<double> & coeffs)
+  void Cone :: SetPrimitiveData (Array<double> & coeffs)
   {
-    a(0) = coeffs.Elem(1);
-    a(1) = coeffs.Elem(2);
-    a(2) = coeffs.Elem(3);
-    b(0) = coeffs.Elem(4);
-    b(1) = coeffs.Elem(5);
-    b(2) = coeffs.Elem(6);
-    ra = coeffs.Elem(7);
-    rb = coeffs.Elem(8);
+    a(0) = coeffs[0];
+    a(1) = coeffs[1];
+    a(2) = coeffs[2];
+    b(0) = coeffs[3];
+    b(1) = coeffs[4];
+    b(2) = coeffs[5];
+    ra = coeffs[6];
+    rb = coeffs[7];
 
     CalcData();
   }
@@ -1537,7 +1536,7 @@ namespace netgen
 ///
 
 EllipticCone :: EllipticCone (const Point<3> & aa, const Vec<3> & avl,
-	      const Vec<3> & avs, double ah, double avlr)
+              const Vec<3> & avs, double ah, double avlr)
 {
   a = aa;
   h = ah;
@@ -1545,13 +1544,13 @@ EllipticCone :: EllipticCone (const Point<3> & aa, const Vec<3> & avl,
 
   if (avl.Length2() >= avs.Length2())
      {
- 	vl = avl;
- 	vs = avs;
+        vl = avl;
+        vs = avs;
       }
   else
      {
-	vl = avs;
-	vs = avl;
+        vl = avs;
+        vs = avl;
      }
 
 
@@ -1566,39 +1565,39 @@ Primitive * EllipticCone :: CreateDefault ()
   }
 
 
- void EllipticCone :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+ void EllipticCone :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "ellipticcone";
     coeffs.SetSize (11);
-    coeffs.Elem(1) = a(0);
-    coeffs.Elem(2) = a(1);
-    coeffs.Elem(3) = a(2);
-    coeffs.Elem(4) = vl(0);
-    coeffs.Elem(5) = vl(1);
-    coeffs.Elem(6) = vl(2);
-    coeffs.Elem(7) = vs(0);
-    coeffs.Elem(8) = vs(1);
-    coeffs.Elem(9) = vs(2);
-    coeffs.Elem(10) = h;
-    coeffs.Elem(11) = vlr;
+    coeffs[0] = a(0);
+    coeffs[1] = a(1);
+    coeffs[2] = a(2);
+    coeffs[3] = vl(0);
+    coeffs[4] = vl(1);
+    coeffs[5] = vl(2);
+    coeffs[6] = vs(0);
+    coeffs[7] = vs(1);
+    coeffs[8] = vs(2);
+    coeffs[9] = h;
+    coeffs[10] = vlr;
 
   }
 
 
-  void EllipticCone :: SetPrimitiveData (NgArray<double> & coeffs)
+  void EllipticCone :: SetPrimitiveData (Array<double> & coeffs)
   {
 
-    a(0) = coeffs.Elem(1);
-    a(1) = coeffs.Elem(2);
-    a(2) = coeffs.Elem(3);
-    vl(0) = coeffs.Elem(4);
-    vl(1) = coeffs.Elem(5);
-    vl(2) = coeffs.Elem(6);
-    vs(0) = coeffs.Elem(7);
-    vs(1) = coeffs.Elem(8);
-    vs(2) = coeffs.Elem(9);
-    h = coeffs.Elem(10);
-    vlr = coeffs.Elem(11);
+    a(0) = coeffs[0];
+    a(1) = coeffs[1];
+    a(2) = coeffs[2];
+    vl(0) = coeffs[3];
+    vl(1) = coeffs[4];
+    vl(2) = coeffs[5];
+    vs(0) = coeffs[6];
+    vs(1) = coeffs[7];
+    vs(2) = coeffs[8];
+    h = coeffs[9];
+    vlr = coeffs[10];
     CalcData();
   }
 
@@ -1629,19 +1628,19 @@ void EllipticCone :: CalcData ()
   cxz = 2*(nvl(0)*nvl(2) + ellipt2*nvs(0)*nvs(2) - t1vec(0)*t1vec(2));
   cyz = 2*(nvl(1)*nvl(2) + ellipt2*nvs(1)*nvs(2) - t1vec(1)*t1vec(2));
 
-  Vec<3> v = -2*((va*nvl)*nvl + ellipt2*(va*nvs)*nvs + t1*t1vec);
+  Vec<3> v = -2.0*((va*nvl)*nvl + ellipt2*(va*nvs)*nvs + t1*t1vec);
   cx = v(0);
   cy = v(1);
   cz = v(2);
 
-  c1 = pow(va*nvl,2) + ellipt2*pow(va*nvs,2) - t1*t1;
+  c1 = sqr(va*nvl) + ellipt2*sqr(va*nvs) - t1*t1;
 
   double lvltop = vlr*lvl;
   // double minlvl = (lvl < lvltop) ? lvl : lvltop;
   double maxlvl = max2( lvl,lvltop);
   cxx /= maxlvl; cyy /= maxlvl; czz /= maxlvl;
   cxy /= maxlvl; cxz /= maxlvl; cyz /= maxlvl;
-  cx /= maxlvl;  cy /= maxlvl;	cz /= maxlvl;
+  cx /= maxlvl;  cy /= maxlvl;  cz /= maxlvl;
   c1 /= maxlvl;
 }
 
@@ -1722,22 +1721,22 @@ void EllipticCone :: GetTriangleApproximation
   for ( j = 0; j <= n; j++ )
     for (i = 0; i <= n; i++)
       {
-	lg = 2 *M_PI * double (i) /n;
-	bg = double(j) /n;
+        lg = 2 *M_PI * double (i) /n;
+        bg = double(j) /n;
 
-	Point<3> p = a + (bg *vh)
-	  + (( lvl*(1 + (vlr -1)*bg) * cos(lg)) * nvl)
+        Point<3> p = a + (bg *vh)
+          + (( lvl*(1 + (vlr -1)*bg) * cos(lg)) * nvl)
           + (( lvs*(1 + (vlr -1)*bg)* sin(lg) ) * nvs);
 
-	tas.AddPoint (p);
+        tas.AddPoint (p);
      }
 
   for ( j = 0; j < n; j++)
     for ( i = 0; i < n; i++)
       {
-	int pi = i + (n+1) * j;
-	tas.AddTriangle (TATriangle (0, pi, pi+1, pi+n+2));
-	tas.AddTriangle (TATriangle (0, pi, pi+n+2, pi+n+1));
+        int pi = i + (n+1) * j;
+        tas.AddTriangle (TATriangle (0, pi, pi+1, pi+n+2));
+        tas.AddTriangle (TATriangle (0, pi, pi+n+2, pi+n+1));
       }
 }
 
@@ -1756,30 +1755,30 @@ void EllipticCone :: GetTriangleApproximation
     r = ar;
   }
 
-  void Torus :: GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+  void Torus :: GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
   {
     classname = "torus";
     coeffs.SetSize (8);
-    coeffs.Elem(1) = c(0);
-    coeffs.Elem(2) = c(1);
-    coeffs.Elem(3) = c(2);
-    coeffs.Elem(4) = n(0);
-    coeffs.Elem(5) = n(1);
-    coeffs.Elem(6) = n(2);
-    coeffs.Elem(7) = R;
-    coeffs.Elem(8) = r;
+    coeffs[0] = c(0);
+    coeffs[1] = c(1);
+    coeffs[2] = c(2);
+    coeffs[3] = n(0);
+    coeffs[4] = n(1);
+    coeffs[5] = n(2);
+    coeffs[6] = R;
+    coeffs[7] = r;
   }
 
-  void Torus :: SetPrimitiveData (NgArray<double> & coeffs)
+  void Torus :: SetPrimitiveData (Array<double> & coeffs)
   {
-    c(0) = coeffs.Elem(1);
-    c(1) = coeffs.Elem(2);
-    c(2) = coeffs.Elem(3);
-    n(0) = coeffs.Elem(4);
-    n(1) = coeffs.Elem(5);
-    n(2) = coeffs.Elem(6);
-    R = coeffs.Elem(7);
-    r = coeffs.Elem(8);
+    c(0) = coeffs[0];
+    c(1) = coeffs[1];
+    c(2) = coeffs[2];
+    n(0) = coeffs[3];
+    n(1) = coeffs[4];
+    n(2) = coeffs[5];
+    R = coeffs[6];
+    r = coeffs[7];
   }
 
   Primitive * Torus :: CreateDefault ()
@@ -1866,7 +1865,7 @@ void EllipticCone :: GetTriangleApproximation
     double rho = sqrt (abs2 - tau*tau);
     // double func = sqr (R - rho) + tau*tau - r*r;
 
-    Vec<3> gradabs2 = 2 * v1;
+    Vec<3> gradabs2 = 2.0 * v1;
     Vec<3> gradtau = n;
     Vec<3> gradrho = 0.5 / rho * (gradabs2 - 2 * tau * gradtau);
     grad = -2 * (R - rho) * gradrho  + 2 * tau * gradtau;
@@ -1890,7 +1889,7 @@ void EllipticCone :: GetTriangleApproximation
   }
 
   double Torus :: HesseNorm () const
-  {	
+  {     
     return 4/(r*r);
     // return  ( 2 / r + 2 / ( R - r ) );
   }
@@ -1906,8 +1905,8 @@ void EllipticCone :: GetTriangleApproximation
   /// }
 
   /// void Torus :: ToPlane (const Point<3> & p, 
-  ///			  Point<2> & pplane, 
-  ///			  double h, int & zone) const
+  ///                     Point<2> & pplane, 
+  ///                     double h, int & zone) const
   /// {
   /// }
 
@@ -1949,21 +1948,21 @@ void EllipticCone :: GetTriangleApproximation
   
     for (int j = 0; j <= N; j++)
       for (int i = 0; i <= N; i++)
-	{
+        {
           double lg = 2 * M_PI * double (i) / N;
           double bg = 2 * M_PI * double(j) / N;
-	
+        
           Point<3> p = c + ( R + r * cos(lg) ) * ( cos(bg) * n1 + sin(bg) * n2 ) + r * sin(lg) * n;
           tas.AddPoint (p);
-	}
-	
+        }
+        
     for (int j = 0; j < N; j++)
       for (int i = 0; i < N; i++)
-	{
+        {
           int pi = i + (N+1) * j;
           tas.AddTriangle (TATriangle (0, pi, pi+1, pi+N+2));
           tas.AddTriangle (TATriangle (0, pi, pi+N+2, pi+N+1));
-	}
+        }
   } 
   
   void Torus :: Read (istream & ist)

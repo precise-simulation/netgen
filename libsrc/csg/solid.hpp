@@ -101,14 +101,14 @@ namespace netgen
     void IterateSolid (SolidIterator & it, bool only_once = 0);
 
   
-    void Boundaries (const Point<3> & p, NgArray<int> & bounds) const;
+    void Boundaries (const Point<3> & p, Array<int> & bounds) const;
     int NumPrimitives () const;
-    void GetSurfaceIndices (NgArray<int> & surfind) const;
+    void GetSurfaceIndices (Array<int> & surfind) const;
     void GetSurfaceIndices (IndexSet & iset) const;
 
-    void GetTangentialSurfaceIndices (const Point<3> & p, NgArray<int> & surfids, double eps) const;
-    void GetTangentialSurfaceIndices2 (const Point<3> & p, const Vec<3> & v, NgArray<int> & surfids, double eps) const;
-    void GetTangentialSurfaceIndices3 (const Point<3> & p, const Vec<3> & v, const Vec<3> & v2, NgArray<int> & surfids, double eps) const;
+    void GetTangentialSurfaceIndices (const Point<3> & p, Array<int> & surfids, double eps) const;
+    void GetTangentialSurfaceIndices2 (const Point<3> & p, const Vec<3> & v, Array<int> & surfids, double eps) const;
+    void GetTangentialSurfaceIndices3 (const Point<3> & p, const Vec<3> & v, const Vec<3> & v2, Array<int> & surfids, double eps) const;
 
     void ForEachSurface (const std::function<void(Surface*,bool)> & lambda, bool inv = false) const;
 
@@ -136,40 +136,40 @@ namespace netgen
     bool VectorStrictIn (const Point<3> & p, const Vec<3> & v, double eps = 1e-6) const;
   
     bool VectorIn2 (const Point<3> & p, const Vec<3> & v1, const Vec<3> & v2,
-		    double eps) const;
+                    double eps) const;
     /*
     bool VectorIn2Rec (const Point<3> & p, const Vec<3> & v1, const Vec<3> & v2,
-		       double eps) const;
+                       double eps) const;
     */
     bool VectorStrictIn2 (const Point<3> & p, const Vec<3> & v1, const Vec<3> & v2,
                           double eps) const;
 
     /// compute localization in point p
-    unique_ptr<Solid> TangentialSolid (const Point<3> & p, NgArray<int> & surfids, double eps) const;
+    unique_ptr<Solid> TangentialSolid (const Point<3> & p, Array<int> & surfids, double eps) const;
 
     /// compute localization in point p tangential to vector t
     unique_ptr<Solid> TangentialSolid2 (const Point<3> & p, const Vec<3> & t,
-                                        NgArray<int> & surfids, double eps) const;
+                                        Array<int> & surfids, double eps) const;
 
     /** compute localization in point p, with second order approximation to edge
-	p + s t + s*s/2 t2 **/
+        p + s t + s*s/2 t2 **/
     unique_ptr<Solid> TangentialSolid3 (const Point<3> & p, const Vec<3> & t, const Vec<3> & t2, 
-                                        NgArray<int> & surfids, double eps) const;
+                                        Array<int> & surfids, double eps) const;
 
 
 
     /** tangential solid, which follows the edge
-	p + s t + s*s/2 t2
-	with second order, and the neighbouring face
-	p + s t + s*s/2 t2 + r m
-	with first order
+        p + s t + s*s/2 t2
+        with second order, and the neighbouring face
+        p + s t + s*s/2 t2 + r m
+        with first order
     **/
     unique_ptr<Solid> TangentialEdgeSolid (const Point<3> & p, const Vec<3> & t, const Vec<3> & t2, 
                                            const Vec<3> & m, 
-                                           NgArray<int> & surfids, double eps) const;
+                                           Array<int> & surfids, double eps) const;
 
 
-    void CalcOnePrimitiveSpecialPoints (const Box<3> & box, NgArray<Point<3> > & pts) const;
+    void CalcOnePrimitiveSpecialPoints (const Box<3> & box, Array<Point<3> > & pts) const;
 
     ///
     int Edge (const Point<3> & p, const Vec<3> & v, double eps) const;
@@ -207,43 +207,43 @@ namespace netgen
   protected:
     ///
 
-    void RecBoundaries (const Point<3> & p, NgArray<int> & bounds, 
-			int & in, int & strin) const;
+    void RecBoundaries (const Point<3> & p, Array<int> & bounds, 
+                        int & in, int & strin) const;
     ///
-    void RecTangentialSolid (const Point<3> & p, Solid *& tansol, NgArray<int> & surfids, 
+    void RecTangentialSolid (const Point<3> & p, Solid *& tansol, Array<int> & surfids, 
                              bool & in, bool & strin, double eps) const;
 
     void RecTangentialSolid2 (const Point<3> & p, const Vec<3> & vec, 
-			      Solid *& tansol, NgArray<int> & surfids, 
-			      bool & in, bool & strin, double eps) const;
+                              Solid *& tansol, Array<int> & surfids, 
+                              bool & in, bool & strin, double eps) const;
     ///
     void RecTangentialSolid3 (const Point<3> & p, const Vec<3> & vec,const Vec<3> & vec2, 
-			      Solid *& tansol, NgArray<int> & surfids, 
-			      bool & in, bool & strin, double eps) const;
+                              Solid *& tansol, Array<int> & surfids, 
+                              bool & in, bool & strin, double eps) const;
     ///
     void RecTangentialEdgeSolid (const Point<3> & p, const Vec<3> & t, const Vec<3> & t2, 
-				 const Vec<3> & m, 
-				 Solid *& tansol, NgArray<int> & surfids, 
-				 bool & in, bool & strin, double eps) const;
+                                 const Vec<3> & m, 
+                                 Solid *& tansol, Array<int> & surfids, 
+                                 bool & in, bool & strin, double eps) const;
 
     ///
     void RecEdge (const Point<3> & p, const Vec<3> & v,
-		  bool & in, bool & strin, int & faces, double eps) const;
+                  bool & in, bool & strin, int & faces, double eps) const;
     ///
     void CalcSurfaceInverseRec (int inv);
     ///
     Solid * RecGetReducedSolid (const BoxSphere<3> & box, INSOLID_TYPE & in) const;
     ///
-    void RecGetSurfaceIndices (NgArray<int> & surfind) const;
-    void RecGetTangentialSurfaceIndices (const Point<3> & p, NgArray<int> & surfids, double eps) const;
-    void RecGetTangentialSurfaceIndices2 (const Point<3> & p, const Vec<3> & v, NgArray<int> & surfids, double eps) const;
+    void RecGetSurfaceIndices (Array<int> & surfind) const;
+    void RecGetTangentialSurfaceIndices (const Point<3> & p, Array<int> & surfids, double eps) const;
+    void RecGetTangentialSurfaceIndices2 (const Point<3> & p, const Vec<3> & v, Array<int> & surfids, double eps) const;
     void RecGetTangentialSurfaceIndices3 (const Point<3> & p, const Vec<3> & v, const Vec<3> & v2, 
-					  NgArray<int> & surfids, double eps) const;
+                                          Array<int> & surfids, double eps) const;
     void RecGetTangentialEdgeSurfaceIndices (const Point<3> & p, const Vec<3> & v, const Vec<3> & v2, const Vec<3> & m,
-					     NgArray<int> & surfids, double eps) const;
+                                             Array<int> & surfids, double eps) const;
     void RecGetSurfaceIndices (IndexSet & iset) const;
 
-    void RecCalcOnePrimitiveSpecialPoints (NgArray<Point<3> > & pts) const;
+    void RecCalcOnePrimitiveSpecialPoints (Array<Point<3> > & pts) const;
 
     friend class SolidIterator;
     friend class ClearVisitedIt;
@@ -273,7 +273,7 @@ namespace netgen
     virtual void Do (Solid * sol)
     {
       if (sol -> GetPrimitive())
-	sol -> GetPrimitive() -> Reduce (box);
+        sol -> GetPrimitive() -> Reduce (box);
     }
   };
 
@@ -286,7 +286,7 @@ namespace netgen
     virtual void Do (Solid * sol)
     {
       if (sol -> GetPrimitive())
-	sol -> GetPrimitive() -> UnReduce ();
+        sol -> GetPrimitive() -> UnReduce ();
     }
   };
 

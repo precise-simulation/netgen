@@ -24,30 +24,30 @@ void SplineSurface :: AppendPoint(const Point<3> & p, const double reffac, const
     
     for(int i=0; i<splines.Size(); i++)
       {
-	auto pp1 = Point<3>(splines[i]->GetPoint(0));
-	Project(pp1);
-	auto pp2 = Point<3>(splines[i]->GetPoint(1));
-	Project(pp2);
+        auto pp1 = Point<3>(splines[i]->GetPoint(0));
+        Project(pp1);
+        auto pp2 = Point<3>(splines[i]->GetPoint(1));
+        Project(pp2);
         double eps = (p1-p2).Length() * 1e-4;
-	if (((pp1-p1).Length()<eps && (pp2-p2).Length() < eps) || ((pp1-p2).Length() < eps && (pp2-p1).Length() < eps))
-	  {
-	    return bcnames[i];
-	  }
+        if (((pp1-p1).Length()<eps && (pp2-p2).Length() < eps) || ((pp1-p2).Length() < eps && (pp2-p1).Length() < eps))
+          {
+            return bcnames[i];
+          }
       }
     return "default";
   }
 
-  const shared_ptr<NgArray<shared_ptr<OneSurfacePrimitive>>> SplineSurface :: CreateCuttingSurfaces()
+  const shared_ptr<Array<shared_ptr<OneSurfacePrimitive>>> SplineSurface :: CreateCuttingSurfaces()
   {
     if(all_cuts)
       return all_cuts;
-    auto cuttings = make_shared<NgArray<shared_ptr<OneSurfacePrimitive>>>();
+    auto cuttings = make_shared<Array<shared_ptr<OneSurfacePrimitive>>>();
     for (auto cut : *cuts)
       cuttings->Append(cut);
     for(int i = 0; i<splines.Size(); i++)
       {
-	auto spline = splines[i];
-	auto lineseg = dynamic_cast<LineSeg<3>*>(spline.get());
+        auto spline = splines[i];
+        auto lineseg = dynamic_cast<LineSeg<3>*>(spline.get());
         if(lineseg)
           {
             auto p1 = Point<3>(spline->GetPoint(0));

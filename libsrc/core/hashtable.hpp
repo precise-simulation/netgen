@@ -10,6 +10,7 @@
 #include <string>
 #include <tuple>
 #include <optional>
+#include <array>
 
 // #include "mpi_wrapper.hpp"
 #include "ngcore_api.hpp"
@@ -47,59 +48,34 @@ namespace ngcore
   class IVec
   {
     /// data
-    // T i[(N>0)?N:1];
-
-    HTArray<N,T> i;
+    std::array<T,N> i;
     
   public:
     ///
     constexpr IVec () = default;
-    constexpr NETGEN_INLINE IVec (const IVec & i1) : i(i1.i) { }
+    constexpr IVec (const IVec & i1) = default;
 
-    constexpr NETGEN_INLINE IVec (T ai1) : i(ai1) { }
+    /// broadcast, explicit to avoid silent int -> IVec conversions
+    explicit constexpr NETGEN_INLINE IVec (T ai1) : i{}
+    {
+      for (int j = 0; j < N; j++) i[j] = ai1;
+    }
     
     template <class... T2,
               std::enable_if_t<N==1+sizeof...(T2),bool> = true>
     constexpr IVec (const T &v, T2... rest)
-      : i{v,rest...} { } 
+      : i{v, T(rest)...} { } 
 
-    /*
-    /// init all
-    NETGEN_INLINE IVec (T ai1)
-    { 
-     for (int j = 0; j < N; j++) { i[j] = ai1; }
-    }
-
-    /// init i[0], i[1]
-    constexpr NETGEN_INLINE IVec (T ai1, T ai2)
-      : i{ai1, ai2} { ; } 
-
-    /// init i[0], i[1], i[2]
-    constexpr NETGEN_INLINE IVec (T ai1, T ai2, T ai3)
-      : i{ai1, ai2, ai3} { ; } 
-
-    /// init i[0], i[1], i[2]
-    constexpr NETGEN_INLINE IVec (T ai1, T ai2, T ai3, T ai4)
-      : i{ai1, ai2, ai3, ai4} { ; }
-    
-    /// init i[0], i[1], i[2]
-    constexpr NETGEN_INLINE IVec (T ai1, T ai2, T ai3, T ai4, T ai5)
-      : i{ai1, ai2, ai3, ai4, ai5} { ; }      
-      
-    /// init i[0], i[1], i[2]
-    NETGEN_INLINE IVec (T ai1, T ai2, T ai3, T ai4, T ai5, T ai6, T ai7, T ai8, T ai9)
-      : i{ai1, ai2, ai3, ai4, ai5, ai6, ai7, ai8, ai9 } { ; }            
-    */
     
     template <typename ARCHIVE>
     void DoArchive(ARCHIVE& ar)
     {
       // ar.Do(i.begin(), N);
-      ar.Do(i.Ptr(), N);
+      ar.Do(i.data(), N);
     }
 
     template <int N2, typename T2>
-    NETGEN_INLINE IVec (const IVec<N2,T2> & in2)
+    NETGEN_INLINE constexpr IVec (const IVec<N2,T2> & in2) : i{}
     {
       if (N2 <= N)
         {
@@ -115,24 +91,31 @@ namespace ngcore
         }
     }
 
-    template <typename T2>
-    NETGEN_INLINE IVec (const BaseArrayObject<T2> & ao)
+    /// from the first N entries of an array-like, if its elements convert to T.
+    /// Keyed on the indexing expression, not on a value_type typedef: array-likes
+    /// such as AOWrapper have no typedef, and arrays with a strong index type
+    /// (which this ctor cannot read anyway) drop out here instead of erroring.
+    template <typename TA,
+              typename = std::enable_if_t<std::is_convertible_v<
+                  decltype(std::declval<const TA&>()[size_t(0)]), T>>>
+    NETGEN_INLINE constexpr IVec (const BaseArrayObject<TA> & ao) : i{}
     {
+      NETGEN_CHECK_RANGE(size_t(N-1), size_t(0), ao.Size());  // we read ao[0..N-1]
       for (int j = 0; j < N; j++)
         i[j] = ao.Spec()[j];
     }
     
-    NETGEN_INLINE size_t Size() const { return N; }
+    NETGEN_INLINE constexpr size_t Size() const { return N; }
     /// all ints equal ?
-    NETGEN_INLINE bool operator== (const IVec & in2) const
+    NETGEN_INLINE constexpr bool operator== (const IVec & in2) const
     { 
       for (int j = 0; j < N; j++) 
-	if (i[j] != in2.i[j]) return 0;
+        if (i[j] != in2.i[j]) return 0;
       return 1; 
     }
 
     /// any ints unequal ?
-    NETGEN_INLINE bool operator!= (const IVec & in2) const
+    NETGEN_INLINE constexpr bool operator!= (const IVec & in2) const
     {
       for (int j = 0; j < N; j++)
         if (i[j] != in2.i[j]) return 1;
@@ -140,26 +123,26 @@ namespace ngcore
     }
 
     /// sort integers
-    NETGEN_INLINE IVec & Sort () & 
+    NETGEN_INLINE constexpr IVec & Sort () & 
     {
       for (int k = 0; k < N; k++)
-	for (int l = k+1; l < N; l++)
-	  if (i[k] > i[l]) 
-	    Swap (i[k], i[l]);
+        for (int l = k+1; l < N; l++)
+          if (i[k] > i[l]) 
+            Swap (i[k], i[l]);
       return *this;
     }
 
-    NETGEN_INLINE IVec Sort () &&
+    NETGEN_INLINE constexpr IVec Sort () &&
     {
       for (int k = 0; k < N; k++)
-	for (int l = k+1; l < N; l++)
-	  if (i[k] > i[l]) 
-	    Swap (i[k], i[l]);
+        for (int l = k+1; l < N; l++)
+          if (i[k] > i[l]) 
+            Swap (i[k], i[l]);
       return *this;
     }
 
     /// access
-    NETGEN_INLINE T & operator[] (int j)
+    NETGEN_INLINE constexpr T & operator[] (int j)
     { return i[j]; }
 
     /// access
@@ -169,20 +152,20 @@ namespace ngcore
     template <size_t J>
     constexpr T get() const { return i[J]; }
     
-    operator FlatArray<T> () { return FlatArray<T> (N, i.Ptr()); }
+    operator FlatArray<T> () { return FlatArray<T> (N, i.data()); }
 
-    NETGEN_INLINE IVec<N,T> & operator= (T value)
+    NETGEN_INLINE constexpr IVec<N,T> & operator= (T value)
     {
       for (int j = 0; j < N; j++)
-	i[j] = value;
+        i[j] = value;
       return *this;
     }
 
     template <typename T2>
-    NETGEN_INLINE IVec<N,T> & operator= (IVec<N,T2> v2)
+    NETGEN_INLINE constexpr IVec<N,T> & operator= (IVec<N,T2> v2)
     {
       for (int j = 0; j < N; j++)
-	i[j] = v2[j];
+        i[j] = v2[j];
       return *this;
     }
 
@@ -192,7 +175,7 @@ namespace ngcore
       return MakeTupleFromInt<N>()(*this);
     }
 
-    bool Contains (T val)
+    constexpr bool Contains (T val) const
     {
       for (int j = 0; j < N; j++)
         if (i[j] == val) return true;
@@ -202,14 +185,14 @@ namespace ngcore
 
   /// sort 2 integers
   template <>
-  NETGEN_INLINE IVec<2> & IVec<2>::Sort () & 
+  NETGEN_INLINE constexpr IVec<2> & IVec<2>::Sort () & 
   {
     if (i[0] > i[1]) Swap (i[0], i[1]);
     return *this;
   }
 
   template <>
-  NETGEN_INLINE IVec<2> IVec<2>::Sort () &&
+  NETGEN_INLINE constexpr IVec<2> IVec<2>::Sort () &&
   {
     if (i[0] > i[1]) Swap (i[0], i[1]);
     return *this;
@@ -217,7 +200,7 @@ namespace ngcore
 
   /// sort 3 integers
   template <>
-  NETGEN_INLINE IVec<3> IVec<3>::Sort () &&
+  NETGEN_INLINE constexpr IVec<3> IVec<3>::Sort () &&
   {
     if (i[0] > i[1]) Swap (i[0], i[1]);
     if (i[1] > i[2]) Swap (i[1], i[2]);
@@ -225,12 +208,23 @@ namespace ngcore
     return *this;
   }
 
+  template <int N, typename T>
+  NETGEN_INLINE constexpr bool operator< (const IVec<N,T> & a, const IVec<N,T> & b)
+  {
+    for (int j = 0; j < N; j++)
+      {
+        if (a[j] < b[j]) return true;
+        if (b[j] < a[j]) return false;
+      }
+    return false;
+  }
+
   /// Print integers
   template <int N, typename T>
   inline ostream & operator<<(ostream  & s, const IVec<N,T> & i2)
   {
     for (int j = 0; j < N; j++)
-      s << (int) i2[j] << " ";
+      s << i2[j] << " ";
     return s;
   }
   
@@ -252,7 +246,7 @@ namespace ngcore
 
   
   template <int N, typename TI>
-  NETGEN_INLINE size_t HashValue (const IVec<N,TI> & ind, size_t size)
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<N,TI> & ind, size_t size)
   {
     IVec<N,size_t> lind = ind;    
     size_t sum = 0;
@@ -263,14 +257,14 @@ namespace ngcore
 
   /// hash value of 1 int
   template <typename TI>
-  NETGEN_INLINE size_t HashValue (const IVec<1,TI> & ind, size_t size) 
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<1,TI> & ind, size_t size) 
   {
     return ind[0] % size;
   }
 
   /// hash value of 2 int
   template <typename TI>  
-  NETGEN_INLINE size_t HashValue (const IVec<2,TI> & ind, size_t size) 
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<2,TI> & ind, size_t size) 
   {
     IVec<2,size_t> lind = ind;
     return (113*lind[0]+lind[1]) % size;
@@ -278,17 +272,17 @@ namespace ngcore
 
   /// hash value of 3 int
   template <typename TI>    
-  NETGEN_INLINE size_t HashValue (const IVec<3,TI> & ind, size_t size) 
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<3,TI> & ind, size_t size) 
   {
     IVec<3,size_t> lind = ind;
     return (113*lind[0]+59*lind[1]+lind[2]) % size;
   }
 
-  NETGEN_INLINE size_t HashValue (size_t ind, size_t size)
+  NETGEN_INLINE constexpr size_t HashValue (size_t ind, size_t size)
   {
     return ind%size;
   }
-  NETGEN_INLINE size_t HashValue (int ind, size_t size)
+  NETGEN_INLINE constexpr size_t HashValue (int ind, size_t size)
   {
     return size_t(ind)%size;
   }
@@ -348,7 +342,7 @@ namespace ngcore
   // using ngstd::max;
 
   template <int D, typename T>
-  NETGEN_INLINE T Max (const IVec<D,T> & i)
+  NETGEN_INLINE constexpr T Max (const IVec<D,T> & i)
   {
     if (D == 0) return 0;
     T m = i[0];
@@ -358,7 +352,7 @@ namespace ngcore
   }
 
   template <int D, typename T>
-  NETGEN_INLINE T Min (const IVec<D,T> & i)
+  NETGEN_INLINE constexpr T Min (const IVec<D,T> & i)
   {
     if (D == 0) return 0;
     T m = i[0];
@@ -368,18 +362,18 @@ namespace ngcore
   }
 
   template <int D, typename T>
-  NETGEN_INLINE IVec<D,T> Max (IVec<D,T> i1, IVec<D,T> i2)
+  NETGEN_INLINE constexpr IVec<D,T> Max (IVec<D,T> i1, IVec<D,T> i2)
   {
-    IVec<D,T> tmp;
+    IVec<D,T> tmp{};
     for (int i = 0; i < D; i++)
       tmp[i] = std::max(i1[i], i2[i]);
     return tmp;
   }
 
   template <int D, typename T>
-  NETGEN_INLINE IVec<D,T> operator+ (IVec<D,T> i1, IVec<D,T> i2)
+  NETGEN_INLINE constexpr IVec<D,T> operator+ (IVec<D,T> i1, IVec<D,T> i2)
   {
-    IVec<D,T> tmp;
+    IVec<D,T> tmp{};
     for (int i = 0; i < D; i++)
       tmp[i] = i1[i]+i2[i];
     return tmp;
@@ -423,14 +417,14 @@ namespace ngcore
       int bnr = HashValue (ahash, Size());
       int pos = CheckPosition (bnr, ahash);
       if (pos != -1)
-	// cont.Set (bnr, pos, acont);
+        // cont.Set (bnr, pos, acont);
         table[bnr][pos].second = acont;
       else
-	{
-	  // hash.Add (bnr, ahash);
-	  // cont.Add (bnr, acont);
+        {
+          // hash.Add (bnr, ahash);
+          // cont.Add (bnr, acont);
           table.Add (bnr, std::make_pair(ahash, acont));
-	}        
+        }        
     }
 
     /// get value of identifier ahash, exception if unused
@@ -502,12 +496,12 @@ namespace ngcore
     {
       /*
       for (int i = 0; i < hash[bnr].Size(); i++)
-	if (hash[bnr][i] == ind)
-	  return i;
+        if (hash[bnr][i] == ind)
+          return i;
       */
       for (int i = 0; i < table[bnr].Size(); i++)
-	if (table[bnr][i].first == ind)
-	  return i;
+        if (table[bnr][i].first == ind)
+          return i;
       return -1;
     }
 
@@ -515,8 +509,8 @@ namespace ngcore
     int Position (int bnr, const T_HASH & ind) const
     {
       for (int i = 0; i < table[bnr].Size(); i++)
-	if (table[bnr][i].first == ind)
-	  return i;
+        if (table[bnr][i].first == ind)
+          return i;
       throw Exception ("Ask for unused hash-value");
     }
 
@@ -527,8 +521,8 @@ namespace ngcore
         return table[bnr][pos].second;
       else
         {
-	  // hash.Add (bnr, ahash);
-	  // cont.Add (bnr, T(0));
+          // hash.Add (bnr, ahash);
+          // cont.Add (bnr, T(0));
           table.Add (bnr, std::make_pair(ahash, T(0)));
           // return cont[bnr][cont[bnr].Size()-1];
           return table[bnr][table[bnr].Size()-1].second;
@@ -584,7 +578,7 @@ namespace ngcore
 
 
 
-  inline size_t RoundUp2 (size_t i)
+  constexpr inline size_t RoundUp2 (size_t i)
   {
     size_t res = 1;
     while (res < i) res *= 2; // hope it will never be too large 
@@ -681,11 +675,11 @@ namespace ngcore
       // size_t i = HashValue2(ind, mask);
       size_t i = CHT_trait<T_HASH>::HashValue(ind, mask);
       while (true)
-	{
-	  if (hash[i] == ind) return i;
-	  if (hash[i] == invalid) return size_t(-1);
+        {
+          if (hash[i] == ind) return i;
+          if (hash[i] == invalid) return size_t(-1);
           i = (i+1) & mask;          
-	}
+        }
     }
 
     void DoubleSize()
@@ -705,21 +699,21 @@ namespace ngcore
       size_t i = CHT_trait<T_HASH>::HashValue (ind, mask);
 
       while (true)
-	{
-	  if (hash[i] == invalid)
-	    { 
-	      hash[i] = ind; 
-	      apos = i;
+        {
+          if (hash[i] == invalid)
+            { 
+              hash[i] = ind; 
+              apos = i;
               used++;
-	      return true;
-	    }
-	  if (hash[i] == ind) 
-	    { 
-	      apos = i; 
-	      return false; 
-	    }
+              return true;
+            }
+          if (hash[i] == ind) 
+            { 
+              apos = i; 
+              return false; 
+            }
           i = (i+1) & mask;
-	}
+        }
     }
 
 
@@ -727,8 +721,7 @@ namespace ngcore
     void Set (const T_HASH & ahash, const T & acont)
     {
       size_t pos;
-      PositionCreate (ahash, pos);
-      hash[pos] = ahash;
+      PositionCreate (ahash, pos);   // stores the key already
       cont[pos] = acont;
     }
 
@@ -797,15 +790,15 @@ namespace ngcore
       return cont[pos];
     }
     
+    /// resize to (at least) asize and clear
     void SetSize (size_t asize)
     {
-      size = asize;
-      hash.Alloc(size);
-      cont.Alloc(size);
-
-      // for (size_t i = 0; i < size; i++)
-      // hash[i] = invalid;
-      hash = T_HASH(invalid);
+      size = RoundUp2(asize);
+      mask = size-1;
+      used = 0;
+      hash.SetSize0(); hash.SetSize(size);   // no copy of the old contents
+      cont.SetSize0(); cont.SetSize(size);
+      hash = CHT_trait<T_HASH>::Invalid();
     }
 
     void Delete (T_HASH key)
@@ -822,7 +815,7 @@ namespace ngcore
           
           auto key = hash[nextpos];
           auto val = cont[nextpos];
-          hash[pos] = invalid; used--;
+          hash[nextpos] = invalid; used--;
           
           Set (key, val);
           pos = nextpos;
@@ -890,21 +883,21 @@ namespace ngcore
   }
 
   template <typename TI>
-  NETGEN_INLINE size_t HashValue (const IVec<3,TI> ind)
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<3,TI> ind)
   {
     IVec<3,size_t> lind = ind;
     return 113*lind[0]+59*lind[1]+lind[2];
   }
 
   template <typename TI>  
-  NETGEN_INLINE size_t HashValue (const IVec<2,TI> ind)
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<2,TI> ind)
   {
     IVec<2,size_t> lind = ind;
     return 113*lind[0]+lind[1];
   }
 
   template <typename TI>  
-  NETGEN_INLINE size_t HashValue (const IVec<1,TI> ind)
+  NETGEN_INLINE constexpr size_t HashValue (const IVec<1,TI> ind)
   {
     return ind[0];
   }
@@ -1185,36 +1178,36 @@ namespace ngcore
     {
       mode = amode;
       if (mode == 2)
-	{
+        {
           cnt.SetSize(nd);  
           cnt = 0;
-	}
+        }
       if (mode == 3)
-	{
+        {
           table = Table<T,size_t> (cnt);
           cnt = 0;
-	}
+        }
     }
 
     void Add (IndexType blocknr, const T & data)
     {
       switch (mode)
-	{
-	case 1:
+        {
+        case 1:
           {
             if (!idmap.Used (blocknr))
               idmap[blocknr] = nd++;
             break;
           }
-	case 2:
-	  cnt[idmap.Get(blocknr)]++;
-	  break;
-	case 3:
+        case 2:
+          cnt[idmap.Get(blocknr)]++;
+          break;
+        case 3:
           size_t cblock = idmap.Get(blocknr);
           int ci = cnt[cblock]++;
           table[cblock][ci] = data;
-	  break;
-	}
+          break;
+        }
     }
   };
 
@@ -1245,10 +1238,10 @@ namespace ngcore {
     { 
       static MPI_Datatype MPI_T = 0;
       if (!MPI_T)
-	{
-	  MPI_Type_contiguous ( S, MPI_typetrait<T>::MPIType(), &MPI_T);
-	  MPI_Type_commit ( &MPI_T );
-	}
+        {
+          MPI_Type_contiguous ( S, MPI_typetrait<T>::MPIType(), &MPI_T);
+          MPI_Type_commit ( &MPI_T );
+        }
       return MPI_T;
     }
   };

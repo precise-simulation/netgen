@@ -13,7 +13,7 @@ namespace netgen
     SurfaceElementIndex tnr;
     int sidenr;
 
-    trionedge () { tnr = 0; sidenr = 0; }
+    trionedge () { tnr = SurfaceElementIndex::INVALID; sidenr = 0; }
     trionedge (SurfaceElementIndex atnr, int asidenr)
     { tnr = atnr; sidenr = asidenr; }
   };
@@ -41,8 +41,8 @@ namespace netgen
   }
 
   bool MeshOptimize2d :: EdgeSwapping (const int usemetric,
-    Array<Neighbour> &neighbors,
-    Array<bool> &swapped,
+    Array<Neighbour, SurfaceElementIndex> &neighbors,
+    Array<bool, SurfaceElementIndex> &swapped,
     const SurfaceElementIndex t1, const int o1,
     const int t,
     Array<int,PointIndex> &pdef,
@@ -54,12 +54,12 @@ namespace netgen
     SurfaceElementIndex t2 = neighbors[t1].GetNr (o1);
     int o2 = neighbors[t1].GetOrientation (o1);
 
-    if (t2 == -1) return false;
+    if (!t2.IsValid()) return false;
     if (swapped[t1] || swapped[t2]) return false;
     if (mesh[t2].IsDeleted()) return false;
     if (mesh[t2].GetNP() != 3) return false;
 
-    const int faceindex = mesh[t1].GetIndex();
+    const auto faceindex = mesh[t1].GetIndex();
     const int surfnr = mesh.GetFaceDescriptor (faceindex).SurfNr();
 
     PointIndex pi1 = mesh[t1].PNumMod(o1+1+1);
@@ -118,7 +118,7 @@ namespace netgen
 
 
 
-    double critval = cos (M_PI / 6);  // 30 degree
+    double critval = 0.86602540378443864676;  // 30 degree
     allowswap = allowswap &&
         (nv1 * nvp3 > critval) &&
         (nv1 * nvp4 > critval) &&
@@ -210,18 +210,19 @@ namespace netgen
         timerstart.Stop();
         return GenericImprove();
     }
+    PreviewResyncGuard preview_guard{mesh, faceindex};
 
-    Array<Neighbour> neighbors(mesh.GetNSE());
+    Array<Neighbour, SurfaceElementIndex> neighbors(mesh.GetNSE());
     auto elements_on_node = mesh.CreateCompressedPoint2SurfaceElementTable(faceindex);
 
-    Array<bool> swapped(mesh.GetNSE());
+    Array<bool, SurfaceElementIndex> swapped(mesh.GetNSE());
     Array<int,PointIndex> pdef(mesh.GetNP());
     Array<double,PointIndex> pangle(mesh.GetNP());
 
     static const double minangle[] = { 0, 1.481, 2.565, 3.627, 4.683, 5.736, 7, 9 };
 
 
-    if(faceindex == 0)
+    if(!faceindex.IsValid())
       {
         ParallelFor( Range(pangle), [&] (auto i) NETGEN_LAMBDA_INLINE
             {
@@ -232,7 +233,7 @@ namespace netgen
       {
         ParallelFor( Range(seia), [&] (auto i) NETGEN_LAMBDA_INLINE
             {
-              const Element2d & sel = mesh[seia[i]];
+              const Element2dRef & sel = mesh[seia[i]];
               for (int j = 0; j < 3; j++)
                   pangle[sel[j]] = 0.0;
             });
@@ -240,7 +241,7 @@ namespace netgen
 
     ParallelFor( Range(seia), [&] (auto i) NETGEN_LAMBDA_INLINE
         {
-          const Element2d & sel = mesh[seia[i]];
+          const Element2dRef & sel = mesh[seia[i]];
           for (int j = 0; j < 3; j++)
             {
               POINTTYPE typ = mesh[sel[j]].Type();
@@ -255,7 +256,7 @@ namespace netgen
 
     ParallelFor( Range(seia), [&] (auto i) NETGEN_LAMBDA_INLINE
         {
-          const Element2d & sel = mesh[seia[i]];
+          const Element2dRef & sel = mesh[seia[i]];
           for (int j = 0; j < 3; j++)
             {
               PointIndex pi = sel[j];
@@ -275,7 +276,7 @@ namespace netgen
               AsAtomic(pdef[pi])++;
           for (int j = 0; j < 3; j++)
             {
-              neighbors[sei].SetNr (j, -1);
+              neighbors[sei].SetNr (j, SurfaceElementIndex::INVALID);
               neighbors[sei].SetOrientation (j, 0);
             }
 
@@ -358,7 +359,7 @@ namespace netgen
 
         for (auto [t1,o1] : elements_with_improvement)
             done |= EdgeSwapping(usemetric, neighbors, swapped, t1, o1, t, pdef, false);
-	t--;
+        t--;
       }
 
     mesh.SetNextTimeStamp();
@@ -393,11 +394,11 @@ namespace netgen
         return 0.0;
 
     double loch = 0.5*(mesh.GetH(pi1) + mesh.GetH(pi2));
-    int faceindex = -1;
+    FaceRegionIndex faceindex = FaceRegionIndex::INVALID;
 
     for (SurfaceElementIndex sei2 : elementsonnode[pi1])
       {
-        const Element2d & el2 = mesh[sei2];
+        const Element2dRef & el2 = mesh[sei2];
 
         if (el2.IsDeleted()) continue;
 
@@ -417,7 +418,7 @@ namespace netgen
 
     for (SurfaceElementIndex sei2 :  elementsonnode[pi2])
       {
-        const Element2d & el2 = mesh[sei2];
+        const Element2dRef & el2 = mesh[sei2];
         if (el2.IsDeleted()) continue;
         if (!el2.PNums<3>().Contains (pi1))
             hasonepi.Append (sei2);
@@ -428,14 +429,15 @@ namespace netgen
     /*
        for (SurfaceElementIndex sei : hasonepi)
        {
-       const Element2d & el = mesh[sei];
+       const Element2dRef & el = mesh[sei];
        bad1 += CalcTriangleBadness (mesh[el[0]], mesh[el[1]], mesh[el[2]],
        nv, -1, loch);
        illegal1 += 1-mesh.LegalTrig(el);
        }
        */
-    for (const Element2d & el : mesh.SurfaceElements()[hasonepi])
+    for (auto sei : hasonepi)
       {
+        auto el = mesh[sei];
         bad1 += CalcTriangleBadness (mesh[el[0]], mesh[el[1]], mesh[el[2]],
                 nv, metricweight, loch);
         illegal1 += 1-mesh.LegalTrig(el);
@@ -443,7 +445,7 @@ namespace netgen
 
     for (int k = 0; k < hasbothpi.Size(); k++)
       {
-        const Element2d & el = mesh[hasbothpi[k]];
+        const Element2dRef & el = mesh[hasbothpi[k]];
         bad1 += CalcTriangleBadness (mesh[el[0]], mesh[el[1]], mesh[el[2]],
                 nv, metricweight, loch);
         illegal1 += 1-mesh.LegalTrig(el);
@@ -452,7 +454,7 @@ namespace netgen
     double bad2 = 0;
     for (int k = 0; k < hasonepi.Size(); k++)
       {
-        Element2d el = mesh[hasonepi[k]];
+        Element2d el (mesh[hasonepi[k]]);
         for (auto i : Range(3))
             if(el[i]==pi2)
                 el[i] = pi1;
@@ -462,9 +464,9 @@ namespace netgen
                     nv, metricweight, loch);
         bad2 += err;
 
-        Vec<3> hnv = Cross (Vec3d (mesh[el[0]],
+        Vec<3> hnv = Cross (Vec<3> (mesh[el[0]],
                     mesh[el[1]]),
-                Vec3d (mesh[el[0]],
+                Vec<3> (mesh[el[0]],
                     mesh[el[2]]));
         if (hnv * nv < 0)
             bad2 += 1e10;
@@ -532,7 +534,7 @@ namespace netgen
         */
         for (auto sei : hasbothpi)
           {
-            const Element2d & el1p = mesh[sei];
+            const Element2dRef & el1p = mesh[sei];
             if (el1p.IsDeleted()) continue;
             if(el1p.GetIndex() != faceindex) continue;
 
@@ -547,7 +549,7 @@ namespace netgen
         // for (int k = 0; k < elementsonnode[pi2].Size(); k++)
         for (SurfaceElementIndex sei2 : elementsonnode[pi2])
           {
-            Element2d & el = mesh[sei2];
+            Element2dRef el = mesh[sei2];
             if (el.IsDeleted()) continue;
             if (el.PNums().Contains(pi1)) continue;
 
@@ -598,6 +600,7 @@ namespace netgen
         timerstart.Stop();
         return;
     }
+    PreviewResyncGuard preview_guard{mesh, faceindex};
 
     int np = mesh.GetNP();
 
@@ -626,11 +629,11 @@ namespace netgen
         {
             if (elementsonnode[pi].Size())
               {
-                Element2d & hel = mesh[elementsonnode[pi][0]];
+                Element2dRef hel = mesh[elementsonnode[pi][0]];
                 for (int k = 0; k < 3; k++)
                   if (hel[k] == pi)
                     {
-                      const int faceindex = hel.GetIndex();
+                      const auto faceindex = hel.GetIndex();
                       const int surfnr = mesh.GetFaceDescriptor (faceindex).SurfNr();
                       normals[pi] = geo.GetNormal (surfnr, mesh[pi], &hel.GeomInfoPi(k+1));
                       break;
@@ -640,8 +643,8 @@ namespace netgen
 
     timerstart.Stop();
 
-    // Find edges with improvement
-    Array<std::tuple<double, int>> candidate_edges(edges.Size());
+    // Find edges with improvement, each edge can yield a candidate per orientation
+    Array<std::tuple<double, int>> candidate_edges(2*edges.Size());
     std::atomic<int> improvement_counter(0);
 
     ParallelFor( Range(edges), [&] (auto i) NETGEN_LAMBDA_INLINE
@@ -672,23 +675,25 @@ namespace netgen
 
   void MeshOptimize2d :: SplitImprove()
   {
-    if (!faceindex)
+    if (!faceindex.IsValid())
       {
         PrintMessage (3, "Split improve");
 
         mesh.CalcSurfacesOfNode(); // TODO: needed?
-        for (faceindex = 1; faceindex <= mesh.GetNFD(); faceindex++)
+        for (auto fi : mesh.Regions<2>().Range())
           {
+            faceindex = fi;
             SplitImprove();
 
             if (multithread.terminate)
                 throw NgException ("Meshing stopped");
           }
 
-        faceindex = 0;
+        faceindex = FaceRegionIndex::INVALID;
         mesh.Compress(); // TODO: needed?
         return;
       }
+    PreviewResyncGuard preview_guard{mesh, faceindex};
 
     Array<SurfaceElementIndex> elements;
     mesh.GetSurfaceElementsOfFace (faceindex, elements);
@@ -699,12 +704,12 @@ namespace netgen
             return;
 
     // maps from edges to adjacent trigs
-    INDEX_2_HASHTABLE<tuple<SurfaceElementIndex, SurfaceElementIndex>> els_on_edge(2*elements.Size() + 2);
+    ClosedHashTable<SortedPointIndices<2>, tuple<SurfaceElementIndex, SurfaceElementIndex>> els_on_edge(4*elements.Size() + 8);
 
     // build els_on_edge table
     for (SurfaceElementIndex sei : elements)
       {
-        const Element2d & sel = mesh[sei];
+        const Element2dRef & sel = mesh[sei];
 
         for (int j = 0; j < 3; j++)
           {
@@ -731,7 +736,7 @@ namespace netgen
     // split edges of illegal trigs
     for (SurfaceElementIndex sei : elements)
       {
-        Element2d & sel = mesh[sei];
+        Element2dRef sel = mesh[sei];
 
         if (sel.IsDeleted()) continue;
 
@@ -769,7 +774,7 @@ namespace netgen
         auto els = els_on_edge.Get(edge);
         SurfaceElementIndex other_i = get<0>(els);
         if(other_i==sei) other_i = get<1>(els);
-        auto & other = mesh[other_i];
+        auto other = mesh[other_i];
 
         // find opposite point of neighbor element
         for (int j = 0; j < 3; j++)
@@ -786,7 +791,7 @@ namespace netgen
         PointGeomInfo gi5;
 
         geo.PointBetween(mesh[pi1], mesh[pi2], 0.5,
-                         faceindex,
+                         faceindex.Nr1(),
                          gi1, gi2, p5, gi5);
 
         pi5 = mesh.AddPoint(p5);
@@ -827,18 +832,18 @@ namespace netgen
     int ne = mesh.GetNSE();
     int surfnr;
   
-    Vec3d n, ng;
-    NgArray<Vec3d> ngs(3);
+    Vec<3> n, ng;
+    Array<Vec<3>> ngs(3);
 
     (*mycout) << "Check Surface Approximation" << endl;
     (*testout) << "Check Surface Approximation" << endl;
 
     for (i = 1; i <= ne; i++)
     {
-    const Element2d & el = mesh.SurfaceElement(i);
+    const Element2dRef & el = mesh.SurfaceElement(i);
     surfnr = mesh.GetFaceDescriptor (el.GetIndex()).SurfNr();
-    Vec3d n = Cross (mesh.Point (el.PNum(1)) - mesh.Point (el.PNum(2)),
-    mesh.Point (el.PNum(1)) - mesh.Point (el.PNum(3)));
+    Vec<3> n = Cross (mesh.Point (el[0]) - mesh.Point (el[1]),
+    mesh.Point (el[0]) - mesh.Point (el[2]));
     n /= n.Length();
 
     for (j = 1; j <= el.GetNP(); j++)
@@ -854,7 +859,7 @@ namespace netgen
     (*testout) << "el " << i << " node " << el.PNum(j)
     << "has angle = " << angle << endl;
     }
-    }	
+    }   
 
     for (j = 1; j <= 3; j++)
     {

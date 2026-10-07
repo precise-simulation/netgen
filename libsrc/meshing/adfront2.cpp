@@ -10,7 +10,7 @@
 namespace netgen
 {
   FrontPoint2 :: FrontPoint2 (const Point<3> & ap, PointIndex agi,
-			      MultiPointGeomInfo * amgi, bool aonsurface)
+                              MultiPointGeomInfo * amgi, bool aonsurface)
   {
     p = ap;
     globalindex = agi;
@@ -20,10 +20,10 @@ namespace netgen
 
     if (amgi)
       {
-	mgi = new MultiPointGeomInfo (*amgi);
-	for (int i = 1; i <= mgi->GetNPGI(); i++)
-	  if (mgi->GetPGI(i).trignum <= 0)
-	    cout << "WARNING: Add FrontPoint2, illegal geominfo = " << mgi->GetPGI(i).trignum << endl;
+        mgi = new MultiPointGeomInfo (*amgi);
+        for (int i = 1; i <= mgi->GetNPGI(); i++)
+          if (mgi->GetPGI(i).trignum <= 0)
+            cout << "WARNING: Add FrontPoint2, illegal geominfo = " << mgi->GetPGI(i).trignum << endl;
       }
     else
       mgi = NULL;
@@ -37,7 +37,7 @@ namespace netgen
       cpointsearchtree(boundingbox.PMin(), boundingbox.PMax())
   {
     nfl = 0;
-    allflines = 0;
+    allflines = nullptr;
 
     minval = 0;
     // starti = lines.Begin();
@@ -46,7 +46,6 @@ namespace netgen
 
   AdFront2 :: ~AdFront2 ()
   {
-    delete allflines;
   }
 
 
@@ -54,18 +53,18 @@ namespace netgen
   {
     if (nfl > 0)
       {
-	ost << nfl << " open front segments left:" << endl;
-	// for (int i = lines.Begin(); i < lines.End(); i++)
+        ost << nfl << " open front segments left:" << endl;
+        // for (int i = lines.Begin(); i < lines.End(); i++)
         for (int i : lines.Range())
-	  if (lines[i].Valid())
-	    ost << i << ": " 
-                << GetGlobalIndex (lines[i].L().I1()) << "-"
-		<< GetGlobalIndex (lines[i].L().I2()) << endl;
+          if (lines[i].Valid())
+            ost << i << ": " 
+                << GetGlobalIndex (lines[i].L()[0]) << "-"
+                << GetGlobalIndex (lines[i].L()[1]) << endl;
       }
   }
 
   /*
-  void AdFront2 :: GetPoints (NgArray<Point<3> > & apoints) const
+  void AdFront2 :: GetPoints (Array<Point<3> > & apoints) const
   {
     apoints.Append (points);
     // for (int i = 0; i < points.Size(); i++)
@@ -75,24 +74,24 @@ namespace netgen
 
 
 
-  int AdFront2 :: AddPoint (const Point<3> & p, PointIndex globind, 
+  Front2PointIndex AdFront2 :: AddPoint (const Point<3> & p, PointIndex globind, 
                             MultiPointGeomInfo * mgi,
                             bool pointonsurface)
   {
     // inserts at empty position or resizes array
-    int pi;
+    Front2PointIndex pi;
 
     if (delpointl.Size() != 0)
       {
-	pi = delpointl.Last();
-	delpointl.DeleteLast ();
+        pi = delpointl.Last();
+        delpointl.DeleteLast ();
 
-	points[pi] = FrontPoint2 (p, globind, mgi, pointonsurface);
+        points[pi] = FrontPoint2 (p, globind, mgi, pointonsurface);
       }
     else
       {
-	points.Append (FrontPoint2 (p, globind, mgi, pointonsurface));
-        pi = points.Size()-1;
+        points.Append (FrontPoint2 (p, globind, mgi, pointonsurface));
+        pi = points.Size()-1+IndexBASE<Front2PointIndex>();
       }
 
     if (mgi)
@@ -105,7 +104,7 @@ namespace netgen
   }
 
 
-  int AdFront2 :: AddLine (int pi1, int pi2,
+  int AdFront2 :: AddLine (Front2PointIndex pi1, Front2PointIndex pi2,
                            const PointGeomInfo & gi1, const PointGeomInfo & gi2)
   {
     int minfn;
@@ -126,20 +125,20 @@ namespace netgen
 
     if (dellinel.Size() != 0)
       {
-	li = dellinel.Last();
-	dellinel.DeleteLast ();
-	lines[li] = FrontLine (INDEX_2(pi1, pi2));
+        li = dellinel.Last();
+        dellinel.DeleteLast ();
+        lines[li] = FrontLine (IVec<2,Front2PointIndex>(pi1, pi2));
       }
     else
       {
-	lines.Append(FrontLine (INDEX_2(pi1, pi2)));
+        lines.Append(FrontLine (IVec<2,Front2PointIndex>(pi1, pi2)));
         li = lines.Size()-1;
       }
 
   
     if (!gi1.trignum || !gi2.trignum)
       {
-	cout << "WARNING: in AdFront::AddLine, illegal geominfo" << endl;
+        cout << "WARNING: in AdFront::AddLine, illegal geominfo" << endl;
       }
   
     lines[li].SetGeomInfo (gi1, gi2);
@@ -152,14 +151,14 @@ namespace netgen
 
     if (allflines)
       {
-	if (allflines->Used (PointIndices<2>(GetGlobalIndex (pi1), 
+        if (allflines->Used (PointIndices<2>(GetGlobalIndex (pi1), 
                                              GetGlobalIndex (pi2))))
-	  {
-	    cerr << "ERROR Adfront2::AddLine: line exists" << endl;
-	    (*testout) << "ERROR Adfront2::AddLine: line exists" << endl;
-	  }
+          {
+            cerr << "ERROR Adfront2::AddLine: line exists" << endl;
+            (*testout) << "ERROR Adfront2::AddLine: line exists" << endl;
+          }
 
-	allflines->Set (PointIndices<2>(GetGlobalIndex (pi1), 
+        allflines->Set (PointIndices<2>(GetGlobalIndex (pi1), 
                                         GetGlobalIndex (pi2)), 1);
       }
 
@@ -169,33 +168,33 @@ namespace netgen
 
   void AdFront2 :: DeleteLine (int li)
   {
-    int pi;
+    Front2PointIndex pi;
 
     nfl--;
 
-    for (int i = 1; i <= 2; i++)
+    for (int i = 0; i < 2; i++)
       {
-	pi = lines[li].L().I(i);
-	points[pi].RemoveLine();
+        pi = lines[li].L()[i];
+        points[pi].RemoveLine();
 
-	if (!points[pi].Valid())
-	  {
-	    delpointl.Append (pi);
-	    if (points[pi].mgi)
-	      {
-		cpointsearchtree.DeleteElement (pi);
-		delete points[pi].mgi;
-		points[pi].mgi = NULL;
-	      }
+        if (!points[pi].Valid())
+          {
+            delpointl.Append (pi);
+            if (points[pi].mgi)
+              {
+                cpointsearchtree.DeleteElement (pi);
+                delete points[pi].mgi;
+                points[pi].mgi = NULL;
+              }
 
             pointsearchtree.DeleteElement (pi);
-	  }
+          }
       }
 
     if (allflines)
       {
-	allflines->Set (PointIndices<2>(GetGlobalIndex (lines[li].L().I1()),
-                                        GetGlobalIndex (lines[li].L().I2())), 2);
+        allflines->Set (PointIndices<2>(GetGlobalIndex (lines[li].L()[0]),
+                                        GetGlobalIndex (lines[li].L()[1])), 2);
       }
 
     lines[li].Invalidate();
@@ -205,64 +204,64 @@ namespace netgen
   }
 
 
-  int AdFront2 :: ExistsLine (int pi1, int pi2)
+  int AdFront2 :: ExistsLine (PointIndex pi1, PointIndex pi2)
   {
     if (!allflines)
       return 0;
-    if (allflines->Used (INDEX_2(pi1, pi2)))
-      return allflines->Get (INDEX_2 (pi1, pi2));
+    if (allflines->Used (PointIndices<2>(pi1, pi2)))
+      return allflines->Get (PointIndices<2> (pi1, pi2));
     else
       return 0;
   }
 
 
   int AdFront2 :: SelectBaseLine (Point<3>  & p1, Point<3>  & p2, 
-				  const PointGeomInfo *& geominfo1,
-				  const PointGeomInfo *& geominfo2,
-				  int & qualclass)
+                                  const PointGeomInfo *& geominfo1,
+                                  const PointGeomInfo *& geominfo2,
+                                  int & qualclass)
   {
     int baselineindex = -1; 
     
     // for (int i = starti; i < lines.End(); i++)
     for (int i = starti; i < *lines.Range().end(); i++)
       {
-	if (lines[i].Valid())
-	  {
-	    int hi = lines[i].LineClass() +
-	      points[lines[i].L().I1()].FrontNr() +
-	      points[lines[i].L().I2()].FrontNr();
-	  
-	    if (hi <= minval)
-	      {
-		minval = hi;
-		baselineindex = i;
-		break;
-	      }
-	  }
+        if (lines[i].Valid())
+          {
+            int hi = lines[i].LineClass() +
+              points[lines[i].L()[0]].FrontNr() +
+              points[lines[i].L()[1]].FrontNr();
+          
+            if (hi <= minval)
+              {
+                minval = hi;
+                baselineindex = i;
+                break;
+              }
+          }
       }
   
     if (baselineindex == -1)
       {
-	minval = INT_MAX;
-	// for (int i = lines.Begin(); i < lines.End(); i++)
+        minval = INT_MAX;
+        // for (int i = lines.Begin(); i < lines.End(); i++)
         for (int i : lines.Range())
-	  if (lines[i].Valid())
-	    {
-	      int hi = lines[i].LineClass() +
-		points[lines[i].L().I1()].FrontNr() +
-		points[lines[i].L().I2()].FrontNr();
-	    
-	      if (hi < minval)
-		{
-		  minval = hi;
-		  baselineindex = i;
-		}
-	    }
+          if (lines[i].Valid())
+            {
+              int hi = lines[i].LineClass() +
+                points[lines[i].L()[0]].FrontNr() +
+                points[lines[i].L()[1]].FrontNr();
+            
+              if (hi < minval)
+                {
+                  minval = hi;
+                  baselineindex = i;
+                }
+            }
       }
     starti = baselineindex+1;
 
-    p1 = points[lines[baselineindex].L().I1()].P();
-    p2 = points[lines[baselineindex].L().I2()].P();
+    p1 = points[lines[baselineindex].L()[0]].P();
+    p2 = points[lines[baselineindex].L()[1]].P();
     geominfo1 = &lines[baselineindex].GetGeomInfo(1);
     geominfo2 = &lines[baselineindex].GetGeomInfo(2);
 
@@ -275,159 +274,163 @@ namespace netgen
 
 
   int AdFront2 :: GetLocals (int baselineindex,
-			     NgArray<Point<3>> & locpoints,
-			     NgArray<MultiPointGeomInfo> & pgeominfo,
-			     NgArray<INDEX_2> & loclines,   // local index
-			     NgArray<INDEX> & pindex,
-			     NgArray<INDEX> & lindex,
-			     double xh)
+                             Array<Point<3>, LocalPointIndex> & locpoints,
+                             Array<MultiPointGeomInfo, LocalPointIndex> & pgeominfo,
+                             Array<IVec<2,LocalPointIndex>> & loclines,
+                             Array<Front2PointIndex, LocalPointIndex> & pindex,   // local -> front
+                             Array<int> & lindex,
+                             double xh)
   {
     // static Timer timer("adfront2::GetLocals"); RegionTimer reg (timer);
     
-    int pstind;
+    Front2PointIndex pstind;
     Point<3>  midp, p0;
 
-    pstind = lines[baselineindex].L().I1();
+    ArrayMem<IVec<2,Front2PointIndex>,100> frontlines;   // the selected lines, front numbering
+
+    pstind = lines[baselineindex].L()[0];
     p0 = points[pstind].P();
 
-    loclines.Append(lines[baselineindex].L());
+    frontlines.Append(lines[baselineindex].L());
     lindex.Append(baselineindex);  
 
     ArrayMem<int, 1000> nearlines(0);
-    NgArrayMem<int, 1000> nearpoints(0);
+    ArrayMem<Front2PointIndex, 1000> nearpoints(0);
 
     // dominating costs !!
-    linesearchtree.GetIntersecting (p0 - Vec3d(xh, xh, xh),
-				    p0 + Vec3d(xh, xh, xh),
-				    nearlines);
+    linesearchtree.GetIntersecting (p0 - Vec<3>(xh, xh, xh),
+                                    p0 + Vec<3>(xh, xh, xh),
+                                    nearlines);
 
     // only special points that are not in adfront,
     // other points are from linesearchtree
-    cpointsearchtree.GetIntersecting(p0 - Vec3d(xh, xh, xh),
-                                     p0 + Vec3d(xh, xh, xh),
+    cpointsearchtree.GetIntersecting(p0 - Vec<3>(xh, xh, xh),
+                                     p0 + Vec<3>(xh, xh, xh),
                                      nearpoints);
 
     for(auto i : nearlines)
       {
-	if (lines[i].Valid() && i != baselineindex) 
-	  {
-            loclines.Append(lines[i].L());
+        if (lines[i].Valid() && i != baselineindex) 
+          {
+            frontlines.Append(lines[i].L());
             lindex.Append(i);
-	  }
+          }
       }
 
-    // static NgArray<int> invpindex;
+    // static Array<int> invpindex;
     invpindex.SetSize (points.Size()); 
     // invpindex = -1;
-    for(auto pi : nearpoints)
-      invpindex[pi] = -1;
+    for(auto n : nearpoints)
+      invpindex[n] = -1;
 
-    for(const auto& li : loclines)
+    for(const auto& li : frontlines)
       {
-	invpindex[li.I1()] = 0;
-	invpindex[li.I2()] = 0;
+        invpindex[li[0]] = 0;
+        invpindex[li[1]] = 0;
       }
 
 
-    for(auto& line : loclines)
+    for(const auto& fline : frontlines)
       {
+        IVec<2,LocalPointIndex> line;
         for(auto i : Range(2))
           {
-            auto& pi = line[i];
-	    if (invpindex[pi] == 0)
-	      {
-		pindex.Append (pi);
-		invpindex[pi] = pindex.Size();
+            Front2PointIndex pi = fline[i];
+            if (invpindex[pi] == 0)
+              {
+                pindex.Append (pi);
+                invpindex[pi] = pindex.Size();
                 locpoints.Append (points[pi].P());
-		pi = locpoints.Size();
-	      }
-	    else
-	      pi = invpindex[pi];
-	  }
+                line[i] = locpoints.Range().Next()-1;
+              }
+            else
+              line[i] = LocalPointIndex::FromNr1(invpindex[pi]);
+          }
+        loclines.Append (line);
       }
 
 
     // double xh2 = xh*xh;
     for(auto i : nearpoints)
       {
-	if (points[i].Valid() && 
-	    points[i].OnSurface() &&
-	    // Dist2 (points.Get(i).P(), p0) <= xh2 &&
-	    invpindex[i] <= 0)
-	  {
+        if (points[i].Valid() && 
+            points[i].OnSurface() &&
+            // Dist2 (points.Get(i).P(), p0) <= xh2 &&
+            invpindex[i] <= 0)
+          {
             locpoints.Append (points[i].P());
-	    invpindex[i] = locpoints.Size();
-	    pindex.Append(i);
-	  }
+            invpindex[i] = locpoints.Size();
+            pindex.Append(i);
+          }
       }
     /*
     double xh2 = xh*xh;
     for (i = 1; i <= points.Size(); i++)
       {
-	if (points.Get(i).Valid() && 
-	    points.Get(i).OnSurface() &&
-	    Dist2 (points.Get(i).P(), p0) <= xh2 &&
-	    invpindex.Get(i) <= 0)
-	  {
-	    invpindex.Elem(i) =
-	      locpoints.Append (points.Get(i).P());
-	    pindex.Append(i);
-	  }
+        if (points.Get(i).Valid() && 
+            points.Get(i).OnSurface() &&
+            Dist2 (points.Get(i).P(), p0) <= xh2 &&
+            invpindex[i] <= 0)
+          {
+            invpindex[i] =
+              locpoints.Append (points.Get(i).P());
+            pindex.Append(i);
+          }
       }
     */
 
     pgeominfo.SetSize (locpoints.Size());
-    for (int i = 0; i < pgeominfo.Size(); i++)
+    for (LocalPointIndex i : pgeominfo.Range())
       pgeominfo[i].Init();
 
 
     for (int i = 0; i < loclines.Size(); i++)
       for (int j = 0; j < 2; j++)
-	{
-	  int lpi = loclines[i][j];
-	
-	  const PointGeomInfo & gi = 
-	    lines[lindex[i]].GetGeomInfo (j+1);
-	  pgeominfo.Elem(lpi).AddPointGeomInfo (gi);
-	
-	  /*
-	    if (pgeominfo.Elem(lpi).cnt == MULTIPOINTGEOMINFO_MAX)
-	    break;
+        {
+          LocalPointIndex lpi = loclines[i][j];
+        
+          const PointGeomInfo & gi = 
+            lines[lindex[i]].GetGeomInfo (j+1);
+          pgeominfo[lpi].AddPointGeomInfo (gi);
+        
+          /*
+            if (pgeominfo[lpi].cnt == MULTIPOINTGEOMINFO_MAX)
+            break;
 
-	    const PointGeomInfo & gi = 
-	    lines.Get(lindex.Get(i)).GetGeomInfo (j);
-	
-	    PointGeomInfo * pgi = pgeominfo.Elem(lpi).mgi;
+            const PointGeomInfo & gi = 
+            lines.Get(lindex.Get(i)).GetGeomInfo (j);
+        
+            PointGeomInfo * pgi = pgeominfo[lpi].mgi;
 
-	    int found = 0;
-	    for (k = 0; k < pgeominfo.Elem(lpi).cnt; k++)
-	    if (pgi[k].trignum == gi.trignum)
-	    found = 1;
+            int found = 0;
+            for (k = 0; k < pgeominfo[lpi].cnt; k++)
+            if (pgi[k].trignum == gi.trignum)
+            found = 1;
 
-	    if (!found)
-	    {
-	    pgi[pgeominfo.Elem(lpi).cnt] = gi;
-	    pgeominfo.Elem(lpi).cnt++;
-	    }
-	  */
-	}
+            if (!found)
+            {
+            pgi[pgeominfo[lpi].cnt] = gi;
+            pgeominfo[lpi].cnt++;
+            }
+          */
+        }
 
-    for (int i = 0; i < locpoints.Size(); i++)
+    for (LocalPointIndex i : locpoints.Range())
       {
-	int pi = pindex[i];
+        Front2PointIndex pi = pindex[i];
       
-	if (points[pi].mgi)
-	  for (int j = 1; j <= points[pi].mgi->GetNPGI(); j++)
-	    pgeominfo[i].AddPointGeomInfo (points[pi].mgi->GetPGI(j));
+        if (points[pi].mgi)
+          for (int j = 1; j <= points[pi].mgi->GetNPGI(); j++)
+            pgeominfo[i].AddPointGeomInfo (points[pi].mgi->GetPGI(j));
       }
    
     if (loclines.Size() == 1)
       {
-	cout << IM(5) << "loclines.Size = 1" << endl;
-	(*testout) << "loclines.size = 1" << endl
-		   << " h = " << xh << endl
-		   << " nearline.size = " << nearlines.Size() << endl
-		   << " p0 = " << p0 << endl;
+        cout << IM(5) << "loclines.Size = 1" << endl;
+        (*testout) << "loclines.size = 1" << endl
+                   << " h = " << xh << endl
+                   << " nearline.size = " << nearlines.Size() << endl
+                   << " p0 = " << p0 << endl;
       }
 
     return lines[baselineindex].LineClass();
@@ -440,8 +443,8 @@ namespace netgen
     // for (int i = lines.Begin(); i < lines.End(); i++)
     for (int i : lines.Range())
       if (lines[i].Valid())
-	for (int j = 1; j <= 2; j++)
-	  points[lines[i].L().I(j)].DecFrontNr(0);
+        for (int j = 0; j < 2; j++)
+          points[lines[i].L()[j]].DecFrontNr(0);
   }
 
 
@@ -449,15 +452,15 @@ namespace netgen
   {
     ost << points.Size() << " Points: " << endl;
     // for (int i = points.Begin(); i < points.End(); i++)
-    for (int i : points.Range())
+    for (auto i : points.Range())
       if (points[i].Valid())
-	ost << i << "  " << points[i].P() << endl;
+        ost << i << "  " << points[i].P() << endl;
 
     ost << nfl << " Lines: " << endl;
     // for (int i = lines.Begin(); i < lines.End(); i++)
     for (int i : lines.Range())
       if (lines[i].Valid())
-	ost << lines[i].L().I1() << " - " << lines[i].L().I2() << endl;
+        ost << lines[i].L()[0] << " - " << lines[i].L()[1] << endl;
 
     ost << flush;
   }
@@ -478,27 +481,27 @@ namespace netgen
     cnt = 0;
     for (int i = 0; i < lines.Size(); i++)
       if (lines[i].Valid())
-	{
-	  const Point<3> & p1 = points[lines[i].L().I1()].P();
-	  const Point<3> & p2 = points[lines[i].L().I2()].P();
-	  
-	  v1 = p2 - p1;
-	  
-	  a(0, 0) = v1(0);
-	  a(1, 0) = v1(1);
-	  
-	  a(0, 1) = -n(0);
-	  a(1, 1) = -n(1);
+        {
+          const Point<3> & p1 = points[lines[i].L()[0]].P();
+          const Point<3> & p2 = points[lines[i].L()[1]].P();
+          
+          v1 = p2 - p1;
+          
+          a(0, 0) = v1(0);
+          a(1, 0) = v1(1);
+          
+          a(0, 1) = -n(0);
+          a(1, 1) = -n(1);
 
-	  b(0) = p(0) - p1(0);
-	  b(1) = p(1) - p1(1);
-	  
-	  CalcInverse (a, ainv);
-	  ainv.Mult (b, u);
-	  
-	  if (u(0) >= 0 && u(0) <= 1 && u(1) > 0)
-	    cnt++;
-	}
+          b(0) = p(0) - p1(0);
+          b(1) = p(1) - p1(1);
+          
+          CalcInverse (a, ainv);
+          ainv.Mult (b, u);
+          
+          if (u(0) >= 0 && u(0) <= 1 && u(1) > 0)
+            cnt++;
+        }
     
     return ((cnt % 2) != 0);
   }
@@ -514,8 +517,8 @@ namespace netgen
           if (lines[(*testfaces)[ii]].Valid())
             {
               int i = (*testfaces)[ii];
-              const Point<3> & p13d = points[lines[i].L().I1()].P();
-              const Point<3> & p23d = points[lines[i].L().I2()].P();
+              const Point<3> & p13d = points[lines[i].L()[0]].P();
+              const Point<3> & p23d = points[lines[i].L()[1]].P();
               
               Point<2> p1(p13d(0), p13d(1));
               Point<2> p2(p23d(0), p23d(1));
@@ -544,8 +547,8 @@ namespace netgen
         for (int i = 0; i < lines.Size(); i++)
           if (lines[i].Valid())
             {
-              const Point<3> & p13d = points[lines[i].L().I1()].P();
-              const Point<3> & p23d = points[lines[i].L().I2()].P();
+              const Point<3> & p13d = points[lines[i].L()[0]].P();
+              const Point<3> & p23d = points[lines[i].L()[1]].P();
               
               Point<2> p1(p13d(0), p13d(1));
               Point<2> p2(p23d(0), p23d(1));

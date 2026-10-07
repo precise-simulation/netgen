@@ -11,13 +11,6 @@ private:
   typedef struct tf 
   { float f1, f2, f3; }   threefloat;
   
-  class threeint 
-  { 
-  public: int i1, i2, i3; 
-    threeint() { } 
-    threeint(int ai1, int ai2, int ai3) 
-    { i1 = ai1; i2 = ai2; i3 = ai3; } 
-  };
 
 
   ///
@@ -25,33 +18,35 @@ private:
   ///
   string name;
   ///
-  NgArray<Point<2>> points;
+  Array<Point<2>, RulePointIndex> points;
   ///
-  NgArray<INDEX_2> lines;
+  Array<IVec<2,RulePointIndex>> lines;
   ///
-  NgArray<Point<2>> freezone, freezonelimit;
+  Array<Point<2>> freezone, freezonelimit;
   ///
-  NgArray<NgArray<Point<2>>> freezone_i;
+  Array<Array<Point<2>>> freezone_i;
   ///
-  NgArray<Point<2>> transfreezone;
+  Array<Point<2>> transfreezone;
 
   ///
-  NgArray<int> dellines;
+  Array<int> dellines;
   ///
-  NgArray<Element2d> elements;
+  Array<RuleElement2d> elements;
   ///
-  NgArray<threefloat> tolerances, linetolerances;
+  Array<threefloat, RulePointIndex> tolerances;
   ///
-  NgArray<threeint> orientations;
+  Array<threefloat> linetolerances;
+  ///
+  Array<IVec<3,RulePointIndex>> orientations;
   ///
   DenseMatrix oldutonewu, oldutofreearea, oldutofreearealimit;
   ///
-  NgArray<DenseMatrix> oldutofreearea_i;
+  Array<DenseMatrix> oldutofreearea_i;
   ///
   MatrixFixWidth<3> freesetinequ;
 
   ///
-  NgArray<Vec<2>> linevecs;
+  Array<Vec<2>> linevecs;
 
   ///
   int noldp, noldl;
@@ -59,7 +54,7 @@ private:
   float fzminx, fzmaxx, fzminy, fzmaxy;
 
   /// topological distance of line to base element
-  NgArray<int> lnearness;
+  Array<int> lnearness;
 
 public:
 
@@ -85,29 +80,29 @@ public:
   ///
   int GetQuality () const { return quality; }
   ///
-  int GetLNearness (int li) const { return lnearness.Get(li); }
+  int GetLNearness (int li) const { return lnearness[li-1]; }
 
   ///
-  const Point<2>& GetPoint (int i) const { return points.Get(i); }
+  const Point<2>& GetPoint (RulePointIndex i) const { return points[i]; }
   ///
-  const INDEX_2 & GetLine (int i) const { return lines.Get(i); }
+  const IVec<2,RulePointIndex> & GetLine (int i) const { return lines[i-1]; }
   ///
-  const Element2d & GetElement (int i) const { return elements.Get(i); }
+  const RuleElement2d & GetElement (int i) const { return elements[i-1]; }
   ///
-  const threeint & GetOrientation (int i) const { return orientations.Get(i); }
+  const IVec<3,RulePointIndex> & GetOrientation (int i) const { return orientations[i-1]; }
   ///
-  int GetDelLine (int i) const { return dellines.Get(i); }
+  int GetDelLine (int i) const { return dellines[i-1]; }
   ///
-  const NgArray<int> & GetDelLines() const { return dellines; }
+  const Array<int> & GetDelLines() const { return dellines; }
   ///
-  void GetFreeZone (NgArray<Point<2>> & afreearea);
+  void GetFreeZone (Array<Point<2>> & afreearea);
   ///
 
-  double CalcPointDist (int pi, const Point<2> & p) const
+  double CalcPointDist (RulePointIndex pi, const Point<2> & p) const
   {
-    double dx = p[0] - points.Get(pi)[0];
-    double dy = p[1] - points.Get(pi)[1];
-    const threefloat * tfp = &tolerances.Get(pi);
+    double dx = p[0] - points[pi][0];
+    double dy = p[1] - points[pi][1];
+    const threefloat * tfp = &tolerances[pi];
     return tfp->f1 * dx * dx + tfp->f2 * dx * dy + tfp->f3 * dy * dy;
   }
 
@@ -121,13 +116,13 @@ public:
   bool IsInFreeZone (const Point<2> & p) const
   {
     if (p[0] < fzminx || p[0] > fzmaxx ||
-	p[1] < fzminy || p[1] > fzmaxy) return 0;
+        p[1] < fzminy || p[1] > fzmaxy) return 0;
 
     for (int i = 0; i < transfreezone.Size(); i++)
       {
-	if (freesetinequ(i, 0) * p[0] + 
-	    freesetinequ(i, 1) * p[1] +
-	    freesetinequ(i, 2) > 0) return 0;
+        if (freesetinequ(i, 0) * p[0] + 
+            freesetinequ(i, 1) * p[1] +
+            freesetinequ(i, 2) > 0) return 0;
       }
     return 1;
   }
@@ -146,10 +141,10 @@ public:
   ///
   int ConvexFreeZone () const;
   ///
-  const NgArray<Point<2>> & GetTransFreeZone () { return transfreezone; }
+  const Array<Point<2>> & GetTransFreeZone () { return transfreezone; }
 
   ///
-  int GetPointNr (int ln, int endp) const { return lines.Get(ln).I(endp); }
+  RulePointIndex GetPointNr (int ln, int endp) const { return lines[ln-1][endp-1]; }
 
   ///
   const DenseMatrix & GetOldUToNewU () const { return oldutonewu; }

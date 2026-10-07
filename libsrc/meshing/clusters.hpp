@@ -25,7 +25,7 @@ class AnisotropicClusters
   int nv, ned, nfa, ne;
 
   // connected nodes, nodes = vertices, edges, faces, elements
-  NgArray<int> cluster_reps;
+  Array<int> cluster_reps;
 
 public:
   AnisotropicClusters (const Mesh & amesh);
@@ -34,13 +34,13 @@ public:
   void Update();
 
   int GetVertexRepresentant (int vnr) const
-  { return cluster_reps.Get(vnr); }
+  { return cluster_reps[vnr-1]; }
   int GetEdgeRepresentant (int ednr) const
-  { return cluster_reps.Get(nv+ednr); }
+  { return cluster_reps[nv+ednr-1]; }
   int GetFaceRepresentant (int fnr) const
-  { return cluster_reps.Get(nv+ned+fnr); }
+  { return cluster_reps[nv+ned+fnr-1]; }
   int GetElementRepresentant (int enr) const
-  { return cluster_reps.Get(nv+ned+nfa+enr); }
+  { return cluster_reps[nv+ned+nfa+enr-1]; }
 };
 } // namespace netgen
 #endif // NETGEN_CLUSTERS_HPP

@@ -17,7 +17,7 @@ public:
   int showstltrias;
   
   /*
-  Vec3d clipnormal;
+  Vec<3> clipnormal;
   double clipdist;
   int clipenable;
   int clipplanetimestamp;
@@ -25,7 +25,7 @@ public:
   class Clipping
   {
   public:
-    Vec3d normal;
+    Vec<3> normal = Vec<3>(0,0,0);
     double dist;
     double dist2;
     int enable;
@@ -33,10 +33,10 @@ public:
     bool operator== (Clipping & clip2)
     {
       return 
-	(normal == clip2.normal) && 
-	(dist == clip2.dist) && 
-	// (dist2 == clip2.dist2) && 
-	(enable == clip2.enable);
+        (normal == clip2.normal) && 
+        (dist == clip2.dist) && 
+        // (dist2 == clip2.dist2) && 
+        (enable == clip2.enable);
     }
   };
   Clipping clipping;

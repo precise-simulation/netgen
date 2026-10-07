@@ -11,7 +11,7 @@ namespace netgen
 
 
   inline double CalcTriangleBadness (double x2, double x3, double y3, 
-				     double metricweight, double h)
+                                     double metricweight, double h)
   {
     // badness = sqrt(3.0) / 12 * (\sum l_i^2) / area - 1 
     // p1 = (0, 0), p2 = (x2, 0), p3 = (x3, y3);
@@ -26,16 +26,16 @@ namespace netgen
     
     if (metricweight > 0)
       {
-	// add:  metricweight * (area / h^2 + h^2 / area - 2)
+        // add:  metricweight * (area / h^2 + h^2 / area - 2)
 
-	double areahh = area / (h * h);
-	badness += metricweight * (areahh + 1 / areahh - 2);
+        double areahh = area / (h * h);
+        badness += metricweight * (areahh + 1 / areahh - 2);
       }
     return badness;
   }
   
   inline void CalcTriangleBadness (double x2, double x3, double y3, double metricweight,
-				   double h, double & badness, double & g1x, double & g1y)
+                                   double h, double & badness, double & g1x, double & g1y)
   {
     // old: badness = sqrt(3.0) /36 * circumference^2 / area - 1 
     // badness = sqrt(3.0) / 12 * (\sum l_i^2) / area - 1 
@@ -47,10 +47,10 @@ namespace netgen
 
     if (area <= 1e-24 * cir_2)
       {
-	g1x = 0;
-	g1y = 0;
-	badness = 1e10;
-	return;
+        g1x = 0;
+        g1y = 0;
+        badness = 1e10;
+        return;
       }
 
     badness = c_trig * cir_2 / area - 1;
@@ -62,29 +62,29 @@ namespace netgen
 
     if (metricweight > 0)
       {
-	// area = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1);
-	// add:  metricweight * (area / h^2 + h^2 / area - 2)
+        // area = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1);
+        // add:  metricweight * (area / h^2 + h^2 / area - 2)
       
-	area = x2 * y3;
-	double dareax1 = -y3; 
-	double dareay1 = x3 - x2; 
+        area = x2 * y3;
+        double dareax1 = -y3; 
+        double dareay1 = x3 - x2; 
 
-	double areahh = area / (h * h);
-	double fac = metricweight * (areahh - 1 / areahh) / area;
+        double areahh = area / (h * h);
+        double fac = metricweight * (areahh - 1 / areahh) / area;
 
-	badness += metricweight * (areahh + 1 / areahh - 2);
-	g1x += fac * dareax1;
-	g1y += fac * dareay1; 
+        badness += metricweight * (areahh + 1 / areahh - 2);
+        g1x += fac * dareax1;
+        g1y += fac * dareay1; 
       }
   }
 
 
 
   double CalcTriangleBadness (const Point<3> & p1, 
-			      const Point<3> & p2, 
-			      const Point<3> & p3,
-			      double metricweight,
-			      double h)
+                              const Point<3> & p2, 
+                              const Point<3> & p3,
+                              double metricweight,
+                              double h)
   {
     // badness = sqrt(3.0) / 12 * (\sum l_i^2) / area - 1 
 
@@ -102,10 +102,10 @@ namespace netgen
 
     if (metricweight > 0)
       {
-	// add:  metricweight * (area / h^2 + h^2 / area - 2)
+        // add:  metricweight * (area / h^2 + h^2 / area - 2)
         area *= 2;   // optimum for (2 area) is h^2
         double areahh = area / (h * h);
-	badness += metricweight * (areahh + 1 / areahh - 2);
+        badness += metricweight * (areahh + 1 / areahh - 2);
       }
 
     return badness;
@@ -128,7 +128,7 @@ namespace netgen
     Vec<3> varea = Cross(e12, e13);
     double area = 0.5 * varea.Length();
 
-    Vec<3> dcir_2 = (-2) * (e12+e13);
+    Vec<3> dcir_2 = (-2.0) * (e12+e13);
     Vec<3> darea = (0.25/area) * Cross (p2-p3, varea);
 
     if (area <= 1e-24 * cir_2)
@@ -142,11 +142,11 @@ namespace netgen
 
     if (metricweight > 0)
       {
-	// add:  metricweight * (area / h^2 + h^2 / area - 2)
+        // add:  metricweight * (area / h^2 + h^2 / area - 2)
         area *= 2;   // optimum for (2 area) is h^2
 
         double areahh = area / (h * h);
-	badness += metricweight * (areahh + 1 / areahh - 2);
+        badness += metricweight * (areahh + 1 / areahh - 2);
 
         gradp1 += (2*metricweight * (1/(h*h) - (h*h)/(area*area))) * darea;
       }
@@ -158,11 +158,11 @@ namespace netgen
 
 
   double CalcTriangleBadness (const Point<3> & p1, 
-			      const Point<3> & p2, 
-			      const Point<3> & p3,
-			      const Vec<3> & n,
-			      double metricweight,
-			      double h)
+                              const Point<3> & p2, 
+                              const Point<3> & p3,
+                              const Vec<3> & n,
+                              double metricweight,
+                              double h)
   {
     Vec<3> v1 = p2-p1;
     Vec<3> v2 = p3-p1;
@@ -175,7 +175,7 @@ namespace netgen
     e2 = Cross (n, e1);
 
     return CalcTriangleBadness ( (e1 * v1), (e1 * v2), (e2 * v2), 
-				 metricweight, h);
+                                 metricweight, h);
   }
 
 
@@ -186,10 +186,10 @@ namespace netgen
     MeshPoint sp1; 
     PointGeomInfo gi1;
     Vec<3> normal, t1, t2;
-    NgArray<SurfaceElementIndex> locelements;
-    NgArray<int> locrots;
-    NgArray<double> lochs;
-    NgArray<Point<3> > loc_pnts2, loc_pnts3;
+    Array<SurfaceElementIndex> locelements;
+    Array<int> locrots;
+    Array<double> lochs;
+    Array<Point<3> > loc_pnts2, loc_pnts3;
   // static int locerr2;
     double locmetricweight;
     double loch;
@@ -209,7 +209,7 @@ namespace netgen
     const NetgenGeometry& geo;
   public:
     Opti2SurfaceMinFunction (const Mesh & amesh,
-			     Opti2dLocalData & ald)
+                             Opti2dLocalData & ald)
       : ld(ald), geo(*amesh.GetGeometry())
     { } ;
 
@@ -372,27 +372,27 @@ namespace netgen
         Vec<3> e1 = ld.loc_pnts2[j] - pp1;
         Vec<3> e2 = ld.loc_pnts3[j] - pp1;
 
-	if (ld.uselocalh) ld.loch = ld.lochs[j];
+        if (ld.uselocalh) ld.loch = ld.lochs[j];
 
-	double e1l = e1.Length();
-	if (Determinant(e1, e2, n) > 1e-8 * e1l * e2.Length())
-	  {
-	    e1 /= e1l;
-	    double e1e2 = e1 * e2;
+        double e1l = e1.Length();
+        if (Determinant(e1, e2, n) > 1e-8 * e1l * e2.Length())
+          {
+            e1 /= e1l;
+            double e1e2 = e1 * e2;
             e2 -= e1e2 * e1;
-	    double e2l = e2.Length();
+            double e2l = e2.Length();
 
             CalcTriangleBadness ( e1l, e1e2, e2l, ld.locmetricweight, ld.loch,
                                   hbadness, g1x, g1y);
             
-	    badness += hbadness;
+            badness += hbadness;
             vgrad += g1x * e1 + (g1y/e2l) * e2;
-	  }
-	else
-	  {
-	    // (*testout) << "very very bad badness" << endl;
-	    badness += 1e8;
-	  }
+          }
+        else
+          {
+            // (*testout) << "very very bad badness" << endl;
+            badness += 1e8;
+          }
       }
 
     // vgrad -=  (vgrad * n) * n;
@@ -423,32 +423,32 @@ namespace netgen
 
         /*
         int roti = ld.locrots[j];
-        const Element2d & bel = mesh[ld.locelements[j]];
-	Vec<3> e1 = mesh[bel.PNumMod(roti + 1)] - pp1;
-	Vec<3> e2 = mesh[bel.PNumMod(roti + 2)] - pp1;
+        const Element2dRef & bel = mesh[ld.locelements[j]];
+        Vec<3> e1 = mesh[bel.PNumMod(roti + 1)] - pp1;
+        Vec<3> e2 = mesh[bel.PNumMod(roti + 2)] - pp1;
         */
         Vec<3> e1 = ld.loc_pnts2[j] - pp1;
         Vec<3> e2 = ld.loc_pnts3[j] - pp1;
-	if (ld.uselocalh) ld.loch = ld.lochs[j];
+        if (ld.uselocalh) ld.loch = ld.lochs[j];
 
-	double e1l = e1.Length();
-	if (Determinant(e1, e2, n) > 1e-8 * e1l * e2.Length())
-	  {
-	    e1 /= e1l;
-	    double e1e2 = e1 * e2;
-	    e2 -= e1e2 * e1;
-	    double e2l = e2.Length();
-	    CalcTriangleBadness ( e1l, e1e2, e2l, ld.locmetricweight, ld.loch,
-				  hbadness, g1x, g1y);
+        double e1l = e1.Length();
+        if (Determinant(e1, e2, n) > 1e-8 * e1l * e2.Length())
+          {
+            e1 /= e1l;
+            double e1e2 = e1 * e2;
+            e2 -= e1e2 * e1;
+            double e2l = e2.Length();
+            CalcTriangleBadness ( e1l, e1e2, e2l, ld.locmetricweight, ld.loch,
+                                  hbadness, g1x, g1y);
 
-	    badness += hbadness;
+            badness += hbadness;
             vgrad += g1x * e1 + (g1y / e2l) * e2;
-	  }
-	else
-	  {
-	    // (*testout) << "very very bad badness" << endl;
-	    badness += 1e8;
-	  }
+          }
+        else
+          {
+            // (*testout) << "very very bad badness" << endl;
+            badness += 1e8;
+          }
       }
 
     // vgrad -= (vgrad * n) * n;
@@ -476,7 +476,7 @@ namespace netgen
 
   public:
     Opti2EdgeMinFunction (const Mesh & amesh,
-			  Opti2dLocalData & ald)
+                          Opti2dLocalData & ald)
       : mesh(amesh), ld(ald), geo(*amesh.GetGeometry()) { } ;
 
     virtual double FuncGrad (const Vector & x, Vector & g) const override;
@@ -505,23 +505,23 @@ namespace netgen
 
     for (j = 0; j < ld.locelements.Size(); j++)
       {
-	rot = ld.locrots[j];
-	const Element2d & bel = mesh[ld.locelements[j]];
+        rot = ld.locrots[j];
+        const Element2dRef & bel = mesh[ld.locelements[j]];
 
-	v1 = mesh[bel.PNumMod(rot + 1)] - pp1;
-	v2 = mesh[bel.PNumMod(rot + 2)] - pp1;
+        v1 = mesh[bel.PNumMod(rot + 1)] - pp1;
+        v2 = mesh[bel.PNumMod(rot + 2)] - pp1;
 
-	e1 = v1;
-	e2 = v2;
-	e1 /= e1.Length();
-	e2 -= (e1 * e2) * e1;
-	e2 /= e2.Length();
+        e1 = v1;
+        e2 = v2;
+        e1 /= e1.Length();
+        e2 -= (e1 * e2) * e1;
+        e2 /= e2.Length();
 
-	if (ld.uselocalh) ld.loch = ld.lochs[j];
-	CalcTriangleBadness ( (e1 * v1), (e1 * v2), (e2 * v2), ld.locmetricweight, ld.loch,
-			      hbadness, g1(0), g1(1));
+        if (ld.uselocalh) ld.loch = ld.lochs[j];
+        CalcTriangleBadness ( (e1 * v1), (e1 * v2), (e2 * v2), ld.locmetricweight, ld.loch,
+                              hbadness, g1(0), g1(1));
 
-	badness += hbadness;
+        badness += hbadness;
         vgrad += g1(0) * e1 + g1(1) * e2;
       }
 
@@ -547,7 +547,7 @@ namespace netgen
 
   public:
     Opti2SurfaceMinFunctionJacobian (const Mesh & amesh,
-				     Opti2dLocalData & ald)
+                                     Opti2dLocalData & ald)
       : mesh(amesh), ld(ald), geo(*amesh.GetGeometry())
     { } ;
     virtual double FuncGrad (const Vector & x, Vector & g) const override;
@@ -568,7 +568,8 @@ namespace netgen
   {
     // from 2d:
 
-    int lpi, gpi;
+    int lpi;
+    PointIndex gpi;
     Vec<3> vgrad;
     Point<3> pp1;
     Vec<2> g1, vdir;
@@ -584,42 +585,42 @@ namespace netgen
     //  meshthis -> ProjectPoint (surfi, pp1);
     //  meshthis -> GetNormalVector (surfi, pp1, n);
 
-    static NgArray<Point<2>> pts2d;  // better: use hashtable
+    static Array<Point<2>, PointIndex> pts2d;  // better: use hashtable
     pts2d.SetSize(mesh.GetNP());
 
     grad = 0;
 
-    for (int j = 1; j <= ld.locelements.Size(); j++)
+    for (int j = 0; j < ld.locelements.Size(); j++)
       {
-	lpi = ld.locrots.Get(j);
-	const Element2d & bel = 
-	  mesh[ld.locelements.Get(j)];
+        lpi = ld.locrots[j];
+        const Element2dRef & bel = 
+          mesh[ld.locelements[j]];
       
-	gpi = bel.PNum(lpi);
+        gpi = bel.PNum(lpi);
 
-	for (int k = 1; k <= bel.GetNP(); k++)
-	  {
-	    PointIndex pi = bel.PNum(k);
-	    pts2d.Elem(pi) = Point2d (ld.t1 * (mesh.Point(pi) - ld.sp1), 
-				      ld.t2 * (mesh.Point(pi) - ld.sp1)); 
-	  }				    
-	pts2d.Elem(gpi) = { x(0), x(1) };
+        for (int k = 1; k <= bel.GetNP(); k++)
+          {
+            PointIndex pi = bel.PNum(k);
+            pts2d[pi] = Point<2> (ld.t1 * (mesh.Point(pi) - ld.sp1), 
+                                      ld.t2 * (mesh.Point(pi) - ld.sp1)); 
+          }                                 
+        pts2d[gpi] = { x(0), x(1) };
       
 
-	for (int k = 1; k <= 2; k++)
-	  {
-	    if (k == 1)
-	      vdir = {1., 0.};
-	    else
-	      vdir = {0., 1.};
-	  
-	    hbad = bel.
-	      CalcJacobianBadnessDirDeriv (pts2d, lpi, vdir, hderiv);
+        for (int k = 1; k <= 2; k++)
+          {
+            if (k == 1)
+              vdir = {1., 0.};
+            else
+              vdir = {0., 1.};
+          
+            hbad = bel.
+              CalcJacobianBadnessDirDeriv (pts2d, lpi, vdir, hderiv);
             
-	    grad(k-1) += hderiv;
-	    if (k == 1)
-	      badness += hbad;
-	  }
+            grad(k-1) += hderiv;
+            if (k == 1)
+              badness += hbad;
+          }
       }
 
 
@@ -640,7 +641,8 @@ namespace netgen
   {
     // from 2d:
 
-    int j, k, lpi, gpi;
+    int j, k, lpi;
+    PointIndex gpi;
     Vec<3> vgrad;
     Point<3> pp1;
     Vec<2> g1, vdir;
@@ -653,35 +655,35 @@ namespace netgen
     //    pp1.Add2 (x.Get(1), t1, x.Get(2), t2);
     pp1 = ld.sp1 + x(0) * ld.t1 + x(1) * ld.t2;
 
-    static NgArray<Point<2>> pts2d;
+    static Array<Point<2>, PointIndex> pts2d;
     pts2d.SetSize(mesh.GetNP());
 
     deriv = 0;
 
     for (j = 1; j <= ld.locelements.Size(); j++)
       {
-	lpi = ld.locrots.Get(j);
-	const Element2d & bel = 
-	  mesh[ld.locelements.Get(j)];
+        lpi = ld.locrots[j-1];
+        const Element2dRef & bel = 
+          mesh[ld.locelements[j-1]];
       
-	gpi = bel.PNum(lpi);
+        gpi = bel.PNum(lpi);
 
-	for (k = 1; k <= bel.GetNP(); k++)
-	  {
-	    PointIndex pi = bel.PNum(k);
-	    pts2d.Elem(pi) = Point2d (ld.t1 * (mesh.Point(pi) - ld.sp1), 
-				      ld.t2 * (mesh.Point(pi) - ld.sp1)); 
-	  }				    
-	pts2d.Elem(gpi) = Point2d (x(0), x(1));
+        for (k = 1; k <= bel.GetNP(); k++)
+          {
+            PointIndex pi = bel.PNum(k);
+            pts2d[pi] = Point<2> (ld.t1 * (mesh.Point(pi) - ld.sp1), 
+                                      ld.t2 * (mesh.Point(pi) - ld.sp1)); 
+          }                                 
+        pts2d[gpi] = Point<2> (x(0), x(1));
       
 
-	vdir = { dir(0), dir(1) };
-	  
-	hbad = bel.
-	  CalcJacobianBadnessDirDeriv (pts2d, lpi, vdir, hderiv);
+        vdir = { dir(0), dir(1) };
+          
+        hbad = bel.
+          CalcJacobianBadnessDirDeriv (pts2d, lpi, vdir, hderiv);
       
-	deriv += hderiv;
-	badness += hbad;
+        deriv += hderiv;
+        badness += hbad;
       }
 
 
@@ -691,6 +693,7 @@ namespace netgen
   void MeshOptimize2d :: ImproveMesh (const MeshingParameters & mp)
   {
     static Timer timer("MeshSmoothing 2D"); RegionTimer reg (timer);
+    PreviewResyncGuard preview_guard{mesh, faceindex};
 
     PrintMessage (3, "Smoothing");
 
@@ -701,10 +704,10 @@ namespace netgen
     bool mixed = false;
     // auto elementsonpoint = mesh.CreatePoint2SurfaceElementTable( faceindex );
     auto elementsonpoint = mesh.CreateCompressedPoint2SurfaceElementTable( faceindex );
-    NgArray<MeshPoint, PointIndex::BASE> savepoints(mesh.GetNP());
+    Array<MeshPoint, PointIndex> savepoints(mesh.GetNP());
 
     Table<PointIndex> color_table;
-    if(faceindex)
+    if(faceindex.IsValid())
       {
         Array<SurfaceElementIndex> seia;
         mesh.GetSurfaceElementsOfFace (faceindex, seia);
@@ -716,16 +719,16 @@ namespace netgen
             }
 
         Array<int, PointIndex> compress(mesh.GetNP());
-        NgArray<PointIndex> icompress;
+        Array<PointIndex> icompress;
         for (int i = 0; i < seia.Size(); i++)
           {
-            const Element2d & el = mesh[seia[i]];
+            const Element2dRef & el = mesh[seia[i]];
             for (int j = 0; j < el.GetNP(); j++)
               compress[el[j]] = -1;
           }
         for (int i = 0; i < seia.Size(); i++)
           {
-            const Element2d & el = mesh[seia[i]];
+            const Element2dRef & el = mesh[seia[i]];
             for (int j = 0; j < el.GetNP(); j++)
               if (compress[el[j]] == -1)
                 {
@@ -755,7 +758,7 @@ namespace netgen
       }
     else
       {
-        for (auto & se : mesh.SurfaceElements())
+        for (auto se : mesh.SurfaceElements())
           if (se.GetNP() != 3)
           {
               for(auto pi : se.PNums())
@@ -770,7 +773,7 @@ namespace netgen
 
         const auto & getDofs = [&] (int i)
           {
-            return elementsonpoint[i+PointIndex::BASE];
+            return elementsonpoint[PointIndex::FromNr0(i)];
           };
 
         colors.SetSize(mesh.GetNP());
@@ -781,7 +784,7 @@ namespace netgen
             ParallelForRange( Range(colors), [&](auto myrange)
                     {
                     for(auto i : myrange)
-                    creator.Add(colors[i], PointIndex(i+PointIndex::BASE));
+                    creator.Add(colors[i], PointIndex::FromNr0(i));
                     });
 
         color_table = creator.MoveTable();
@@ -797,17 +800,17 @@ namespace netgen
       continue;
       PrintDot ();
       sp1 = mesh.Point(i);
-	  
+          
       locelements.SetSize(0);
       locrots.SetSize (0);
       lochs.SetSize (0);
       surfi = surfi2 = surfi3 = 0;
-	  
+          
       for (j = 0; j < elementsonpoint[i].Size(); j++)
       {
       sei = elementsonpoint[i][j];
       const Element2d * bel = &mesh[sei];
-	      
+              
       if (!surfi)
       surfi = mesh.GetFaceDescriptor(bel->GetIndex()).SurfNr();
       else if (surfi != mesh.GetFaceDescriptor(bel->GetIndex()).SurfNr())
@@ -818,35 +821,35 @@ namespace netgen
       else
       surfi2 = mesh.GetFaceDescriptor(bel->GetIndex()).SurfNr();
       }
-	      
+              
       locelements.Append (sei);
-	      
-      if (bel->PNum(1) == i)
+              
+      if ((*bel)[0] == i)
       locrots.Append (1);
-      else if (bel->PNum(2) == i)
+      else if ((*bel)[1] == i)
       locrots.Append (2);
       else
       locrots.Append (3);
 
       if (uselocalh)
       {
-      Point3d pmid = Center (mesh.Point(bel->PNum(1)),
-      mesh.Point(bel->PNum(2)),
-      mesh.Point(bel->PNum(3)));
+      Point<3> pmid = Center (mesh.Point((*bel)[0]),
+      mesh.Point((*bel)[1]),
+      mesh.Point((*bel)[2]));
       lochs.Append (mesh.GetH(pmid));
       }
       }
-	  
+          
       if (surfi2 && !surfi3)
       {
-      Vec3d n1, n2;
+      Vec<3> n1, n2;
       GetNormalVector (surfi, sp1, n1);
       GetNormalVector (surfi2, sp1, n2);
       t1 = Cross (n1, n2);
-	      
+              
       xedge = 0;
       BFGS (xedge, edgeminf, par, 1e-6);
-	      
+              
       mesh.Point(i).X() += xedge.Get(1) * t1.X();
       mesh.Point(i).Y() += xedge.Get(1) * t1.Y();
       mesh.Point(i).Z() += xedge.Get(1) * t1.Z();
@@ -887,77 +890,77 @@ namespace netgen
       par.maxit_bfgs = 5;
       for (auto i : myrange)
         {
-	PointIndex pi = color_table[icolor][i];
-	if (mesh[pi].Type() == SURFACEPOINT)
-	  {
-	    if (multithread.terminate)
-	      return;
-	    
-	    if (elementsonpoint[pi].Size() == 0) continue;
+        PointIndex pi = color_table[icolor][i];
+        if (mesh[pi].Type() == SURFACEPOINT)
+          {
+            if (multithread.terminate)
+              return;
             
-	    ld.sp1 = mesh[pi];
-	    
-	    Element2d & hel = mesh[elementsonpoint[pi][0]];
-	    
-	    int hpi = 0;
-	    for (int j = 1; j <= hel.GetNP(); j++)
-	      if (hel.PNum(j) == pi)
-		{
-		  hpi = j;
-		  break;
-		}
+            if (elementsonpoint[pi].Size() == 0) continue;
+            
+            ld.sp1 = mesh[pi];
+            
+            Element2dRef hel = mesh[elementsonpoint[pi][0]];
+            
+            int hpi = 0;
+            for (int j = 1; j <= hel.GetNP(); j++)
+              if (hel.PNum(j) == pi)
+                {
+                  hpi = j;
+                  break;
+                }
 
-	    ld.gi1 = hel.GeomInfoPi(hpi);
-	    // SelectSurfaceOfPoint (ld.sp1, ld.gi1);
-	  
-	    ld.locelements.SetSize(0);
-	    ld.locrots.SetSize (0);
-	    ld.lochs.SetSize (0);
+            ld.gi1 = hel.GeomInfoPi(hpi);
+            // SelectSurfaceOfPoint (ld.sp1, ld.gi1);
+          
+            ld.locelements.SetSize(0);
+            ld.locrots.SetSize (0);
+            ld.lochs.SetSize (0);
             ld.loc_pnts2.SetSize (0);
             ld.loc_pnts3.SetSize (0);
 
-	    for (int j = 0; j < elementsonpoint[pi].Size(); j++)
-	      {
-		SurfaceElementIndex sei = elementsonpoint[pi][j];
-		const Element2d & bel = mesh[sei];
-		ld.surfi = mesh.GetFaceDescriptor(bel.GetIndex()).SurfNr();
-		
-		ld.locelements.Append (sei);
-		
-		for (int k = 1; k <= bel.GetNP(); k++)
-		  if (bel.PNum(k) == pi)
-		    {
-		      ld.locrots.Append (k);
+            for (int j = 0; j < elementsonpoint[pi].Size(); j++)
+              {
+                SurfaceElementIndex sei = elementsonpoint[pi][j];
+                const Element2dRef & bel = mesh[sei];
+                ld.surfi = mesh.GetFaceDescriptor(bel.GetIndex()).SurfNr();
+                
+                ld.locelements.Append (sei);
+                
+                for (int k = 1; k <= bel.GetNP(); k++)
+                  if (bel.PNum(k) == pi)
+                    {
+                      ld.locrots.Append (k);
                       ld.loc_pnts2.Append (mesh[bel.PNumMod(k + 1)]);
                       ld.loc_pnts3.Append (mesh[bel.PNumMod(k + 2)]);
-		      break;
-		    }
-		
-		if (ld.uselocalh)
-		  {
-		    Point3d pmid = Center (mesh[bel[0]], mesh[bel[1]], mesh[bel[2]]);
-		    ld.lochs.Append (mesh.GetH(pmid));
-		  }
-	      }
+                      break;
+                    }
+                
+                if (ld.uselocalh)
+                  {
+                    Point<3> pmid = Center (mesh[bel[0]], mesh[bel[1]], mesh[bel[2]]);
+                    ld.lochs.Append (mesh.GetH(pmid, mesh[pi].GetLayer()));
+                  }
+              }
 
 
           ld.normal = geo.GetNormal(ld.surfi, ld.sp1, &ld.gi1);
-	  ld.t1 = ld.normal.GetNormal ();
-	  ld.t2 = Cross (ld.normal, ld.t1);
-	  
+          ld.t1 = ld.normal.GetNormal ();
+          ld.t2 = Cross (ld.normal, ld.t1);
+          
           if(mixed)
             {
               // save points, and project to tangential plane (only for optimization with Opti2SurfaceMinFunctionJacobian in mixed element meshes)
               for (int j = 0; j < ld.locelements.Size(); j++)
                 {
-                  const Element2d & el = mesh[ld.locelements[j]];
+                  const Element2dRef & el = mesh[ld.locelements[j]];
                   for (int k = 0; k < el.GetNP(); k++)
                     savepoints[el[k]] = mesh[el[k]];
                 }
 
               for (int j = 0; j < ld.locelements.Size(); j++)
                 {
-                  const Element2d & el = mesh[ld.locelements[j]];
+                  const Element2dRef & el = mesh[ld.locelements[j]];
                   for (int k = 0; k < el.GetNP(); k++)
                     {
                       PointIndex hhpi = el[k];
@@ -966,10 +969,10 @@ namespace netgen
                     }
                 }
             }
-	  
+          
           Vector x(2);
-	  x = 0;
-	  par.typx = 0.3*ld.lochs[0];
+          x = 0;
+          par.typx = 0.3*ld.lochs[0];
 
           // NgProfiler::StartTimer (timer2);
 
@@ -977,17 +980,17 @@ namespace netgen
 
           // NgProfiler::StopTimer (timer2);
 
-	  auto origp = mesh[pi];
-	  int loci = 1;
-	  double fact = 1;
-	  int moveisok = 0;
+          auto origp = mesh[pi];
+          int loci = 1;
+          double fact = 1;
+          int moveisok = 0;
 
           if(mixed)
             {
               // restore other points
               for (int j = 0; j < ld.locelements.Size(); j++)
                 {
-                  const Element2d & el = mesh[ld.locelements[j]];
+                  const Element2dRef & el = mesh[ld.locelements[j]];
                   for (int k = 0; k < el.GetNP(); k++)
                     {
                       PointIndex hhpi = el[k];
@@ -996,43 +999,43 @@ namespace netgen
                 }
             }
 
-	  
-	  //optimizer loop (if whole distance is not possible, move only a bit!!!!)
-	  while (loci <= 5 && !moveisok)
-	    {
-	      loci ++;
+          
+          //optimizer loop (if whole distance is not possible, move only a bit!!!!)
+          while (loci <= 5 && !moveisok)
+            {
+              loci ++;
               /*
-	      mesh[pi].X() = origp.X() + (x.Get(1) * t1.X() + x.Get(2) * t2.X())*fact;
-	      mesh[pi].Y() = origp.Y() + (x.Get(1) * t1.Y() + x.Get(2) * t2.Y())*fact;
-	      mesh[pi].Z() = origp.Z() + (x.Get(1) * t1.Z() + x.Get(2) * t2.Z())*fact;
+              mesh[pi].X() = origp.X() + (x.Get(1) * t1.X() + x.Get(2) * t2.X())*fact;
+              mesh[pi].Y() = origp.Y() + (x.Get(1) * t1.Y() + x.Get(2) * t2.Y())*fact;
+              mesh[pi].Z() = origp.Z() + (x.Get(1) * t1.Z() + x.Get(2) * t2.Z())*fact;
               */
               Vec<3> hv = x(0) * ld.t1 + x(1) * ld.t2;
-              Point3d hnp = origp + Vec3d (hv);
-              mesh[pi](0) = hnp.X();
-              mesh[pi](1) = hnp.Y();
-              mesh[pi](2) = hnp.Z();
+              Point<3> hnp = origp + Vec<3> (hv);
+              mesh[pi](0) = hnp(0);
+              mesh[pi](1) = hnp(1);
+              mesh[pi](2) = hnp(2);
 
-	      fact = fact/2.;
+              fact = fact/2.;
 
-	      // ProjectPoint (surfi, mesh[pi]);
-	      // moveisok = CalcPointGeomInfo(surfi, ngi, mesh[pi]); 
+              // ProjectPoint (surfi, mesh[pi]);
+              // moveisok = CalcPointGeomInfo(surfi, ngi, mesh[pi]); 
 
-	      PointGeomInfo ngi;
-	      ngi = ld.gi1;
-	      moveisok = geo.ProjectPointGI(ld.surfi, mesh[pi], ngi);
-	      // point lies on same chart in stlsurface
-	    
-	      if (moveisok)
-		{
-		  for (int j = 0; j < ld.locelements.Size(); j++)
-		    mesh[ld.locelements[j]].GeomInfoPi(ld.locrots[j]) = ngi;
-		}
-	      else
-		{
-		  mesh[pi] = origp;
-		}
-	    
-	    }
+              PointGeomInfo ngi;
+              ngi = ld.gi1;
+              moveisok = geo.ProjectPointGI(ld.surfi, mesh[pi], ngi);
+              // point lies on same chart in stlsurface
+            
+              if (moveisok)
+                {
+                  for (int j = 0; j < ld.locelements.Size(); j++)
+                    mesh[ld.locelements[j]].GeomInfoPi(ld.locrots[j]) = ngi;
+                }
+              else
+                {
+                  mesh[pi] = origp;
+                }
+            
+            }
           }
         }
       }, mixed ? 1 : ngcore::TasksPerThread(4)); // mixed element smoothing not parallel yet

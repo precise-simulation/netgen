@@ -10,14 +10,14 @@ namespace netgen
   class VisualScene
   {
   protected:
-    static NGGUI_API Point3d center;
+    static NGGUI_API Point<3> center;
     static NGGUI_API double rad;
 
     static double lookatmat[16];
     static double transmat[16];
     static double rotmat[16];
     static double centermat[16];
-	
+        
     static NGGUI_API double transformationmat[16];
 
     GLdouble clipplane[4];
@@ -52,8 +52,8 @@ namespace netgen
   
     NGGUI_API void CalcTransformationMatrices();
     NGGUI_API void StandardRotation (const char * dir);
-    NGGUI_API void ArbitraryRotation (const NgArray<double> & alpha, const NgArray<Vec3d> & vec);
-    NGGUI_API void ArbitraryRotation (const double alpha, const Vec3d & vec);
+    NGGUI_API void ArbitraryRotation (const Array<double> & alpha, const Array<Vec<3>> & vec);
+    NGGUI_API void ArbitraryRotation (const double alpha, const Vec<3> & vec);
 
     NGGUI_API virtual void MouseMove(int oldx, int oldy,
                                       int newx, int newy,
@@ -77,7 +77,7 @@ namespace netgen
     NGGUI_API void DrawMarker();
     NGGUI_API void DrawNetgenLogo ();
     NGGUI_API void SetOpenGlColor(double val, double valmin, double valmax, int logscale = 0);
-	
+        
 
 #ifdef PARALLELGL
     NGGUI_API void InitParallelGL ();
@@ -106,9 +106,9 @@ namespace netgen
   {
     double scalex = 1., scaley = 1., shiftx = 0., shifty = 0.;
   public:
-    shared_ptr<NgArray<Point<3>>> locpointsptr;
-    shared_ptr<NgArray<INDEX_2>> loclinesptr;
-    shared_ptr<NgArray<Point<2>>> plainpointsptr;
+    shared_ptr<Array<Point<3>, LocalPointIndex>> locpointsptr;
+    shared_ptr<Array<IVec<2,LocalPointIndex>>> loclinesptr;
+    shared_ptr<Array<Point<2>, LocalPointIndex>> plainpointsptr;
     int oldnl;
     bool clearptr;
     VisualSceneSurfaceMeshing ();
@@ -210,13 +210,13 @@ namespace netgen
     VisualSelect select;
 
 #ifdef PARALLELGL
-    NgArray<int> par_linelists;
-    NgArray<int> par_filledlists;
+    Array<int> par_linelists;
+    Array<int> par_filledlists;
 #endif
 
     MouseEventHandler * user_me_handler;
 
-    NgLock *lock;
+    std::unique_lock<std::mutex> lock;
 
     //  int selface, selelement;
     //  int selpoint, selpoint2, locpi;
@@ -227,11 +227,11 @@ namespace netgen
 
   public:
     NGGUI_API VisualSceneMesh ();
-	NGGUI_API virtual ~VisualSceneMesh ();
+        NGGUI_API virtual ~VisualSceneMesh ();
 
-	NGGUI_API virtual void BuildScene (int zoomall = 0);
-	NGGUI_API virtual void DrawScene ();
-	NGGUI_API virtual void MouseDblClick (int px, int py);
+        NGGUI_API virtual void BuildScene (int zoomall = 0);
+        NGGUI_API virtual void DrawScene ();
+        NGGUI_API virtual void MouseDblClick (int px, int py);
 
     NGGUI_API void SetMesh (shared_ptr<Mesh> m) { mesh = m; }
     NGGUI_API shared_ptr<Mesh> GetMesh () const { return mesh; }
@@ -240,16 +240,16 @@ namespace netgen
     { user_me_handler = handler; }
 
 
-	NGGUI_API int SelectedFace () const
+        NGGUI_API int SelectedFace () const
     { return selface; }
-	NGGUI_API void SetSelectedFace (int asf);
+        NGGUI_API void SetSelectedFace (int asf);
     //    { selface = asf; selecttimestamp = GetTimeStamp(); }
 
-	NGGUI_API int SelectedEdge () const
+        NGGUI_API int SelectedEdge () const
     { return seledge; }
-	NGGUI_API int SelectedElement () const
+        NGGUI_API int SelectedElement () const
     { return selelement; }
-	NGGUI_API int SelectedPoint () const
+        NGGUI_API PointIndex SelectedPoint () const
     { return selpoint; }
     void BuildFilledList (bool select);
     void BuildColorTexture();
@@ -259,10 +259,10 @@ namespace netgen
     void BuildEdgeList();
     void BuildPointNumberList();
 
-    void BuildTetList(const BitArray & shownode);
-    void BuildPrismList(const BitArray & shownode);
-    void BuildPyramidList(const BitArray & shownode);
-    void BuildHexList(const BitArray & shownode);
+    void BuildTetList(const TBitArray<PointIndex> & shownode);
+    void BuildPrismList(const TBitArray<PointIndex> & shownode);
+    void BuildPyramidList(const TBitArray<PointIndex> & shownode);
+    void BuildHexList(const TBitArray<PointIndex> & shownode);
 
     void BuildBadelList();
     void BuildIdentifiedList();
@@ -304,7 +304,7 @@ namespace netgen
   void MouseDblClickSelect (const int px, const int py,
                             const GLdouble * clipplane, const GLdouble backcolor,
                             const double * transformationmat,
-                            const Point3d & center,
+                            const Point<3> & center,
                             const double rad,
                             const int displaylist,
                             int & selelement, int & selface, int & seledge, PointIndex & selpoint,

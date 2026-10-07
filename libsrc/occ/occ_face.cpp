@@ -5,6 +5,7 @@
 #include <BRep_Tool.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <BRepLProp_SLProps.hxx>
+#include <ShapeAnalysis.hxx>
 
 #pragma clang diagnostic pop
 
@@ -95,10 +96,24 @@ namespace netgen
                 throw Exception("have edge more than twice in face " + ToString(nr) + " " + properties.GetName() + ", orientation: " + ToString(orientation));
         }
 
+        auto n_faces = static_cast<int>(geom.GetNFaces());
+
+        double umin, umax, vmin, vmax;
+        ShapeAnalysis::GetFaceUVBounds (face, umin, umax, vmin, vmax);
+        double du = 0.01*(umax-umin), dv = 0.01*(vmax-vmin);
+
         Array<Segment> boundary;
         for (auto seg : mesh.LineSegments())
         {
-            auto edgenr = seg.epgeominfo[0].edgenr;
+            const auto & ed = mesh.GetEdgeDescriptor(seg.GetIndex());
+            auto edgenr = ed.EdgeNr() - 1;
+            if(edgenr < 0 || edgenr >= n_edges)
+                continue;  // not on an edge of the geometry, handled below
+
+            if((ed.SurfNr(0) > n_faces || ed.SurfNr(1) > n_faces) &&
+               ed.SurfNr(0) != nr+1 && ed.SurfNr(1) != nr+1)
+                continue;
+
             auto orientation = edge_orientation[edgenr];
 
             if(orientation == UNUSED)
@@ -114,7 +129,7 @@ namespace netgen
                 double s0, s1;
                 auto cof = BRep_Tool::CurveOnSurface (edge, face, s0, s1);
 
-                double s[2] = { seg.epgeominfo[0].dist, seg.epgeominfo[1].dist };
+                double s[2] = { seg.EPGeomInfo(0).dist, seg.EPGeomInfo(1).dist };
 
                 // dist is in [0,1], map parametrization to [s0, s1]
                 s[0] = s0 + s[0]*(s1-s0);
@@ -135,24 +150,55 @@ namespace netgen
                     gi.v = uv.Y();
                     Point<3> pproject = mesh[seg[i]];
                     ProjectPointGI(pproject, gi);
-                    seg.epgeominfo[i].u = gi.u;
-                    seg.epgeominfo[i].v = gi.v;
+                    // points off the surface (large vertex tolerance) may project outside the face
+                    if(gi.u < umin-du || gi.u > umax+du || gi.v < vmin-dv || gi.v > vmax+dv)
+                      {
+                        gi.u = uv.X();
+                        gi.v = uv.Y();
+                      }
+                    seg.GeomInfo(i).u = gi.u;
+                    seg.GeomInfo(i).v = gi.v;
                 }
 
                 bool do_swap = ORIENTATION == REVERSED;
-                if(seg.epgeominfo[1].dist < seg.epgeominfo[0].dist)
+                if(seg.EPGeomInfo(1).dist < seg.EPGeomInfo(0).dist)
                   do_swap = !do_swap;
 
                 if(do_swap)
                 {
                     swap(seg[0], seg[1]);
-                    swap(seg.epgeominfo[0].dist, seg.epgeominfo[1].dist);
-                    swap(seg.epgeominfo[0].u, seg.epgeominfo[1].u);
-                    swap(seg.epgeominfo[0].v, seg.epgeominfo[1].v);
+                    swap(seg.EPGeomInfo(0).dist, seg.EPGeomInfo(1).dist);
+                    swap(seg.GeomInfo(0).u, seg.GeomInfo(1).u);
+                    swap(seg.GeomInfo(0).v, seg.GeomInfo(1).v);
                 }
 
                 boundary.Append(seg);
             }
+        }
+
+        for (auto seg : mesh.LineSegments())
+        {
+            const auto & ed = mesh.GetEdgeDescriptor(seg.GetIndex());
+            auto edgenr = ed.EdgeNr() - 1;
+            if(edgenr >= 0 && edgenr < n_edges)
+                continue;
+
+            bool forward = ed.SurfNr(0) == nr+1;
+            bool reversed = ed.SurfNr(1) == nr+1;
+            if(forward == reversed)
+                continue;  // not adjacent to this face, or interior to it
+
+            if(reversed)
+            {
+                swap(seg[0], seg[1]);
+                swap(seg.EPGeomInfo(0), seg.EPGeomInfo(1));
+            }
+            for(auto i : Range(2))
+            {
+                Point<3> p = mesh[seg[i]];
+                seg.GeomInfo(i) = Project(p);
+            }
+            boundary.Append(seg);
         }
         return boundary;
     }

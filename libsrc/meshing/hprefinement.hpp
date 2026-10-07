@@ -17,6 +17,8 @@
 namespace netgen
 {
 
+class Mesh;
+
 
 enum HPREF_ELEMENT_TYPE {
   HP_NONE=0,
@@ -289,22 +291,22 @@ private:
 
 public:
   HPRefElement (); 
-  HPRefElement(Element & el);
-  HPRefElement(Element2d & el);
-  HPRefElement(Segment & el);	
+  HPRefElement(const ElementRef & el);
+  HPRefElement(Element2dRef el);
+  HPRefElement(Segment & el, const Mesh & mesh);        
   HPRefElement(HPRefElement & el);
 
   void SetType( HPREF_ELEMENT_TYPE t);
   // HPRefElement(HPRefElement & el, HPREF_ELEMENT_TYPE t); 
-	       
+               
   /* HPRefElement(HPRefElement & el, HPREF_ELEMENT_TYPE t)
   { 
     type = t; 
     HPRef_Struct * hprs = Get_HPRef_Struct(t);
     for (int i=0; i<np ; i++) 
       {
-	pnums[i] = el[i];
-	for(int l=0; l<np; l++) param[i][l] = el.param[i][l]; 
+        pnums[i] = el[i];
+        for(int l=0; l<np; l++) param[i][l] = el.param[i][l]; 
       }
     switch(hprs->geom)
       {
@@ -329,20 +331,22 @@ public:
   HPREF_ELEMENT_TYPE type;
   PointIndex pnums[8];
   double param[8][3];
-  int index;
+  AnyRegionIndex index;
   // int si;
   int edgenr;
   int levelx;
   int levely;
   int levelz;
   int np; 
-  int coarse_elnr;  // issue (JS): same class is for ElementIndex, SurfaceElementIndex, SegmentIndex 
+  /// the coarse element this one came from; which kind it is
+  /// follows from the element type, so narrowing is explicit
+  AnyElementIndex coarse_elnr;
   int domin, domout; // he: needed for segment!! in 3d there should be surf1, surf2!!
   // int coarse_hpelnr; 
   PointIndex & operator[](int i) { return(pnums[i]);}
   PointIndex & PNumMod(int i) { return pnums[(i-1) % np]; };
   PointIndex & PNum(int i) {return pnums[(i-1)]; };
-  int GetIndex () const { return index; }; 
+  AnyRegionIndex GetIndex () const { return index; }
   double singedge_left, singedge_right; 
   auto PNums() const { return FlatArray<const PointIndex>(np, &pnums[0]); }
 
@@ -354,10 +358,10 @@ public:
 enum SplittingType { SPLIT_HP, SPLIT_ALFELD, SPLIT_POWELL};
 
 DLL_HEADER extern void HPRefinement (Mesh & mesh, Refinement * ref, SplittingType split, int levels,
-			  double fac1=0.125, bool setorders=true, bool ref_level = false);
+                          double fac1=0.125, bool setorders=true, bool ref_level = false);
 
 inline void HPRefinement (Mesh & mesh, Refinement * ref, int levels,
-			  double fac1=0.125, bool setorders=true, bool ref_level = false)
+                          double fac1=0.125, bool setorders=true, bool ref_level = false)
 {
   HPRefinement (mesh, ref, SPLIT_HP, levels, fac1, setorders, ref_level);
 }

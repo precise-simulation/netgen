@@ -40,6 +40,9 @@ namespace ngcore
   template <> struct MPI_typetrait<double> {
     static NG_MPI_Datatype MPIType () { return NG_MPI_DOUBLE; } };
 
+  template <> struct MPI_typetrait<float> {
+    static NG_MPI_Datatype MPIType () { return NG_MPI_FLOAT; } };
+
   template <> struct MPI_typetrait<std::complex<double>> {
     static NG_MPI_Datatype MPIType () { return NG_MPI_CXX_DOUBLE_COMPLEX; } };
 
@@ -54,10 +57,10 @@ namespace ngcore
     { 
       static NG_MPI_Datatype NG_MPI_T = 0;
       if (!NG_MPI_T)
-	{
-	  NG_MPI_Type_contiguous ( S, MPI_typetrait<T>::MPIType(), &NG_MPI_T);
-	  NG_MPI_Type_commit ( &NG_MPI_T );
-	}
+        {
+          NG_MPI_Type_contiguous ( S, MPI_typetrait<T>::MPIType(), &NG_MPI_T);
+          NG_MPI_Type_commit ( &NG_MPI_T );
+        }
       return NG_MPI_T;
     }
   };

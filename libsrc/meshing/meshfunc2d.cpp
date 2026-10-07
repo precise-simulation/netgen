@@ -4,19 +4,20 @@
 namespace netgen
 {
 
-  DLL_HEADER void Optimize2d (Mesh & mesh, MeshingParameters & mp, int faceindex)
+  DLL_HEADER void Optimize2d (Mesh & mesh, MeshingParameters & mp, FaceRegionIndex faceindex)
   {
     static Timer timer("optimize2d"); RegionTimer reg(timer);
 
     mesh.CalcSurfacesOfNode();
 
+    mesh.ComputeNVertices();
     bool secondorder = mesh.GetNP() > mesh.GetNV();
 
 
     if (secondorder)
       {
-      for (SurfaceElementIndex ei = 0; ei < mesh.GetNSE(); ei++)
-        mesh[ei].SetType(TRIG);
+      for (auto el : mesh.SurfaceElements())
+        el.SetType(TRIG);
       }
     mesh.Compress();
 
@@ -26,14 +27,14 @@ namespace netgen
       bool mixed = false;
       ParallelFor( Range(mesh.GetNSE()), [&] (auto i) NETGEN_LAMBDA_INLINE
           {
-            if (mesh[SurfaceElementIndex(i)].GetNP() != 3)
+            if (mesh[SurfaceElementIndex::FromNr0(i)].GetNP() != 3)
                 mixed = true;
           });
       if(mixed)
         optimize_swap_separate_faces = true;
     }
 
-    if(faceindex)
+    if(faceindex.IsValid())
       optimize_swap_separate_faces = false;
 
     const char * optstr = mp.optimize2d.c_str();
@@ -42,22 +43,22 @@ namespace netgen
     // reset topology
     mesh.GetTopology() = MeshTopology(mesh);
     for (int i = 1; i <= optsteps; i++)
-      for (size_t j = 1; j <= strlen(optstr); j++)
-	{
-	  if (multithread.terminate) break;
+      for (size_t j = 0; j < strlen(optstr); j++)
+        {
+          if (multithread.terminate) break;
           MeshOptimize2d meshopt(mesh);
           meshopt.SetMetricWeight (mp.elsizeweight);
           meshopt.SetFaceIndex(faceindex);
-	  switch (optstr[j-1])
-	    {
-	    case 's': 
-	      {  // topological swap
+          switch (optstr[j])
+            {
+            case 's': 
+              {  // topological swap
 
                 if(optimize_swap_separate_faces)
                 {
-                  for(auto i : Range(1, mesh.GetNFD()+1))
+                  for(auto fi : mesh.Regions<2>().Range())
                   {
-                    meshopt.SetFaceIndex(i);
+                    meshopt.SetFaceIndex(fi);
                     meshopt.EdgeSwapping (0);
                   }
                 }
@@ -65,15 +66,15 @@ namespace netgen
                 {
                   meshopt.EdgeSwapping (0);
                 }
-		break;
-	      }
-	    case 'S': 
-	      {  // metric swap
+                break;
+              }
+            case 'S': 
+              {  // metric swap
                 if(optimize_swap_separate_faces)
                 {
-                  for(auto i : Range(1, mesh.GetNFD()+1))
+                  for(auto fi : mesh.Regions<2>().Range())
                   {
-                    meshopt.SetFaceIndex(i);
+                    meshopt.SetFaceIndex(fi);
                     meshopt.EdgeSwapping (1);
                   }
                 }
@@ -81,22 +82,22 @@ namespace netgen
                 {
                   meshopt.EdgeSwapping (1);
                 }
-		break;
-	      }
-	    case 'm': 
-	      {
-		meshopt.ImproveMesh(mp);
-		break;
-	      }
-	    case 'c': 
-	      {
-		meshopt.CombineImprove();
-		break;
-	      }
-	    default:
-	      cerr << "Optimization code " << optstr[j-1] << " not defined" << endl;
-	    }  
-	}
+                break;
+              }
+            case 'm': 
+              {
+                meshopt.ImproveMesh(mp);
+                break;
+              }
+            case 'c': 
+              {
+                meshopt.CombineImprove();
+                break;
+              }
+            default:
+              cerr << "Optimization code " << optstr[j] << " not defined" << endl;
+            }  
+        }
     mesh.Compress(); // better: compress in individual steps, if necessary
     if (secondorder)
       {

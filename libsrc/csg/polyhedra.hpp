@@ -35,13 +35,13 @@ namespace netgen
 
       Face () { ; }
       Face (int pi1, int pi2, int pi3, 
-	    const NgArray<Point<3> > & points,
-	    int ainputnr);
+            const Array<Point<3> > & points,
+            int ainputnr);
     };
 
-    NgArray<Point<3> > points;
-    NgArray<Face> faces;
-    NgArray<Plane*> planes;
+    Array<Point<3> > points;
+    Array<Face> faces;
+    Array<Plane*> planes;
     Box<3> poly_bbox;
 
     double eps_base1;
@@ -53,44 +53,44 @@ namespace netgen
 
     virtual INSOLID_TYPE BoxInSolid (const BoxSphere<3> & box) const override;
     virtual INSOLID_TYPE PointInSolid (const Point<3> & p,
-				       double eps) const override;
+                                       double eps) const override;
     virtual INSOLID_TYPE VecInSolidNew (const Point<3> & p,
                                         const Vec<3> & v,
                                         double eps, bool printing = false) const;
     virtual INSOLID_TYPE VecInSolidOld (const Point<3> & p,
-				     const Vec<3> & v,
-				     double eps) const;
+                                     const Vec<3> & v,
+                                     double eps) const;
     
     virtual INSOLID_TYPE VecInSolid (const Point<3> & p,
-				     const Vec<3> & v,
-				     double eps) const override;
+                                     const Vec<3> & v,
+                                     double eps) const override;
 
     virtual INSOLID_TYPE VecInSolid2 (const Point<3> & p,
-				      const Vec<3> & v1,
-				      const Vec<3> & v2,
-				      double eps) const override;
+                                      const Vec<3> & v1,
+                                      const Vec<3> & v2,
+                                      double eps) const override;
     
     virtual INSOLID_TYPE VecInSolid3 (const Point<3> & p,
-				      const Vec<3> & v1,
-				      const Vec<3> & v2,
-				      double eps) const override;
+                                      const Vec<3> & v1,
+                                      const Vec<3> & v2,
+                                      double eps) const override;
 
     virtual INSOLID_TYPE VecInSolid4 (const Point<3> & p,
-				      const Vec<3> & v,
-				      const Vec<3> & v2,
-				      const Vec<3> & m,
-				      double eps) const override;
+                                      const Vec<3> & v,
+                                      const Vec<3> & v2,
+                                      const Vec<3> & m,
+                                      double eps) const override;
     
     virtual void GetTangentialSurfaceIndices (const Point<3> & p, 
-					      NgArray<int> & surfind, double eps) const override;
+                                              Array<int> & surfind, double eps) const override;
 
 
     virtual void GetTangentialVecSurfaceIndices2 (const Point<3> & p, const Vec<3> & v1, const Vec<3> & v2,
-						  NgArray<int> & surfind, double eps) const override;
+                                                  Array<int> & surfind, double eps) const override;
 
-    virtual void CalcSpecialPoints (NgArray<Point<3> > & pts) const override;
+    virtual void CalcSpecialPoints (Array<Point<3> > & pts) const override;
     virtual void AnalyzeSpecialPoint (const Point<3> & pt, 
-				      NgArray<Point<3> > & specpts) const override;
+                                      Array<Point<3> > & specpts) const override;
     virtual Vec<3> SpecialPointTangentialVector (const Point<3> & p, int s1, int s2) const override;
 
     virtual int GetNSurfaces() const override
@@ -100,8 +100,8 @@ namespace netgen
     virtual const Surface & GetSurface (int i) const override
     { return *planes[i]; }
 
-    virtual void GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const override;
-    virtual void SetPrimitiveData (NgArray<double> & coeffs) override;
+    virtual void GetPrimitiveData (const char *& classname, Array<double> & coeffs) const override;
+    virtual void SetPrimitiveData (Array<double> & coeffs) override;
 
     virtual void Reduce (const BoxSphere<3> & box) override;
     virtual void UnReduce () override;
@@ -109,7 +109,7 @@ namespace netgen
     int AddPoint (const Point<3> & p);
     int AddFace (int pi1, int pi2, int pi3, int inputnum);
 
-    void GetPolySurfs(NgArray < NgArray<int> * > & polysurfs);
+    void GetPolySurfs(Array < Array<int> * > & polysurfs);
   
   protected:
     int FaceBoxIntersection (int fnr, const BoxSphere<3> & box) const;

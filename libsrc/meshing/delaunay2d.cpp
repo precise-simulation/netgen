@@ -326,7 +326,7 @@ namespace netgen
   {
       auto mesh = make_unique<Mesh>();
       Mesh & m = *mesh;
-      m.AddFaceDescriptor (FaceDescriptor (1, 1, 0, 0));
+      m.AddFaceDescriptor (FaceRegion (1, 1, 0, 0));
       for(auto pi : points.Range())
           m.AddPoint(P3(points[pi]));
 
@@ -340,7 +340,7 @@ namespace netgen
         if (n(2) < 0) Swap (trig[1], trig[2]);
 
         Element2d el(trig[0], trig[1], trig[2]);
-        el.SetIndex (1);
+        el.SetIndex (FaceRegionIndex::FromNr1(1));
         m.AddSurfaceElement (el);
       }
       m.Compress();
@@ -370,7 +370,7 @@ namespace netgen
     
     PrintMessage (6, "blockfill local h");
 
-    NgArray<Point<3> > npoints;
+    Array<Point<3> > npoints;
     
     // adfront -> CreateTrees();
 
@@ -379,15 +379,15 @@ namespace netgen
     
     for (int i = 0; i < adfront.GetNFL(); i++)
       {
-	const FrontLine & line = adfront.GetLine (i);
+        const FrontLine & line = adfront.GetLine (i);
 
-	const Point<3> & p1 = adfront.GetPoint(line.L().I1());
-	const Point<3> & p2 = adfront.GetPoint(line.L().I2());
-	
+        const Point<3> & p1 = adfront.GetPoint(line.L()[0]);
+        const Point<3> & p2 = adfront.GetPoint(line.L()[1]);
+        
         maxh = max (maxh, Dist (p1, p2));
-	
-	bbox.Add (p1);
-	bbox.Add (p2);
+        
+        bbox.Add (p1);
+        bbox.Add (p2);
       }
 
     
@@ -410,39 +410,39 @@ namespace netgen
         tcf.Start();
         // mesh.LocalHFunction().ClearFlags();
         mesh.LocalHFunction().ClearRootFlags();
-	tcf.Stop();
+        tcf.Stop();
         
         static Timer tcut("tcut");
         tcut.Start();
-	for (int i = 0; i < adfront.GetNFL(); i++)
-	  {
-	    const FrontLine & line = adfront.GetLine(i);
-	    
-	    Box<3> bbox (adfront.GetPoint (line.L().I1()));
-	    bbox.Add (adfront.GetPoint (line.L().I2()));
+        for (int i = 0; i < adfront.GetNFL(); i++)
+          {
+            const FrontLine & line = adfront.GetLine(i);
+            
+            Box<3> bbox (adfront.GetPoint (line.L()[0]));
+            bbox.Add (adfront.GetPoint (line.L()[1]));
 
-	    
-	    double filld = filldist * bbox.Diam();
-	    bbox.Increase (filld);
-	    
-	    mesh.LocalHFunction().CutBoundary (bbox); 
-	  }
-	tcut.Stop();
+            
+            double filld = filldist * bbox.Diam();
+            bbox.Increase (filld);
+            
+            mesh.LocalHFunction().CutBoundary (bbox); 
+          }
+        tcut.Stop();
 
-	mesh.LocalHFunction().FindInnerBoxes (adfront, NULL);
-	
-	npoints.SetSize(0);
-	mesh.LocalHFunction().GetInnerPoints (npoints);
+        mesh.LocalHFunction().FindInnerBoxes (adfront, NULL);
+        
+        npoints.SetSize(0);
+        mesh.LocalHFunction().GetInnerPoints (npoints);
 
-	changed = false;
-	for (int i = 0; i < npoints.Size(); i++)
-	  {
-	    if (mesh.LocalHFunction().GetH(npoints[i]) > 1.2 * maxh)
-	      {
-		mesh.LocalHFunction().SetH (npoints[i], maxh);
-		changed = true;
-	      }
-	  }
+        changed = false;
+        for (int i = 0; i < npoints.Size(); i++)
+          {
+            if (mesh.LocalHFunction().GetH(npoints[i]) > 1.2 * maxh)
+              {
+                mesh.LocalHFunction().SetH (npoints[i], maxh);
+                changed = true;
+              }
+          }
       }
     while (changed);
 
@@ -473,24 +473,24 @@ namespace netgen
       {
         size_t hi = (size_t(prim) * size_t(i)) % npoints.Size();
         
-	if (meshbox.IsIn (npoints[hi]))
-	  {
-	    PointIndex gpnum = mesh.AddPoint (npoints[hi]);
-	    adfront.AddPoint (npoints[hi], gpnum);
-	    
-	    if (debugparam.slowchecks)
-	      {
-		(*testout) << npoints[hi] << endl;
+        if (meshbox.IsIn (npoints[hi]))
+          {
+            PointIndex gpnum = mesh.AddPoint (npoints[hi]);
+            adfront.AddPoint (npoints[hi], gpnum);
+            
+            if (debugparam.slowchecks)
+              {
+                (*testout) << npoints[hi] << endl;
 
-		Point<2> p2d (npoints[hi](0), npoints[hi](1));
-		if (!adfront.Inside(p2d))
-		  {
-		    cout << "add outside point" << endl;
-		    (*testout) << "outside" << endl;
-		  }
-	      }
-	    
-	  }
+                Point<2> p2d (npoints[hi](0), npoints[hi](1));
+                if (!adfront.Inside(p2d))
+                  {
+                    cout << "add outside point" << endl;
+                    (*testout) << "outside" << endl;
+                  }
+              }
+            
+          }
       }
     
     timer3.Stop();
@@ -503,24 +503,24 @@ namespace netgen
 
     for (int i = 0; i < adfront.GetNFL(); i++)
       {
-	const FrontLine & line = adfront.GetLine(i);
-	
-	Box<3> bbox (adfront.GetPoint (line.L().I1()));
-	bbox.Add (adfront.GetPoint (line.L().I2()));
-	
-	loch2.SetH (bbox.Center(), bbox.Diam());
+        const FrontLine & line = adfront.GetLine(i);
+        
+        Box<3> bbox (adfront.GetPoint (line.L()[0]));
+        bbox.Add (adfront.GetPoint (line.L()[1]));
+        
+        loch2.SetH (bbox.Center(), bbox.Diam());
       }
 
 
     for (int i = 0; i < adfront.GetNFL(); i++)
       {
-	const FrontLine & line = adfront.GetLine(i);
-	
-	Box<3> bbox (adfront.GetPoint (line.L().I1()));
-	bbox.Add (adfront.GetPoint (line.L().I2()));
+        const FrontLine & line = adfront.GetLine(i);
+        
+        Box<3> bbox (adfront.GetPoint (line.L()[0]));
+        bbox.Add (adfront.GetPoint (line.L()[1]));
 
-	bbox.Increase (filldist * bbox.Diam());
-	loch2.CutBoundary (bbox);
+        bbox.Increase (filldist * bbox.Diam());
+        loch2.CutBoundary (bbox);
       }
     
     loch2.FindInnerBoxes (adfront, NULL);
@@ -532,11 +532,11 @@ namespace netgen
     /*
     for (int i = 1; i <= npoints.Size(); i++)
       {
-	if (meshbox.IsIn (npoints.Get(i)))
-	  {
-	    PointIndex gpnum = mesh.AddPoint (npoints.Get(i));
-	    adfront.AddPoint (npoints.Get(i), gpnum);
-	  }
+        if (meshbox.IsIn (npoints.Get(i)))
+          {
+            PointIndex gpnum = mesh.AddPoint (npoints.Get(i));
+            adfront.AddPoint (npoints.Get(i), gpnum);
+          }
       }  
     */
 
@@ -575,7 +575,7 @@ namespace netgen
 
     for (int i = 0; i < adfront.GetNFL(); i++)
       {
-	const FrontLine & line = adfront.GetLine(i);
+        const FrontLine & line = adfront.GetLine(i);
         bbox.Add (P2(Point<3> (adfront.GetPoint (line.L()[0]))));
         bbox.Add (P2(Point<3> (adfront.GetPoint (line.L()[1]))));
       }
@@ -593,9 +593,8 @@ namespace netgen
     Array<PointIndex> addpoints;
     add_point.Clear();
     /*
-    for (SegmentIndex si = 0; si < mesh.GetNSeg(); si++)
+    for (auto & s : mesh.LineSegments())
     {
-      const auto & s = mesh[si];
       if ( s.domin==domainnr || s.domout==domainnr )
       {
         add_point.SetBit(s[0]);
@@ -606,7 +605,7 @@ namespace netgen
     /*
     for (int i = 0; i < adfront.GetNFL(); i++)
       {
-	const FrontLine & line = adfront.GetLine(i);
+        const FrontLine & line = adfront.GetLine(i);
         for (int j = 0; j < 2; j++)
           add_point.SetBit (adfront.GetGlobalIndex (line.L()[j]))adfront.GetGlobalIndex (line.L()[j]));
       }
@@ -625,9 +624,9 @@ namespace netgen
 
     t3.Start();
     Mesh tempmesh;
-    tempmesh.AddFaceDescriptor (FaceDescriptor (1, 1, 0, 0));
-    tempmesh.AddFaceDescriptor (FaceDescriptor (2, 1, 0, 0));
-    tempmesh.AddFaceDescriptor (FaceDescriptor (3, 1, 0, 0));
+    tempmesh.AddFaceDescriptor (FaceRegion (1, 1, 0, 0));
+    tempmesh.AddFaceDescriptor (FaceRegion (2, 1, 0, 0));
+    tempmesh.AddFaceDescriptor (FaceRegion (3, 1, 0, 0));
 
     Array<PointIndex, PointIndex> compress;
     Array<PointIndex, PointIndex> icompress(mesh.Points().Size());
@@ -655,7 +654,7 @@ namespace netgen
     timer_addpoints.Start();
 
 //     // reorder points
-//     NgArray<PointIndex, PointIndex::BASE, PointIndex> mixed(old_points.Size());
+//     Array<PointIndex, PointIndex::BASE, PointIndex> mixed(old_points.Size());
 //     int prims[] = { 11, 13, 17, 19, 23, 29, 31, 37 };
 //     int prim;
 //   
@@ -701,8 +700,6 @@ namespace netgen
         Segment seg;
         for (int j = 0; j < 2; j++)
           seg[j] = icompress [adfront.GetGlobalIndex (line.L()[j])];
-        seg.domin = domainnr;
-        seg.domout = 0;
         tempmesh.AddSegment(seg);
       }
            
@@ -714,7 +711,7 @@ namespace netgen
       if (!trig[0].IsValid()) continue;
 
       Element2d el(trig[0], trig[1], trig[2]);
-      el.SetIndex (1);
+      el.SetIndex (FaceRegionIndex::FromNr1(1));
       tempmesh.AddSurfaceElement (el);
     }
 
@@ -747,7 +744,7 @@ namespace netgen
         ArrayMem<SurfaceElementIndex, 2> cutting_trigs;
         for(auto sei : point_to_trigs[pi0])
         {
-          auto & el = tempmesh[sei];
+          auto el = tempmesh[sei];
           pi2 = el[0] == pi0 ? el[1] : el[0];
           pi3 = el[2] == pi0 ? el[1] : el[2];
           double alpha, beta;
@@ -776,8 +773,8 @@ namespace netgen
           if(marked_points.Test(pi2)) continue;
           if(marked_points.Test(pi3)) continue;
 
-          auto & el0 = tempmesh[cutting_trigs[0]];
-          auto & el1 = tempmesh[cutting_trigs[1]];
+          auto el0 = tempmesh[cutting_trigs[0]];
+          auto el1 = tempmesh[cutting_trigs[1]];
 
           pi1 = el1[0]-pi2+el1[1]-pi3+el1[2];
 
@@ -821,12 +818,12 @@ namespace netgen
 
       for(auto sei : els)
       {
-        auto & el = tempmesh[sei];
+        auto el = tempmesh[sei];
         PointIndex pi2 = el[0]-seg[0]+el[1]-seg[1]+el[2];
         bool is_left = ::netgen::Area(P2(tempmesh[seg[0]]), P2(tempmesh[seg[1]]), P2(tempmesh[pi2]))>0.0;
         POSITION pos;
 
-        if(is_left == (seg.domin==domainnr))
+        if(is_left)
           pos = INSIDE;
         else
           pos = OUTSIDE;
@@ -851,7 +848,7 @@ namespace netgen
 
       for (auto sei : Range(tempmesh.SurfaceElements()))
       {
-        auto & el = tempmesh[sei];
+        auto el = tempmesh[sei];
 
         if(trig_pos[sei] == UNKNOWN)
         {
@@ -887,7 +884,7 @@ namespace netgen
     {
       if(trig_pos[sei] == INSIDE)
       {
-        auto el = tempmesh[sei];
+        Element2d el (tempmesh[sei]);
 
         Vec<3> n = Cross (tempmesh[el[1]]-tempmesh[el[0]],
             tempmesh[el[2]]-tempmesh[el[0]]);
@@ -896,7 +893,7 @@ namespace netgen
         el[0] = compress[el[0]];
         el[1] = compress[el[1]];
         el[2] = compress[el[2]];
-        el.SetIndex(domainnr);
+        el.SetIndex(FaceRegionIndex::FromNr1(domainnr));
         mesh.AddSurfaceElement(el);
       }
     }

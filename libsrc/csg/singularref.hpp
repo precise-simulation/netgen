@@ -29,8 +29,8 @@ namespace netgen
     int domnr;
     const Solid *sol;
     double factor; 
-    // NgArray<Point<3> > points;
-    // NgArray<INDEX_2> segms;
+    // Array<Point<3> > points;
+    // Array<IVec<2>> segms;
   public:
     SingularFace (int adomnr, const Solid * asol, double sf)
       : domnr(adomnr), sol(asol), factor(sf) { ; }
@@ -47,16 +47,16 @@ namespace netgen
     int domnr;
     const CSGeometry& geom;
     const Solid *sol1, *sol2;
-    NgArray<Point<3> > points;
-    NgArray<INDEX_2> segms;
+    Array<Point<3> > points;
+    Array<PointIndices<2>> segms;
     double factor; 
 
     double maxhinit;
   public:
     SingularEdge (double abeta, int adomnr, 
-		  const CSGeometry & ageom,
-		  const Solid * asol1, const Solid * asol2, double sf,
-		  const double maxh_at_initialization = -1);
+                  const CSGeometry & ageom,
+                  const Solid * asol1, const Solid * asol2, double sf,
+                  const double maxh_at_initialization = -1);
     void FindPointsOnEdge (class Mesh & mesh);
     void SetMeshSize (class Mesh & mesh, double globalh);
   };
@@ -68,12 +68,12 @@ namespace netgen
   public:
     double beta;
     const Solid *sol1, *sol2, *sol3;
-    NgArray<Point<3> > points;
+    Array<Point<3> > points;
     double factor; 
  
   public:
     SingularPoint (double abeta, const Solid * asol1, const Solid * asol2,
-		   const Solid * asol3, double sf);
+                   const Solid * asol3, double sf);
     void FindPoints (class Mesh & mesh);
     void SetMeshSize (class Mesh & mesh, double globalh);
   };

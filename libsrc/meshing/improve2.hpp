@@ -6,7 +6,7 @@
 namespace netgen
 {
 
-inline void AppendEdges( const Element2d & elem, PointIndex pi, Array<std::tuple<PointIndex,PointIndex>> & edges )
+inline void AppendEdges( const Element2dRef & elem, PointIndex pi, Array<std::tuple<PointIndex,PointIndex>> & edges )
 {
   for (int j = 0; j < 3; j++)
   {
@@ -18,7 +18,7 @@ inline void AppendEdges( const Element2d & elem, PointIndex pi, Array<std::tuple
   }
 }
 
-inline void AppendEdges( const Element & elem, PointIndex pi, Array<std::tuple<PointIndex,PointIndex>> & edges )
+inline void AppendEdges( const ElementRef & elem, PointIndex pi, Array<std::tuple<PointIndex,PointIndex>> & edges )
 {
   static constexpr int tetedges[6][2] =
   { { 0, 1 }, { 0, 2 }, { 0, 3 },
@@ -84,23 +84,35 @@ void BuildEdgeList( const Mesh & mesh, const T_PI2SEI & elementsonnode, Array<st
 
 class Neighbour
 {
-  int nr[3];
+  SurfaceElementIndex nr[3];
   int orient[3];
 
 public:
   Neighbour () { ; }
 
-  void SetNr (int side, int anr) { nr[side] = anr; }
-  int GetNr (int side) { return nr[side]; }
+  void SetNr (int side, SurfaceElementIndex anr) { nr[side] = anr; }
+  SurfaceElementIndex GetNr (int side) { return nr[side]; }
 
   void SetOrientation (int side, int aorient) { orient[side] = aorient; }
   int GetOrientation (int side) { return orient[side]; }
 };
 
 ///
+struct PreviewResyncGuard
+{
+  Mesh & mesh;
+  FaceRegionIndex fi;
+  int nexcept = std::uncaught_exceptions();
+  ~PreviewResyncGuard()
+  {
+    if (std::uncaught_exceptions() == nexcept)
+      mesh.PreviewResync(fi);
+  }
+};
+
 class MeshOptimize2d
 {
-  int faceindex = 0;
+  FaceRegionIndex faceindex = FaceRegionIndex::INVALID;   // INVALID: all faces
   int improveedges = 0;
   double metricweight = 0.;
   int writestatus = 1;
@@ -115,10 +127,10 @@ public:
   DLL_HEADER void ImproveMesh (const MeshingParameters & mp);
   DLL_HEADER void ImproveMeshJacobian (const MeshingParameters & mp);
   DLL_HEADER void ImproveVolumeMesh ();
-  DLL_HEADER void ProjectBoundaryPoints(NgArray<int> & surfaceindex, 
-			     const NgArray<Point<3>* > & from, NgArray<Point<3>* > & dest);
+  DLL_HEADER void ProjectBoundaryPoints(Array<int> & surfaceindex, 
+                             const Array<Point<3>* > & from, Array<Point<3>* > & dest);
 
-  DLL_HEADER bool EdgeSwapping (const int usemetric, Array<Neighbour> &neighbors, Array<bool> &swapped,
+  DLL_HEADER bool EdgeSwapping (const int usemetric, Array<Neighbour, SurfaceElementIndex> &neighbors, Array<bool, SurfaceElementIndex> &swapped,
                                 const SurfaceElementIndex t1, const int edge, const int t, Array<int,PointIndex> &pdef, const bool check_only=false);
   DLL_HEADER void EdgeSwapping (int usemetric);
   DLL_HEADER void CombineImprove ();
@@ -127,7 +139,7 @@ public:
   DLL_HEADER void GenericImprove ();
 
 
-  void SetFaceIndex (int fi) { faceindex = fi; }
+  void SetFaceIndex (FaceRegionIndex fi) { faceindex = fi; }
   void SetImproveEdges (int ie) { improveedges = ie; }
   void SetMetricWeight (double mw) { metricweight = mw; }
   void SetWriteStatus (int ws) { writestatus = ws; }
@@ -155,24 +167,24 @@ public:
 
 
 extern void CalcTriangleBadness (double x2, double x3, double y3, 
-				 double metricweight,
-				 double h, double & badness, 
-				 double & g1x, double & g1y);
+                                 double metricweight,
+                                 double h, double & badness, 
+                                 double & g1x, double & g1y);
 
 
 
 
 extern double CalcTriangleBadness (const Point<3> & p1, 
-				   const Point<3> & p2, 
-				   const Point<3> & p3,
-				   double metricweight,
-				   double h);
+                                   const Point<3> & p2, 
+                                   const Point<3> & p3,
+                                   double metricweight,
+                                   double h);
 
 extern double CalcTriangleBadness (const Point<3> & p1, 
-				   const Point<3> & p2, 
-				   const Point<3> & p3,
-				   const Vec<3> & n,
-				   double metricweight,
-				   double h);
+                                   const Point<3> & p2, 
+                                   const Point<3> & p3,
+                                   const Vec<3> & n,
+                                   double metricweight,
+                                   double h);
 } // namespace netgen
 #endif // NETGEN_IMPROVE2_HPP

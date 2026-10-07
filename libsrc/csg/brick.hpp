@@ -51,8 +51,8 @@ namespace netgen
     virtual void Print (ostream & str) const;
   
     virtual void GetTriangleApproximation (TriangleApproximation & tas, 
-					   const Box<3> & boundingbox, 
-					   double facets) const;
+                                           const Box<3> & boundingbox, 
+                                           double facets) const;
 
   protected:
     void CalcData();
@@ -63,8 +63,8 @@ namespace netgen
   {
     Point<3> p1, p2, p3, p4;
     Vec<3> v12, v13, v14;
-    // NgArray<OneSurfacePrimitive*> faces;
-    NgArray<Plane*> faces;
+    // Array<OneSurfacePrimitive*> faces;
+    Array<Plane*> faces;
 
   public:
     Brick (Point<3> ap1, Point<3> ap2, Point<3> ap3, Point<3> ap4);
@@ -86,25 +86,25 @@ namespace netgen
     virtual INSOLID_TYPE BoxInSolid (const BoxSphere<3> & box) const;
 
     virtual INSOLID_TYPE PointInSolid (const Point<3> & p,
-				       double eps) const;
+                                       double eps) const;
     virtual INSOLID_TYPE VecInSolid (const Point<3> & p,
-				     const Vec<3> & v,
-				     double eps) const;
+                                     const Vec<3> & v,
+                                     double eps) const;
     virtual INSOLID_TYPE VecInSolid2 (const Point<3> & p,
-				      const Vec<3> & v1,
-				      const Vec<3> & v2,
-				      double eps) const;
+                                      const Vec<3> & v1,
+                                      const Vec<3> & v2,
+                                      double eps) const;
 
     virtual INSOLID_TYPE VecInSolid3 (const Point<3> & p,
-				      const Vec<3> & v1,
-				      const Vec<3> & v2,
-				      double eps) const;
+                                      const Vec<3> & v1,
+                                      const Vec<3> & v2,
+                                      double eps) const;
 
     virtual INSOLID_TYPE VecInSolid4 (const Point<3> & p,
-				      const Vec<3> & v,
-				      const Vec<3> & v2,
-				      const Vec<3> & m,
-				      double eps) const;
+                                      const Vec<3> & v,
+                                      const Vec<3> & v2,
+                                      const Vec<3> & m,
+                                      double eps) const;
 
 
     virtual int GetNSurfaces() const 
@@ -115,8 +115,8 @@ namespace netgen
     { return *faces[i]; }
 
 
-    virtual void GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const;
-    virtual void SetPrimitiveData (NgArray<double> & coeffs);
+    virtual void GetPrimitiveData (const char *& classname, Array<double> & coeffs) const;
+    virtual void SetPrimitiveData (Array<double> & coeffs);
 
     virtual void Reduce (const BoxSphere<3> & box);
     virtual void UnReduce ();

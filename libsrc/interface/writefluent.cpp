@@ -17,7 +17,7 @@ namespace netgen
 
 
 void WriteFluentFormat (const Mesh & mesh,
-			const filesystem::path & filename)
+                        const filesystem::path & filename)
 
 {
   cout << "start writing fluent export" << endl;
@@ -47,14 +47,14 @@ void WriteFluentFormat (const Mesh & mesh,
   //nodes of zone 1:
   snprintf (str, size(str), "(10 (7 1 %x 1)(",np); //hexadecimal!!!
   outfile << str << endl;
-  for (i = 1; i <= np; i++)
+  for (PointIndex pi : mesh.Points().Range())
     {
-      const Point3d & p = mesh.Point(i);
+      const Point<3> & p = mesh[pi];
 
       //outfile.width(10);
-      outfile << p.X() << " ";
-      outfile << p.Y() << " ";
-      outfile << p.Z() << "\n";
+      outfile << p(0) << " ";
+      outfile << p(1) << " ";
+      outfile << p(2) << "\n";
     }
   outfile << "))" << endl << endl;
 
@@ -64,8 +64,8 @@ void WriteFluentFormat (const Mesh & mesh,
 
   Element2d face, face2;
   int /* i2, */ j2;
-  NgArray<INDEX_3> surfaceelp;
-  NgArray<int> surfaceeli;
+  Array<PointIndices<3>> surfaceelp;
+  Array<int> surfaceeli;
   Array<ElementIndex> locels;
 
   //no cells=no tets
@@ -81,25 +81,25 @@ void WriteFluentFormat (const Mesh & mesh,
 
   const_cast<Mesh&> (mesh).BuildElementSearchTree(3);
 
-  for (i = 1; i <= ne; i++)
+  for (ElementIndex i : T_Range<ElementIndex>(ne))
     {
       if (ne > 2000)
-	{
-	  if (i%2000 == 0)
-	    {
-	      cout << (double)i/(double)ne*100. << "%" << endl;
-	    }
-	}
+        {
+          if (i.Nr1()%2000 == 0)
+            {
+              cout << (double)i.Nr1()/(double)ne*100. << "%" << endl;
+            }
+        }
 
-      Element el = mesh.VolumeElement(i);
+      Element el (mesh[i]);
       //if (inverttets)
       //  el.Invert();
-	  
+          
       //outfile << el.GetIndex() << "    ";
       if (el.GetNP() != 4) {cout << "only tet-meshes supported in write fluent!" << endl;}
-	  
+          
       //faces:
-	  
+          
       Box3d box;
       el.GetBox(mesh.Points(), box);
       box.IncreaseRel(1e-6);
@@ -111,44 +111,44 @@ void WriteFluentFormat (const Mesh & mesh,
       //cout << "nel=" << nel << endl;
 
       for (j = 1; j <= el.GetNFaces(); j++)
-	{
-	  el.GetFace(j, face);
-	  face.Invert();
-	  int eli2 = 0;
-	  int stopsig = 0;
-	      
-	  for (auto locind : locels)
-	    {
-	      Element el2 = mesh[locind];
-	      //if (inverttets)
-	      //  el2.Invert();
+        {
+          el.GetFace(j, face);
+          face.Invert();
+          int eli2 = 0;
+          int stopsig = 0;
+              
+          for (auto locind : locels)
+            {
+              Element el2 (mesh[locind]);
+              //if (inverttets)
+              //  el2.Invert();
 
-	      for (j2 = 1; j2 <= el2.GetNFaces(); j2++)
-		{
-		  el2.GetFace(j2, face2);
+              for (j2 = 1; j2 <= el2.GetNFaces(); j2++)
+                {
+                  el2.GetFace(j2, face2);
 
-		  if (face2.HasFace(face)) {eli2 = locind+1; stopsig = 1; break;}
-		}
-	      if (stopsig) break;
-	    }
-	      
-	  if (eli2==i) cout << "error in WRITE_FLUENT!!!" << endl;
-	      
-	  if (eli2 > i) //don't write faces two times!
-	    {
-	      //i: left cell, eli: right cell
-	      outfile << hex << face.PNum(2) << " "
-		<< hex << face.PNum(1) << " "
-		<< hex << face.PNum(3) << " "
-		<< hex << i  << " "
-		<< hex << eli2 << "\n";
-	    }
-	  if (eli2 == 0) 
-	    {
-	      surfaceelp.Append(INDEX_3(face.PNum(2),face.PNum(1),face.PNum(3)));
-	      surfaceeli.Append(i);
-	    }
-	}
+                  if (face2.HasFace(face)) {eli2 = locind.Nr1(); stopsig = 1; break;}
+                }
+              if (stopsig) break;
+            }
+              
+          if (eli2==i.Nr1()) cout << "error in WRITE_FLUENT!!!" << endl;
+              
+          if (eli2 > i.Nr1()) //don't write faces two times!
+            {
+              //i: left cell, eli: right cell
+              outfile << hex << face[1] << " "
+                << hex << face[0] << " "
+                << hex << face[2] << " "
+                << hex << i.Nr1()  << " "
+                << hex << eli2 << "\n";
+            }
+          if (eli2 == 0) 
+            {
+              surfaceelp.Append(PointIndices<3>(face[1],face[0],face[2]));
+              surfaceeli.Append(i.Nr1());
+            }
+        }
     }
   outfile << "))" << endl;
       
@@ -157,10 +157,10 @@ void WriteFluentFormat (const Mesh & mesh,
 
   for (i = 1; i <= surfaceelp.Size(); i++)
     {
-      outfile << hex << surfaceelp.Get(i).I1() << " "
-	      << hex << surfaceelp.Get(i).I2() << " "
-	      << hex << surfaceelp.Get(i).I3() << " "
-	      << hex << surfaceeli.Get(i) << " " << 0 << "\n";
+      outfile << hex << surfaceelp[i-1][0].Nr1() << " "
+              << hex << surfaceelp[i-1][1].Nr1() << " "
+              << hex << surfaceelp[i-1][2].Nr1() << " "
+              << hex << surfaceeli[i-1] << " " << 0 << "\n";
     }
 
   outfile << "))" << endl << endl;
@@ -177,11 +177,11 @@ void WriteFluentFormat (const Mesh & mesh,
 
 
   outfile << "(0 \"Zones:\")\n"
-	  << "(45 (1 fluid fluid)())\n"
+          << "(45 (1 fluid fluid)())\n"
     //      << "(45 (2 velocity-inlet velocity_inlet.1)())\n"
     //      << "(45 (3 pressure-outlet pressure_outlet.2)())\n"
-	  << "(45 (2 wall wall)())\n"
-	  << "(45 (4 interior default-interior)())\n" << endl;
+          << "(45 (2 wall wall)())\n"
+          << "(45 (4 interior default-interior)())\n" << endl;
 
   cout << "done" << endl;
 }

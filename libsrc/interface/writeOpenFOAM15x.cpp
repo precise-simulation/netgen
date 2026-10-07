@@ -40,11 +40,11 @@ namespace netgen
 
    // Global arrays used to maintain the owner, neighbour and face lists 
    // so that they are accessible across functions
-   static NgArray<int> owner_facelist;
-   static NgArray<int> owner_celllist;
-   static NgArray<int> neighbour_celllist;
-   static NgArray<int> surfelem_bclist;
-   static NgArray<INDEX_2> surfelem_lists;
+   static Array<int> owner_facelist;
+   static Array<int> owner_celllist;
+   static Array<int> neighbour_celllist;
+   static Array<int> surfelem_bclist;
+   static Array<IVec<2>> surfelem_lists;
 
 
 
@@ -119,17 +119,17 @@ namespace netgen
       // Initialise arrays to zero if required
       neighbour_celllist = 0;
 
-      // NgArray used to keep track of Faces which have already been 
+      // Array used to keep track of Faces which have already been 
       // processed and added to the Owner list... In addition, also the 
       // location where the face appears in the Owner list is also stored 
       // to speed up creation of the Neighbour list
-      NgArray<int> ownerfaces(totfaces);
+      Array<int> ownerfaces(totfaces);
       ownerfaces = 0;
 
-      // NgArray to hold the set of local faces of each volume element 
+      // Array to hold the set of local faces of each volume element 
       // while running through the set of volume elements
       // NOTE: The size is set automatically by the Netgen topology function
-      NgArray<int> locfaces;
+      Array<int> locfaces;
 
       // Secondary indices used to independently advance the owner 
       // and boundary condition arrays within the main loop
@@ -140,7 +140,7 @@ namespace netgen
       for(int elind = 1; elind <= ne; elind++)
       {
          // Extract the current volume element
-	// const Element & el = mesh.VolumeElement(elind);
+        // const Element & el = mesh.VolumeElement(elind);
 
          // Get the face numbers of the faces of the current volume element
          // The values returned are given a sign depending on the orientation 
@@ -150,20 +150,20 @@ namespace netgen
          meshtopo.GetElementFaces(elind,locfaces,true);
 
          // Loop through the faces
-         for(int i = 1; i <= locfaces.Size(); i++)
+         for (int i = 0; i < locfaces.Size(); i++)
          {
             // The absolute value of a face number (because the faces 
             // returned by the GetElementFaces function prepend it 
             // with a sign depending on the face orientation)
-            int absfacenr = abs(locfaces.Elem(i));
+            int absfacenr = abs(locfaces[i]);
 
             // If the face already exists in the owner list, add 
             // the current cell into the neighbour list, in the 
             // same location where the face appears in the owner list
-            int owner_face = ownerfaces.Elem(absfacenr);
+            int owner_face = ownerfaces[absfacenr-1];
             if(owner_face)
             {
-               neighbour_celllist.Elem(owner_face) = elind;
+               neighbour_celllist[owner_face-1] = elind;
 
                // From this point on, the code within this "if" block 
                // basically sorts the order of the Neighbour cells (along 
@@ -174,19 +174,19 @@ namespace netgen
                // NOTE: A value of "zero" in the neighbour list implies that 
                // the neighbour has not been found yet, so the "zero" locations need 
                // to be skipped while sorting in ascending order
-               int curr_owner = owner_celllist.Elem(owner_face);
+               int curr_owner = owner_celllist[owner_face-1];
 
                int peek_loc = owner_face - 1;
                int new_loc = owner_face;
 
                // Traversing upwards in the list
-               while((owner_celllist.Elem(peek_loc) == curr_owner) && (peek_loc >= 1))
+               while((owner_celllist[peek_loc-1] == curr_owner) && (peek_loc >= 1))
                {
-                  if((neighbour_celllist.Elem(peek_loc) != 0) 
-                     && (neighbour_celllist.Elem(new_loc) < neighbour_celllist.Elem(peek_loc)))
+                  if((neighbour_celllist[peek_loc-1] != 0) 
+                     && (neighbour_celllist[new_loc-1] < neighbour_celllist[peek_loc-1]))
                   {
-                     Swap(neighbour_celllist.Elem(new_loc),neighbour_celllist.Elem(peek_loc));
-                     Swap(owner_facelist.Elem(new_loc),owner_facelist.Elem(peek_loc));
+                     Swap(neighbour_celllist[new_loc-1],neighbour_celllist[peek_loc-1]);
+                     Swap(owner_facelist[new_loc-1],owner_facelist[peek_loc-1]);
                      new_loc = peek_loc;
                   }
 
@@ -196,13 +196,13 @@ namespace netgen
                peek_loc = owner_face + 1;
 
                // Traversing downwards in the list
-               while((owner_celllist.Elem(peek_loc) == curr_owner) && (peek_loc <= owner_ind))
+               while((owner_celllist[peek_loc-1] == curr_owner) && (peek_loc <= owner_ind))
                {
-                  if((neighbour_celllist.Elem(peek_loc) != 0) 
-                     && (neighbour_celllist.Elem(new_loc) > neighbour_celllist.Elem(peek_loc)))
+                  if((neighbour_celllist[peek_loc-1] != 0) 
+                     && (neighbour_celllist[new_loc-1] > neighbour_celllist[peek_loc-1]))
                   {
-                     Swap(neighbour_celllist.Elem(new_loc),neighbour_celllist.Elem(peek_loc));
-                     Swap(owner_facelist.Elem(new_loc),owner_facelist.Elem(peek_loc));
+                     Swap(neighbour_celllist[new_loc-1],neighbour_celllist[peek_loc-1]);
+                     Swap(owner_facelist[new_loc-1],owner_facelist[peek_loc-1]);
                      new_loc = peek_loc;
                   }
 
@@ -216,16 +216,16 @@ namespace netgen
             // if not, add the current volume element and the corresponding face into 
             // the owner list
             // int surfelem = meshtopo.GetFace2SurfaceElement1(absfacenr);
-            int surfelem = meshtopo.GetFace2SurfaceElement(absfacenr-1)+1;
+            int surfelem = meshtopo.GetFace2SurfaceElement(FaceIndex::FromNr1(absfacenr)).Nr1();
             if(!surfelem)
             {
                // If it is a new face which has not been listed before, 
                // add the current cell into the owner list, and save 
                // the index location to be used later by the neighbour list
-               owner_celllist.Elem(owner_ind) = elind;
-               owner_facelist.Elem(owner_ind) = locfaces.Elem(i);
+               owner_celllist[owner_ind-1] = elind;
+               owner_facelist[owner_ind-1] = locfaces[i];
                // Update the array to indicate that the face is already processed
-               ownerfaces.Elem(absfacenr) = owner_ind;
+               ownerfaces[absfacenr-1] = owner_ind;
 
                owner_ind++;
             }
@@ -234,9 +234,9 @@ namespace netgen
             // into the various surface elements lists
             else
             {
-               Element2d sel = mesh.SurfaceElement(surfelem);
-               surfelem_bclist.Elem(bc_ind) = mesh.GetFaceDescriptor(sel.GetIndex()).BCProperty();
-               surfelem_lists.Elem(bc_ind) = INDEX_2(locfaces.Elem(i),elind);
+               Element2d sel (mesh[SurfaceElementIndex::FromNr1(surfelem)]);
+               surfelem_bclist[bc_ind-1] = mesh.GetFaceDescriptor(sel.GetIndex()).BCProperty();
+               surfelem_lists[bc_ind-1] = IVec<2>(locfaces[i],elind);
 
                bc_ind++;
             }
@@ -253,7 +253,7 @@ namespace netgen
 
       // Sort the list of surface elements in ascending order of boundary condition number
       // also sort the cell list in the same manner
-      QuickSort(surfelem_bclist,surfelem_lists);
+      QuickSortPair(surfelem_bclist,surfelem_lists);
 
 /*    
       // Debugging output to a file 
@@ -264,8 +264,8 @@ namespace netgen
       for(int i = 1; i <= surfelem_bclist.Size(); i++)
       {
          dbg << "bc = " << surfelem_bclist.Elem(i) 
-              << " : face = " << surfelem_lists.Elem(i).I1()
-              << " : cell = " << surfelem_lists.Elem(i).I2() << "\n";
+              << " : face = " << surfelem_lists.Elem(i)[0]
+              << " : cell = " << surfelem_lists.Elem(i)[1] << "\n";
       }
 
       dbg << "\n ------- Owner / Face / Neighbour List ------- \n";
@@ -309,9 +309,9 @@ namespace netgen
       *outfile << "(\n";
 
       // Write the neighbour cells to file
-      for(int i = 1; i <= neighbour_celllist.Size(); i++)
+      for (int i = 0; i < neighbour_celllist.Size(); i++)
       {
-         *outfile << neighbour_celllist.Elem(i) - 1 << "\n";
+         *outfile << neighbour_celllist[i] - 1 << "\n";
       }
       *outfile << ")\n\n";
       WriteOpenFOAM15xDividerEnd(outfile);
@@ -343,16 +343,16 @@ namespace netgen
       *outfile << "(\n";
 
       // Write the owners of the internal cells to file
-      for(int i = 1; i <= owner_celllist.Size(); i++)
+      for (int i = 0; i < owner_celllist.Size(); i++)
       {
-         *outfile << owner_celllist.Elem(i) - 1 << "\n";
+         *outfile << owner_celllist[i] - 1 << "\n";
       }
 
       // Write the owners of the boundary cells to file
       // (Written in order of ascending boundary condition numbers)
-      for(int i = 1; i <= surfelem_lists.Size(); i++)
+      for (int i = 0; i < surfelem_lists.Size(); i++)
       {
-         *outfile << surfelem_lists.Elem(i).I2() - 1 << "\n";
+         *outfile << surfelem_lists[i][1] - 1 << "\n";
       }
       *outfile << ")\n\n";
       WriteOpenFOAM15xDividerEnd(outfile);
@@ -385,15 +385,15 @@ namespace netgen
 
       *outfile << "(\n";
 
-      // NgArray to hold the indices of the points of each face to 
+      // Array to hold the indices of the points of each face to 
       // flip if required 
-      NgArray<int> facepnts;
+      Array<int> facepnts;
 
       // Write the faces in the order specified in the owners lists of the 
       // internal cells and the boundary cells
-      for(int i = 1; i <= owner_facelist.Size(); i++)
+      for (int i = 0; i < owner_facelist.Size(); i++)
       {
-         int face_w_orientation = owner_facelist.Elem(i);
+         int face_w_orientation = owner_facelist[i];
          int facenr = abs(face_w_orientation);
 
          meshtopo.GetFaceVertices(facenr,facepnts);
@@ -408,19 +408,19 @@ namespace netgen
 
             if(facepnts.Size() == 4)
             {
-               tmppnts = facepnts.Elem(1);
-               facepnts.Elem(1) = facepnts.Elem(2);
-               facepnts.Elem(2) = tmppnts;
+               tmppnts = facepnts[0];
+               facepnts[0] = facepnts[1];
+               facepnts[1] = tmppnts;
                
-               tmppnts = facepnts.Elem(3);
-               facepnts.Elem(3) = facepnts.Elem(4);
-               facepnts.Elem(4) = tmppnts;
+               tmppnts = facepnts[2];
+               facepnts[2] = facepnts[3];
+               facepnts[3] = tmppnts;
             }
             else if(facepnts.Size() == 3)
             {
-               tmppnts = facepnts.Elem(1);
-               facepnts.Elem(1) = facepnts.Elem(3);
-               facepnts.Elem(3) = tmppnts;
+               tmppnts = facepnts[0];
+               facepnts[0] = facepnts[2];
+               facepnts[2] = tmppnts;
             }
          }
 
@@ -428,7 +428,7 @@ namespace netgen
          *outfile << "(";
          for(int j = 1; j <= facepnts.Size(); j++)
          {
-            *outfile << facepnts.Elem(j)-1;
+            *outfile << facepnts[j-1]-1;
             if(j != facepnts.Size()) *outfile << " ";
          }
          *outfile << ")\n";
@@ -437,9 +437,9 @@ namespace netgen
       // Now append the faces of the surface elements (written in 
       // ascending order of boundary condition number) also into 
       // the faces file
-      for(int i = 1; i <= surfelem_lists.Size(); i++)
+      for (int i = 0; i < surfelem_lists.Size(); i++)
       {
-         int face_w_orientation = surfelem_lists.Elem(i).I1();
+         int face_w_orientation = surfelem_lists[i][0];
          int facenr = abs(face_w_orientation);
 
          meshtopo.GetFaceVertices(facenr,facepnts);
@@ -451,19 +451,19 @@ namespace netgen
 
             if(facepnts.Size() == 4)
             {
-               tmppnts = facepnts.Elem(1);
-               facepnts.Elem(1) = facepnts.Elem(2);
-               facepnts.Elem(2) = tmppnts;
+               tmppnts = facepnts[0];
+               facepnts[0] = facepnts[1];
+               facepnts[1] = tmppnts;
                
-               tmppnts = facepnts.Elem(3);
-               facepnts.Elem(3) = facepnts.Elem(4);
-               facepnts.Elem(4) = tmppnts;
+               tmppnts = facepnts[2];
+               facepnts[2] = facepnts[3];
+               facepnts[3] = tmppnts;
             }
             else if(facepnts.Size() == 3)
             {
-               tmppnts = facepnts.Elem(1);
-               facepnts.Elem(1) = facepnts.Elem(3);
-               facepnts.Elem(3) = tmppnts;
+               tmppnts = facepnts[0];
+               facepnts[0] = facepnts[2];
+               facepnts[2] = tmppnts;
             }
          }
 
@@ -471,7 +471,7 @@ namespace netgen
          *outfile << "(";
          for(int j = 1; j <= facepnts.Size(); j++)
          {
-            *outfile << facepnts.Elem(j)-1;
+            *outfile << facepnts[j-1]-1;
             if(j != facepnts.Size()) *outfile << " ";
          }
          *outfile << ")\n";
@@ -512,15 +512,15 @@ namespace netgen
       // Coordinate list starts here
       *outfile << "(\n";
 
-      for(int i = 1; i <= np; i++)
+      for (PointIndex pi : mesh.Points().Range())
       {
-         const Point3d & p = mesh.Point(i);
+         const Point<3> & p = mesh[pi];
 
          // Write coordinates to file
          *outfile << "(";
-         *outfile << p.X() << " ";
-         *outfile << p.Y() << " ";
-         *outfile << p.Z();
+         *outfile << p(0) << " ";
+         *outfile << p(1) << " ";
+         *outfile << p(2);
          *outfile << ")\n";
       }
       *outfile << ")\n\n";
@@ -547,28 +547,28 @@ namespace netgen
       *outfile << "\n";
 
 
-      NgArray<INDEX_3> bcarray;
+      Array<IVec<3>> bcarray;
       int ind = 1;
 
       // Since the boundary conditions are already sorted in ascending 
       // order, the last element will give the maximum number of possible 
       // boundary condition entries
-      int bcmax = surfelem_bclist.Elem(surfelem_bclist.Size());
+      int bcmax = surfelem_bclist[surfelem_bclist.Size()-1];
 
       bcarray.SetSize(bcmax+1);
 
-      bcarray.Elem(ind) = INDEX_3(surfelem_bclist.Elem(1),1,0);
+      bcarray[ind-1] = IVec<3>(surfelem_bclist[0],1,0);
             
       for(int i = 2; i <= surfelem_bclist.Size(); i++)
       {
-         if(surfelem_bclist.Elem(i) == bcarray.Elem(ind).I1())
+         if(surfelem_bclist[i-1] == bcarray[ind-1][0])
          {
-            bcarray.Elem(ind).I2() = bcarray.Elem(ind).I2()+1;
+            bcarray[ind-1][1] = bcarray[ind-1][1]+1;
          }
          else
          {
             ind++;
-            bcarray.Elem(ind) = INDEX_3(surfelem_bclist.Elem(i),1,i-1);
+            bcarray[ind-1] = IVec<3>(surfelem_bclist[i-1],1,i-1);
          }
       }
 
@@ -579,15 +579,15 @@ namespace netgen
 
       int startface = 0;
 
-      for(int i = 1; i <= bcarray.Size(); i++)
+      for (int i = 0; i < bcarray.Size(); i++)
       {
-         startface = owner_celllist.Size() + bcarray.Elem(i).I3();
+         startface = owner_celllist.Size() + bcarray[i][2];
 
-         *outfile << "    patch" << bcarray.Elem(i).I1() << "\n"
+         *outfile << "    patch" << bcarray[i][0] << "\n"
                  << "    {\n"
                  << "        type            patch;\n"
                  << "        physicalType    patch;\n"
-                 << "        nFaces          " << bcarray.Elem(i).I2() << ";\n"
+                 << "        nFaces          " << bcarray[i][1] << ";\n"
                  << "        startFace       " << startface << ";\n"
                  << "    }\n";
       }
@@ -630,10 +630,10 @@ namespace netgen
          return;
       }
 
-      if(( (mesh.SurfaceElement(nse/2).GetType() != TRIG) 
-	   && (mesh.SurfaceElement(nse/2).GetType() != QUAD) )
-         || (mesh.VolumeElement(ne/2).GetType() == TET10)
-         || (mesh.VolumeElement(ne/2).GetType() == PRISM12))
+      if(( (mesh[SurfaceElementIndex::FromNr1(nse/2)].GetType() != TRIG) 
+           && (mesh[SurfaceElementIndex::FromNr1(nse/2)].GetType() != QUAD) )
+         || (mesh[ElementIndex::FromNr1(ne/2)].GetType() == TET10)
+         || (mesh[ElementIndex::FromNr1(ne/2)].GetType() == PRISM12))
       {
          cout << "Export Error: OpenFOAM 1.5+ does not support non-linear elements.... Aborting!\n";
          return;

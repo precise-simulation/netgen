@@ -8,9 +8,8 @@
 /* Redesigned by Wolfram Muehlhuber, May 1998                              */
 /* *************************************************************************/
 
-#include <general/optmem.hpp>
+#include <myadt.hpp>
 #include <general/template.hpp>
-#include <general/hashtabl.hpp>
 
 #include "geomfuncs.hpp"
 
@@ -56,25 +55,25 @@ class ADTree
   int dim;
   ADTreeNode * root;
   float *cmin, *cmax;
-  NgArray<ADTreeNode*> ela;
+  Array<ADTreeNode*> ela;
   const ADTreeCriterion * criterion; 
 
-  NgArray<ADTreeNode*> stack;
-  NgArray<int> stackdir;
+  Array<ADTreeNode*> stack;
+  Array<int> stackdir;
   int stackindex;
 
 public:
   ADTree (int adim, const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree ();
 
   void Insert (const float * p, int pi);
   // void GetIntersecting (const float * bmin, const float * bmax,
-  //			NgArray<int> & pis) const;
+  //                    Array<int> & pis) const;
   void SetCriterion (ADTreeCriterion & acriterion);
   void Reset ();
   int Next ();
-  void GetMatch (NgArray<int> & matches);
+  void GetMatch (Array<int> & matches);
 
   void DeleteElement (int pi);
 
@@ -87,47 +86,229 @@ public:
 
 
 
+template <typename T>
 class ADTreeNode3
 {
 public:
   ADTreeNode3 *left, *right, *father;
   float sep;
   float data[3];
-  int pi;
+  T pi;
   int nchilds;
 
-  ADTreeNode3 ();
-  void DeleteChilds ();
-  friend class ADTree3;
+  ADTreeNode3 ()
+  {
+    SetInvalid(pi);
+    left = nullptr;
+    right = nullptr;
+    father = nullptr;
+    nchilds = 0;
+  }
+
+  void DeleteChilds ()
+  {
+    if (left)
+      {
+        left->DeleteChilds();
+        delete left;
+        left = nullptr;
+      }
+    if (right)
+      {
+        right->DeleteChilds();
+        delete right;
+        right = nullptr;
+      }
+  }
 
   static BlockAllocator ball;
-  void * operator new(size_t);
-  void operator delete (void *);
+  void * operator new (size_t) { return ball.Alloc(); }
+  void operator delete (void * p) { ball.Free(p); }
 };
 
+template <typename T>
+BlockAllocator ADTreeNode3<T> :: ball(sizeof (ADTreeNode3<T>));
 
+
+template <typename T = int>
 class ADTree3
 {
-  ADTreeNode3 * root;
+  ADTreeNode3<T> * root;
   float cmin[3], cmax[3];
-  NgArray<ADTreeNode3*> ela;
+  Array<ADTreeNode3<T>*, T> ela;
 
 public:
-  ADTree3 (const float * acmin, 
-	   const float * acmax);
-  ~ADTree3 ();
+  ADTree3 (const Point<3> & pmin, const Point<3> & pmax)
+  {
+    for (int i = 0; i < 3; i++)
+      {
+        cmin[i] = pmin(i);
+        cmax[i] = pmax(i);
+      }
 
-  void Insert (const float * p, int pi);
+    root = new ADTreeNode3<T>;
+    root->sep = (cmin[0] + cmax[0]) / 2;
+  }
+
+  ~ADTree3 ()
+  {
+    root->DeleteChilds();
+    delete root;
+  }
+
+  void Insert (const float * p, T pi)
+  {
+    ADTreeNode3<T> *node(nullptr);
+    ADTreeNode3<T> *next;
+    int dir;
+    int lr(0);
+
+    float bmin[3];
+    float bmax[3];
+
+    memcpy (bmin, cmin, 3 * sizeof(float));
+    memcpy (bmax, cmax, 3 * sizeof(float));
+
+    size_t nr0 = size_t(pi - IndexBASE<T>());
+
+    next = root;
+    dir = 0;
+    while (next)
+      {
+        node = next;
+
+        if (IsInvalid(node->pi))
+          {
+            memcpy (node->data, p, 3 * sizeof(float));
+            node->pi = pi;
+
+            if (ela.Size() < nr0+1)
+              ela.SetSize (nr0+1);
+            ela[pi] = node;
+
+            return;
+          }
+
+        if (node->sep > p[dir])
+          {
+            next = node->left;
+            bmax[dir] = node->sep;
+            lr = 0;
+          }
+        else
+          {
+            next = node->right;
+            bmin[dir] = node->sep;
+            lr = 1;
+          }
+
+        dir++;
+        if (dir == 3)
+          dir = 0;
+      }
+
+
+    next = new ADTreeNode3<T>;
+    memcpy (next->data, p, 3 * sizeof(float));
+    next->pi = pi;
+    next->sep = (bmin[dir] + bmax[dir]) / 2;
+
+    if (ela.Size() < nr0+1)
+      ela.SetSize (nr0+1);
+    ela[pi] = next;
+
+    if (lr)
+      node->right = next;
+    else
+      node->left = next;
+    next -> father = node;
+
+    while (node)
+      {
+        node->nchilds++;
+        node = node->father;
+      }
+  }
+
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
-  
-  void DeleteElement (int pi);
+                        Array<T> & pis) const
+  {
+    ArrayMem<ADTreeNode3<T>*, 1000> stack(1000);
+    ArrayMem<int, 1000> stackdir(1000);
+    ADTreeNode3<T> * node;
+    int dir, stacks;
 
+    pis.SetSize(0);
+
+    stack[0] = root;
+    stackdir[0] = 0;
+    stacks = 0;
+
+    while (stacks >= 0)
+      {
+        node = stack[stacks];
+        dir = stackdir[stacks];
+        stacks--;
+
+        if (!IsInvalid(node->pi))
+          {
+            if (node->data[0] >= bmin[0] && node->data[0] <= bmax[0] &&
+                node->data[1] >= bmin[1] && node->data[1] <= bmax[1] &&
+                node->data[2] >= bmin[2] && node->data[2] <= bmax[2])
+
+              pis.Append (node->pi);
+          }
+
+
+        int ndir = dir+1;
+        if (ndir == 3)
+          ndir = 0;
+
+        if (node->left && bmin[dir] <= node->sep)
+          {
+            stacks++;
+            stack[stacks] = node->left;
+            stackdir[stacks] = ndir;
+          }
+        if (node->right && bmax[dir] >= node->sep)
+          {
+            stacks++;
+            stack[stacks] = node->right;
+            stackdir[stacks] = ndir;
+          }
+      }
+  }
+
+  void DeleteElement (T pi)
+  {
+    ADTreeNode3<T> * node = ela[pi];
+
+    SetInvalid (node->pi);
+
+    node = node->father;
+    while (node)
+      {
+        node->nchilds--;
+        node = node->father;
+      }
+  }
 
   void Print (ostream & ost) const
     { PrintRec (ost, root); }
 
-  void PrintRec (ostream & ost, const ADTreeNode3 * node) const;
+  void PrintRec (ostream & ost, const ADTreeNode3<T> * node) const
+  {
+    ost << node->pi << ": ";
+    ost << node->nchilds << " childs, ";
+    for (int i = 0; i < 3; i++)
+      ost << node->data[i] << " ";
+    ost << endl;
+
+    if (node->left)
+      PrintRec (ost, node->left);
+    if (node->right)
+      PrintRec (ost, node->right);
+  }
 };
 
 
@@ -160,16 +341,16 @@ class ADTree3Div
 {
   ADTreeNode3Div * root;
   float cmin[3], cmax[3];
-  NgArray<ADTreeNode3Div*> ela;
+  Array<ADTreeNode3Div*> ela;
 
 public:
   ADTree3Div (const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree3Div ();
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
+                        Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -209,16 +390,16 @@ class ADTree3M
 {
   ADTreeNode3M * root;
   float cmin[3], cmax[3];
-  NgArray<ADTreeNode3M*> ela;
+  Array<ADTreeNode3M*> ela;
 
 public:
   ADTree3M (const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree3M ();
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
+                        Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -258,16 +439,16 @@ class ADTree3F
 {
   ADTreeNode3F * root;
   float cmin[3], cmax[3];
-  NgArray<ADTreeNode3F*> ela;
+  Array<ADTreeNode3F*> ela;
 
 public:
   ADTree3F (const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree3F ();
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
+                        Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -305,16 +486,16 @@ class ADTree3FM
 {
   ADTreeNode3FM * root;
   float cmin[3], cmax[3];
-  NgArray<ADTreeNode3FM*> ela;
+  Array<ADTreeNode3FM*> ela;
 
 public:
   ADTree3FM (const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree3FM ();
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
+                        Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -356,16 +537,16 @@ class ADTree6
 {
   ADTreeNode6 * root;
   float cmin[6], cmax[6];
-  NgArray<ADTreeNode6*> ela;
+  Array<ADTreeNode6*> ela;
 
 public:
   ADTree6 (const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree6 ();
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
+                        Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -413,29 +594,29 @@ public:
   {
     if (left)
       {
-	left->DeleteChilds(ball);
+        left->DeleteChilds(ball);
         ball.Free(left);
-	left = NULL;
+        left = NULL;
       }
     if (right)
       {
-	right->DeleteChilds(ball);
+        right->DeleteChilds(ball);
         ball.Free(right);
-	right = NULL;
+        right = NULL;
       }
   }
 };
 
 
 
-  template <int dim, typename T = INDEX>
+  template <int dim, typename T = int>
   class T_ADTree
   {
     T_ADTreeNode<dim,T> * root;
     // float cmin[dim], cmax[dim];
     Point<dim> cmin, cmax;
-    // NgArray<T_ADTreeNode<dim>*> ela;
-    NgClosedHashTable<T, T_ADTreeNode<dim,T>*> ela;
+    // Array<T_ADTreeNode<dim>*> ela;
+    ClosedHashTable<T, T_ADTreeNode<dim,T>*> ela;
 
     BlockAllocator ball{sizeof(T_ADTreeNode<dim,T>)};
   public:
@@ -480,7 +661,7 @@ public:
               // ela.SetSize (pi+1);
               ela[pi] = node;
               
-	    return;
+            return;
             }
           
           if (node->sep > p[dir])
@@ -531,9 +712,9 @@ public:
     };
     
     void GetIntersecting (Point<dim> bmin, Point<dim> bmax,
-                          NgArray<T> & pis) const
+                          Array<T> & pis) const
   {
-    NgArrayMem<inttn,10000> stack(10000);
+    ArrayMem<inttn,10000> stack(10000);
     pis.SetSize(0);
 
     stack[0].node = root;
@@ -542,12 +723,12 @@ public:
 
     while (stacks >= 0)
       {
-	T_ADTreeNode<dim,T> * node = stack[stacks].node;
-	int dir = stack[stacks].dir; 
+        T_ADTreeNode<dim,T> * node = stack[stacks].node;
+        int dir = stack[stacks].dir; 
 
-	stacks--;
-	if (!IsInvalid(node->pi)) //  != -1)
-	  {
+        stacks--;
+        if (!IsInvalid(node->pi)) //  != -1)
+          {
             bool found = true;
             for (int i = 0; i < dim/2; i++)
               if (node->data[i] > bmax[i])
@@ -558,34 +739,34 @@ public:
             if (found)
               pis.Append (node->pi);            
             /*
-	    if (node->data[0] > bmax[0] || 
-		node->data[1] > bmax[1] || 
-		node->data[2] > bmax[2] || 
-		node->data[3] < bmin[3] || 
-		node->data[4] < bmin[4] || 
-		node->data[5] < bmin[5])
-	      ;
-	    else
+            if (node->data[0] > bmax[0] || 
+                node->data[1] > bmax[1] || 
+                node->data[2] > bmax[2] || 
+                node->data[3] < bmin[3] || 
+                node->data[4] < bmin[4] || 
+                node->data[5] < bmin[5])
+              ;
+            else
               {
                 pis.Append (node->pi);
               }
             */
-	  }
+          }
 
-	int ndir = (dir+1) % dim;
+        int ndir = (dir+1) % dim;
 
-	if (node->left && bmin[dir] <= node->sep)
-	  {
-	    stacks++;
-	    stack[stacks].node = node->left;
-	    stack[stacks].dir = ndir;
-	  }
-	if (node->right && bmax[dir] >= node->sep)
-	  {
-	    stacks++;
-	    stack[stacks].node = node->right;
-	    stack[stacks].dir = ndir;
-	  }
+        if (node->left && bmin[dir] <= node->sep)
+          {
+            stacks++;
+            stack[stacks].node = node->left;
+            stack[stacks].dir = ndir;
+          }
+        if (node->right && bmax[dir] >= node->sep)
+          {
+            stacks++;
+            stack[stacks].node = node->right;
+            stack[stacks].dir = ndir;
+          }
       }
   }
     
@@ -619,11 +800,11 @@ public:
       
       // if (node->data)     // true anyway
       {
-	ost << node->pi << ": ";
-	ost << node->nchilds << " childs, ";
-	for (int i = 0; i < dim; i++)
-	  ost << node->data[i] << " ";
-	ost << endl;
+        ost << node->pi << ": ";
+        ost << node->nchilds << " childs, ";
+        for (int i = 0; i < dim; i++)
+          ost << node->data[i] << " ";
+        ost << endl;
       }
       if (node->left)
         PrintRec (ost, node->left);
@@ -696,16 +877,16 @@ class ADTree6F
 {
   ADTreeNode6F * root;
   float cmin[6], cmax[6];
-  NgArray<ADTreeNode6F*> ela;
+  Array<ADTreeNode6F*> ela;
 
 public:
   ADTree6F (const float * acmin, 
-	   const float * acmax);
+           const float * acmax);
   ~ADTree6F ();
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			NgArray<int> & pis) const;
+                        Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -731,22 +912,44 @@ public:
 
 
 
-class Point3dTree 
+template <typename T = int>
+class Point3dTree
 {
-  ADTree3 * tree;
+  ADTree3<T> tree;
+
+  static void ToFloat (const Point<3> & p, float * pf)
+  {
+    for (int i = 0; i < 3; i++)
+      pf[i] = p(i);
+  }
 
 public:
-  DLL_HEADER Point3dTree (const Point<3> & pmin, const Point<3> & pmax);
-  DLL_HEADER ~Point3dTree ();
-  DLL_HEADER void Insert (const Point<3> & p, int pi);
-  void DeleteElement (int pi) 
-    { tree->DeleteElement(pi); }
-  DLL_HEADER void GetIntersecting (const Point<3> & pmin, const Point<3> & pmax, 
-			NgArray<int> & pis) const;
-  const ADTree3 & Tree() const { return *tree; };
+  Point3dTree (const Point<3> & pmin, const Point<3> & pmax)
+    : tree (pmin, pmax) { }
+
+  void Insert (const Point<3> & p, T pi)
+  {
+    float pf[3];
+    ToFloat (p, pf);
+    tree.Insert (pf, pi);
+  }
+
+  void DeleteElement (T pi)
+    { tree.DeleteElement(pi); }
+
+  void GetIntersecting (const Point<3> & pmin, const Point<3> & pmax,
+                        Array<T> & pis) const
+  {
+    float pmi[3], pma[3];
+    ToFloat (pmin, pmi);
+    ToFloat (pmax, pma);
+    tree.GetIntersecting (pmi, pma, pis);
+  }
+
+  const ADTree3<T> & Tree() const { return tree; }
 };
 
-template<int dim, typename T=INDEX>
+template<int dim, typename T=int>
 class BoxTree
 {
 public:
@@ -764,7 +967,7 @@ public:
     Leaf() : n_elements(0)
     { }
 
-    void Add( NgClosedHashTable<T, Leaf*> &leaf_index, const Point<2*dim> &ap, T aindex )
+    void Add( ClosedHashTable<T, Leaf*> &leaf_index, const Point<2*dim> &ap, T aindex )
       {
         p[n_elements] = ap;
         index[n_elements] = aindex;
@@ -799,7 +1002,7 @@ public:
 private:
   Node root;
 
-  NgClosedHashTable<T, Leaf*> leaf_index;
+  ClosedHashTable<T, Leaf*> leaf_index;
 
   Point<dim> global_min, global_max;
   double tol;
@@ -903,13 +1106,6 @@ public:
                 }
             }
         }
-    }
-
-  void GetIntersecting (const Point<dim> & pmin, const Point<dim> & pmax,
-          NgArray<T> & pis) const
-    {
-      pis.SetSize(0);
-      GetFirstIntersecting(pmin, pmax, [&pis](auto pi) { pis.Append(pi); return false;});
     }
 
   void GetIntersecting(const Point<dim> & pmin,
@@ -1024,7 +1220,7 @@ public:
     }
 };
 
-//   template <int dim, typename T = INDEX>
+//   template <int dim, typename T = int>
 //   class BoxTree
 //   {
 //     T_ADTree<2*dim,T> * tree;
@@ -1085,7 +1281,7 @@ public:
 //     }
 //
 //     void GetIntersecting (const Point<dim> & pmin, const Point<dim> & pmax,
-//                           NgArray<T> & pis) const
+//                           Array<T> & pis) const
 //     {
 //       Point<2*dim> tpmin, tpmax;
 //       double tol = Tolerance();
@@ -1107,7 +1303,7 @@ public:
 //     auto & Tree() { return *tree; };
 //   };
 
-  template<int dim, typename T=INDEX, typename TSCAL=double>
+  template<int dim, typename T=int, typename TSCAL=double>
   class DelaunayTree
   {
   public:
@@ -1273,7 +1469,7 @@ public:
       }
 
     void GetIntersecting (const Point<dim> & pmin, const Point<dim> & pmax,
-            NgArray<T> & pis) const
+            Array<T> & pis) const
       {
         pis.SetSize(0);
         GetFirstIntersecting(pmin, pmax, [&pis](auto pi) { pis.Append(pi); return false;});

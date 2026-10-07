@@ -39,6 +39,116 @@ namespace netgen
   using ELEMENT_EDGE = std::array<int,2>;
   using ELEMENT_FACE = std::array<int,4>;
 
+  /// number of points / vertices / edges / faces and the dimension of an element type
+  namespace element_info
+  {
+    constexpr size_t SIZE = 32;   // > max ELEMENT_TYPE value
+    constexpr std::array<int8_t,SIZE> np = [] {
+      std::array<int8_t,SIZE> t{};
+      t[SEGMENT] = 2;  t[SEGMENT3] = 3;
+      t[TRIG] = 3;  t[QUAD] = 4;  t[TRIG6] = 6;  t[QUAD6] = 6;  t[QUAD8] = 8;
+      t[TET] = 4;  t[PYRAMID] = 5;  t[PRISM] = 6;  t[HEX7] = 7;  t[HEX] = 8;
+      t[TET10] = 10;  t[PRISM12] = 12;  t[PYRAMID13] = 13;  t[PRISM15] = 15;  t[HEX20] = 20;
+      return t; } ();
+    constexpr std::array<int8_t,SIZE> nv = [] {
+      std::array<int8_t,SIZE> t{};
+      t[SEGMENT] = t[SEGMENT3] = 2;
+      t[TRIG] = t[TRIG6] = 3;  t[QUAD] = t[QUAD6] = t[QUAD8] = 4;
+      t[TET] = t[TET10] = 4;  t[PYRAMID] = t[PYRAMID13] = 5;  t[PRISM] = t[PRISM12] = t[PRISM15] = 6;
+      t[HEX7] = 7;  t[HEX] = t[HEX20] = 8;
+      return t; } ();
+    constexpr std::array<int8_t,SIZE> nedges = [] {
+      std::array<int8_t,SIZE> t{};
+      t[SEGMENT] = t[SEGMENT3] = 1;
+      t[TRIG] = t[TRIG6] = 3;  t[QUAD] = t[QUAD6] = t[QUAD8] = 4;
+      t[TET] = t[TET10] = 6;  t[PYRAMID] = t[PYRAMID13] = 8;  t[PRISM] = t[PRISM12] = t[PRISM15] = 9;
+      t[HEX7] = 11;  t[HEX] = t[HEX20] = 12;
+      return t; } ();
+    constexpr std::array<int8_t,SIZE> nfaces = [] {
+      std::array<int8_t,SIZE> t{};
+      t[TRIG] = t[TRIG6] = 1;  t[QUAD] = t[QUAD6] = t[QUAD8] = 1;
+      t[TET] = t[TET10] = 4;  t[PYRAMID] = t[PYRAMID13] = 5;  t[PRISM] = t[PRISM12] = t[PRISM15] = 5;
+      t[HEX7] = 6;  t[HEX] = t[HEX20] = 6;
+      return t; } ();
+    constexpr std::array<int8_t,SIZE> dim = [] {
+      std::array<int8_t,SIZE> t{};
+      t[SEGMENT] = t[SEGMENT3] = 1;
+      t[TRIG] = t[TRIG6] = t[QUAD] = t[QUAD6] = t[QUAD8] = 2;
+      t[TET] = t[TET10] = t[PYRAMID] = t[PYRAMID13] = t[PRISM] = t[PRISM12] = t[PRISM15] = t[HEX7] = t[HEX] = t[HEX20] = 3;
+      return t; } ();
+
+    /// edges of the reference elements, 0-based local vertex numbers
+    constexpr std::array<ELEMENT_EDGE,1> segm_edges = { ELEMENT_EDGE{ 0, 1 } };
+    constexpr std::array<ELEMENT_EDGE,3> trig_edges = { ELEMENT_EDGE{ 2, 0 }, { 1, 2 }, { 0, 1 } };
+    constexpr std::array<ELEMENT_EDGE,4> quad_edges = { ELEMENT_EDGE{ 0, 1 }, { 2, 3 }, { 3, 0 }, { 1, 2 } };
+    constexpr std::array<ELEMENT_EDGE,6> tet_edges = { ELEMENT_EDGE{ 3, 0 }, { 3, 1 }, { 3, 2 }, { 0, 1 }, { 0, 2 }, { 1, 2 } };
+    constexpr std::array<ELEMENT_EDGE,9> prism_edges = { ELEMENT_EDGE{ 2, 0 }, { 0, 1 }, { 2, 1 }, { 5, 3 }, { 3, 4 }, { 5, 4 }, { 2, 5 }, { 0, 3 }, { 1, 4 } };
+    constexpr std::array<ELEMENT_EDGE,8> pyramid_edges = { ELEMENT_EDGE{ 0, 1 }, { 1, 2 }, { 0, 3 }, { 3, 2 }, { 0, 4 }, { 1, 4 }, { 2, 4 }, { 3, 4 } };
+    constexpr std::array<ELEMENT_EDGE,11> hex7_edges = { ELEMENT_EDGE{ 0, 1 }, { 2, 3 }, { 3, 0 }, { 1, 2 }, { 4, 5 }, { 6, 4 }, { 5, 6 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 6 } };
+    constexpr std::array<ELEMENT_EDGE,12> hex_edges = { ELEMENT_EDGE{ 0, 1 }, { 2, 3 }, { 3, 0 }, { 1, 2 }, { 4, 5 }, { 6, 7 }, { 7, 4 }, { 5, 6 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
+
+    constexpr FlatArray<const ELEMENT_EDGE> Edges (ELEMENT_TYPE et)
+    {
+      switch (et)
+        {
+        case SEGMENT: case SEGMENT3: return { segm_edges.size(), segm_edges.data() };
+        case TRIG: case TRIG6: return { trig_edges.size(), trig_edges.data() };
+        case QUAD: case QUAD6: case QUAD8: return { quad_edges.size(), quad_edges.data() };
+        case TET: case TET10: return { tet_edges.size(), tet_edges.data() };
+        case PYRAMID: case PYRAMID13: return { pyramid_edges.size(), pyramid_edges.data() };
+        case PRISM: case PRISM12: case PRISM15: return { prism_edges.size(), prism_edges.data() };
+        case HEX7: return { hex7_edges.size(), hex7_edges.data() };
+        case HEX: case HEX20: return { hex_edges.size(), hex_edges.data() };
+        default: return { 0, nullptr };
+        }
+    }
+
+    /// faces of the reference elements, 0-based local vertex numbers, -1 in the 4th slot of a triangle
+    constexpr std::array<ELEMENT_FACE,1> trig_faces = { ELEMENT_FACE{ 0, 1, 2, -1 } };
+    constexpr std::array<ELEMENT_FACE,1> quad_faces = { ELEMENT_FACE{ 0, 1, 2, 3 } };
+    constexpr std::array<ELEMENT_FACE,4> tet_faces = { ELEMENT_FACE{ 3, 1, 2, -1 }, { 3, 2, 0, -1 }, { 3, 0, 1, -1 }, { 0, 2, 1, -1 } };
+    constexpr std::array<ELEMENT_FACE,5> prism_faces = { ELEMENT_FACE{ 0, 2, 1, -1 }, { 3, 4, 5, -1 }, { 2, 0, 3, 5 }, { 0, 1, 4, 3 }, { 1, 2, 5, 4 } };
+    constexpr std::array<ELEMENT_FACE,5> pyramid_faces = { ELEMENT_FACE{ 0, 1, 4, -1 }, { 1, 2, 4, -1 }, { 2, 3, 4, -1 }, { 3, 0, 4, -1 }, { 0, 3, 2, 1 } };
+    constexpr std::array<ELEMENT_FACE,6> hex7_faces = { ELEMENT_FACE{ 0, 3, 2, 1 }, { 4, 5, 6, -1 }, { 0, 1, 5, 4 }, { 1, 2, 6, 5 }, { 2, 3, 6, -1 }, { 3, 0, 4, 6 } };
+    constexpr std::array<ELEMENT_FACE,6> hex_faces = { ELEMENT_FACE{ 0, 3, 2, 1 }, { 4, 5, 6, 7 }, { 0, 1, 5, 4 }, { 1, 2, 6, 5 }, { 2, 3, 7, 6 }, { 3, 0, 4, 7 } };
+
+    constexpr FlatArray<const ELEMENT_FACE> Faces (ELEMENT_TYPE et)
+    {
+      switch (et)
+        {
+        case TRIG: case TRIG6: return { trig_faces.size(), trig_faces.data() };
+        case QUAD: case QUAD6: case QUAD8: return { quad_faces.size(), quad_faces.data() };
+        case TET: case TET10: return { tet_faces.size(), tet_faces.data() };
+        case PRISM: case PRISM12: case PRISM15: return { prism_faces.size(), prism_faces.data() };
+        case PYRAMID: case PYRAMID13: return { pyramid_faces.size(), pyramid_faces.data() };
+        case HEX7: return { hex7_faces.size(), hex7_faces.data() };
+        case HEX: case HEX20: return { hex_faces.size(), hex_faces.data() };
+        default: return { 0, nullptr };
+        }
+    }
+  }
+
+  /// the 2D element type with np points; 6 points give a TRIG6 (a QUAD6 is only made by type)
+  constexpr ELEMENT_TYPE Element2dTypeFromNP (int np)
+  {
+    switch (np)
+      {
+      case 3: return TRIG;  case 4: return QUAD;  case 6: return TRIG6;  case 8: return QUAD8;
+      }
+    return ELEMENT_TYPE(0);
+  }
+
+  /// the 3D element type with np points (the mapping is one-to-one)
+  constexpr ELEMENT_TYPE Element3dTypeFromNP (int np)
+  {
+    switch (np)
+      {
+      case 4: return TET;  case 5: return PYRAMID;  case 6: return PRISM;  case 7: return HEX7;  case 8: return HEX;
+      case 10: return TET10;  case 12: return PRISM12;  case 13: return PYRAMID13;  case 15: return PRISM15;  case 20: return HEX20;
+      }
+    return ELEMENT_TYPE(0);
+  }
+
 
 #define ELEMENT_MAXPOINTS 20
 #define ELEMENT2D_MAXPOINTS 8
@@ -64,8 +174,8 @@ namespace netgen
   class PointGeomInfo
   {
   public:
-    int trignum;   // for STL Meshing
-    double u, v;   // for OCC Meshing
+    int trignum = 0;        // for STL Meshing
+    double u = 0, v = 0;    // for OCC Meshing
 
     PointGeomInfo () = default;
     PointGeomInfo (const PointGeomInfo&) = default;
@@ -108,21 +218,18 @@ namespace netgen
   class EdgePointGeomInfo
   {
   public:
-    int edgenr;
-    int body;    // for ACIS
-    double dist; // for 2d meshing
-    double u, v; // for OCC Meshing
+    PointGeomInfo gi;
+    double dist; // parameter along edge curve
 
   public:
     EdgePointGeomInfo ()
-      : edgenr(-1), body(0), dist(0.0), u(0.0), v(0.0) { ; }
+      : dist(0.0) { gi.trignum = -1; gi.u = 0.0; gi.v = 0.0; }
     EdgePointGeomInfo (const EdgePointGeomInfo&) = default;
     EdgePointGeomInfo & operator= (const EdgePointGeomInfo & gi2) = default;
   };
-
   inline ostream & operator<< (ostream & ost, const EdgePointGeomInfo & gi)
   {
-    ost << "epgi: edgnr=" << gi.edgenr << ", dist=" << gi.dist;
+    ost << "epgi: dist=" << gi.dist;
     return ost;
   }
 
@@ -157,23 +264,6 @@ namespace netgen
 #endif
     }
 
-
-    /*
-      // didn't manage constexpr friend functions so far ???
-    friend auto operator+ (Index, int) -> TIndex;
-    friend TIndex operator+ (Index, size_t);    
-    friend TIndex operator+ (int, Index);
-    friend TIndex operator+ (size_t, Index);
-    friend constexpr TIndex operator- (Index, int);
-    friend int operator- (Index, Index);
-    friend bool operator< (Index a, Index b);
-    friend bool operator> (Index a, Index b);
-    friend bool operator>= (Index a, Index b);
-    friend bool operator<= (Index a, Index b);
-    friend bool operator== (Index a, Index b);
-    friend bool operator!= (Index a, Index b);
-    */
-    
   public:
     constexpr Index (t_invalid inv) : i(long(BASE)-1) { ; }
     // protected:
@@ -184,25 +274,33 @@ namespace netgen
     TIndex operator-- (int) { TIndex hi(*this); i--; return hi; }
     TIndex & operator++ () { i++; return static_cast<TIndex&>(*this); }
     TIndex & operator-- () { i--; return static_cast<TIndex&>(*this); }
-
-    /*
-    constexpr TIndex operator+= (int add) { i += add; return TIndex{*this}; }
-    constexpr TIndex operator+= (size_t add) { i += add; return TIndex{*this}; }
-    constexpr TIndex operator-= (int add) { i -= add; return TIndex{*this}; }
-    constexpr TIndex operator-= (size_t add) { i -= add; return TIndex{*this}; }
-    */
     constexpr TIndex operator+= (T_diff add) { i += add; return TIndex{*this}; }
     constexpr TIndex operator-= (T_diff add) { i -= add; return TIndex{*this}; }
     
     constexpr auto operator- (Index i2) const { return i-i2.i; }
 
-    // bool operator== (Index i2) const { return i==i2.i; }
-    // bool operator!= (Index i2) const { return i!=i2.i; }
+    /// 0-based number of this index
+    constexpr T Nr0 () const { return i - BASE_; }
+    /// index for a 0-based number
+    static constexpr TIndex FromNr0 (T i0) { return TIndex(T(BASE_) + i0); }
+    /// 1-based number of this index (file formats, external interfaces)
+    constexpr T Nr1 () const { return i - BASE_ + 1; }
+    /// index for a 1-based number
+    static constexpr TIndex FromNr1 (T i1) { return TIndex(T(BASE_) + i1 - 1); }
+    /// the underlying integer, for diagnostics and low-level interfaces only
+    constexpr T GetRawInteger () const { return i; }
+
     void Invalidate() { i = long(TIndex::BASE)-1; }
     bool IsValid() const { return i+1 != TIndex::BASE; }
     // operator bool() const { return IsValid(); }
 
-    void DoArchive (Archive & ar) { ar & i; }
+    // archives store 1-based numbers (the historic base-1 raw value), independent of BASE
+    void DoArchive (Archive & ar)
+    {
+      T nr1 = i - T(BASE) + 1;
+      ar & nr1;
+      if (ar.Input()) i = nr1 - 1 + T(BASE);
+    }
   };
 
 
@@ -217,8 +315,6 @@ namespace netgen
   
   template <typename T, typename TIndex, int Base>    
   constexpr inline auto operator- (Index<T,TIndex,Base> ind, int i) { Index<T,TIndex,Base> res(ind); return res -= i; }  
-  // template <typename T, typename TIndex, int Base>    
-  // constexpr inline auto operator- (Index<T,TIndex,Base> pa, Index<T,TIndex,Base> pb) { return pa.i-pb.i; }
   
   template <typename T, typename TIndex, int Base>      
   inline bool operator< (Index<T,TIndex,Base> a, Index<T,TIndex,Base> b) { return a-b < 0; }
@@ -230,150 +326,66 @@ namespace netgen
   inline bool operator<= (Index<T,TIndex,Base> a, Index<T,TIndex,Base> b) { return a-b <= 0; }
 
   template <typename T, typename TIndex, int Base>      
-  inline bool operator== (Index<T,TIndex,Base> a, Index<T,TIndex,Base> b) { return a.i == b.i; }
+  constexpr bool operator== (Index<T,TIndex,Base> a, Index<T,TIndex,Base> b) { return a.i == b.i; }
   template <typename T, typename TIndex, int Base>      
-  inline bool operator!= (Index<T,TIndex,Base> a, Index<T,TIndex,Base> b) { return a.i != b.i; }
+  constexpr bool operator!= (Index<T,TIndex,Base> a, Index<T,TIndex,Base> b) { return a.i != b.i; }
 
 
   template <typename T, typename TIndex, int Base>      
   inline void SetInvalid (Index<T,TIndex,Base> & id) { id.Invalidate(); }
   template <typename T, typename TIndex, int Base>        
   inline bool IsInvalid (const Index<T,TIndex,Base> & id) { return !id.IsValid(); }
+  template <typename T, typename TIndex, int Base>
+  inline size_t HashValue (Index<T,TIndex,Base> id, size_t size) { return (113*size_t(id)) % size; }
 
 
   
-  class PointIndex : public Index<int,PointIndex,1>
+  class PointIndex : public Index<int,PointIndex,NETGEN_POINTINDEX_BASE>
   {
+    friend class Index<int,PointIndex,NETGEN_POINTINDEX_BASE>;
+    constexpr PointIndex (int ai) : Index(ai) { }   // use IndexBASE<PointIndex>()+nr
   public:
     using Index::Index;
-    template <int N> friend class PointIndices;    
+    operator int () const = delete;    // a PointIndex stays a PointIndex
+    operator int & () = delete;
   };
-
-}
-
-namespace ngcore
-{
-  template<> 
-  constexpr netgen::PointIndex IndexBASE<netgen::PointIndex> () { return netgen::PointIndex::Base(); }
-}
-
-namespace netgen
-{
 
   // input-output is 1-based
   inline istream & operator>> (istream & ist, PointIndex & pi)
   {
-    // int i; ist >> i; pi = PointIndex(i); return ist;
     int i; ist >> i;
-    pi = IndexBASE<PointIndex>()+i-1;
+    pi = PointIndex::FromNr1(i);
     return ist;
   }
 
   inline ostream & operator<< (ostream & ost, const PointIndex & pi)
   {
     // return (ost << int(pi));
-    int intpi = pi - IndexBASE<PointIndex>() + 1;
+    int intpi = pi.Nr1();
     return (ost << intpi);    
   }
 
 
 
   /*
-    PointIndices<2> etc are derived from historic INDEX_2 etc to be useable in old HASHTABLEs.
-    Will change to IVec<2> or std::array when INDEX_2 is not needed anymore
+    PointIndices<N> is just IVec<N,PointIndex> - use operator[], not I1()/I2()/...
+    To get a sorted one, write PointIndices<N>(...).Sort() or use SortedPointIndices<N>.
    */
   
-  template <int N> class PointIndices;
-  template <> class PointIndices<2> : public INDEX_2
-  {
-  public:
-    PointIndices () = default;
-    constexpr PointIndices (const PointIndices&) = default;
-    constexpr PointIndices (PointIndices&&) = default;
-    PointIndices & operator= (const PointIndices&) = default;
-    PointIndices & operator= (PointIndices&&) = default;
-    
-    constexpr PointIndices (INDEX_2 i2) : INDEX_2(i2) { ; }
-    constexpr PointIndices (PointIndex i1, PointIndex i2) : INDEX_2(i1,i2) { ; } 
-    constexpr PointIndex operator[] (int i) const { return PointIndex(INDEX_2::operator[](i)); }
-    PointIndex & operator[] (int i) { return reinterpret_cast<PointIndex&>(INDEX_2::operator[](i)); }
-
-    template <typename ARCHIVE>
-    void DoArchive(ARCHIVE& ar) { ar.Do(&I1(), 2); }
-    
-    PointIndex & I1 () { return (*this)[0]; }
-    PointIndex & I2 () { return (*this)[1]; }
-    PointIndex I1 () const { return (*this)[0]; }
-    PointIndex I2 () const { return (*this)[1]; }
-    
-    using INDEX_2::Sort;
-    static PointIndices Sort(PointIndex i1, PointIndex i2) { return INDEX_2::Sort(i1, i2); }
-    template <size_t J>
-    PointIndex get() const { return PointIndex(INDEX_2::operator[](J)); }    
-  };
-  
-  template <> class PointIndices<3> : public INDEX_3
-  {
-  public:
-    PointIndices () = default;
-    PointIndices (const PointIndices&) = default;
-    PointIndices (PointIndices&&) = default;
-    PointIndices & operator= (const PointIndices&) = default;
-    PointIndices & operator= (PointIndices&&) = default;
-    constexpr PointIndices (INDEX_3 i3) : INDEX_3(i3) { ; }
-    constexpr PointIndices (PointIndex i1, PointIndex i2, PointIndex i3) : INDEX_3(i1,i2,i3) { ; }
-    PointIndex operator[] (int i) const { return PointIndex(INDEX_3::operator[](i)); }
-    PointIndex & operator[] (int i) { return reinterpret_cast<PointIndex&>(INDEX_3::operator[](i)); }
-
-    template <typename ARCHIVE>
-    void DoArchive(ARCHIVE& ar) { ar.Do(&I1(), 3); }
-    
-    PointIndex & I1 () { return (*this)[0]; }
-    PointIndex & I2 () { return (*this)[1]; }
-    PointIndex & I3 () { return (*this)[2]; }
-    PointIndex I1 () const { return (*this)[0]; }
-    PointIndex I2 () const { return (*this)[1]; }
-    PointIndex I3 () const { return (*this)[2]; }
-
-    using INDEX_3::Sort;
-    static PointIndices Sort(PointIndex i1, PointIndex i2, PointIndex i3) { return INDEX_3::Sort(i1, i2, i3); }
-    template <size_t J>
-    PointIndex get() const { return PointIndex(INDEX_3::operator[](J)); }    
-  };
-  
-  template <> class PointIndices<4> : public INDEX_4
-  {
-  public:
-    PointIndices () = default;
-    PointIndices (INDEX_4 i4) : INDEX_4(i4) { ; }
-    PointIndices (PointIndex i1, PointIndex i2, PointIndex i3, PointIndex i4) : INDEX_4(i1,i2,i3,i4) { ; } 
-    PointIndex operator[] (int i) const { return PointIndex(INDEX_4::operator[](i)); }
-    PointIndex & operator[] (int i) { return reinterpret_cast<PointIndex&>(INDEX_4::operator[](i)); }
-
-    template <typename ARCHIVE>
-    void DoArchive(ARCHIVE& ar) { ar.Do(&I1(), 4); }
-    
-    PointIndex & I1 () { return (*this)[0]; }
-    PointIndex & I2 () { return (*this)[1]; }
-    PointIndex & I3 () { return (*this)[2]; }
-    PointIndex & I4 () { return (*this)[3]; }
-    PointIndex I1 () const { return (*this)[0]; }
-    PointIndex I2 () const { return (*this)[1]; }
-    PointIndex I3 () const { return (*this)[2]; }
-    PointIndex I4 () const { return (*this)[3]; }
-    
-    using INDEX_4::Sort;
-    // static PointIndices Sort(PointIndex i1, PointIndex i2, PointIndex i3, PointIndex i4) { return INDEX_4::Sort(i1, i2, i3, i4); }
-    template <size_t J>
-    PointIndex get() const { return PointIndex(INDEX_4::operator[](J)); }    
-  };
-
+  template <int N>
+  using PointIndices = IVec<N,PointIndex>;
 
   template <int N>
   class SortedPointIndices : public PointIndices<N>
   {
     using PointIndices<N>::Sort;
+    struct ordered_t { };
+    constexpr SortedPointIndices (ordered_t, PointIndices<N> pnts)
+      : PointIndices<N>(pnts) { }
   public:
+    /// for values that are known to be ordered already (skips the sort)
+    static constexpr SortedPointIndices Ordered (PointIndices<N> pnts)
+    { return SortedPointIndices(ordered_t{}, pnts); }
     constexpr SortedPointIndices (PointIndices<N> pnts)
       : PointIndices<N>(pnts.Sort()) { } 
     
@@ -412,12 +424,35 @@ namespace ngcore
   template <>
   struct CHT_trait<netgen::SortedPointIndices<2>>
   {
-    constexpr static inline netgen::SortedPointIndices<2> Invalid() { return { netgen::PointIndex::INVALID, netgen::PointIndex::INVALID} ; }
+    constexpr static inline netgen::SortedPointIndices<2> Invalid()
+    { return netgen::SortedPointIndices<2>::Ordered ({ netgen::PointIndex::INVALID, netgen::PointIndex::INVALID }); }
     constexpr static inline size_t HashValue (const netgen::SortedPointIndices<2> & hash, size_t mask)
-    // { return HashValue2(IVec<2,netgen::INDEX>(hash[0], hash[1]), mask); }
+    // { return HashValue2(IVec<2,netgen::int>(hash[0], hash[1]), mask); }
     { return CHT_trait<netgen::PointIndices<2>>::HashValue (hash, mask); }
   };
   
+
+  template <>
+  struct CHT_trait<netgen::PointIndices<3>>
+  {
+    constexpr static inline netgen::PointIndices<3> Invalid()
+    { return { netgen::PointIndex::INVALID, netgen::PointIndex::INVALID, netgen::PointIndex::INVALID }; }
+    constexpr static inline size_t HashValue (const netgen::PointIndices<3> & hash, size_t mask)
+    { return HashValue2(IVec<3>(hash[0]-IndexBASE<netgen::PointIndex>(),
+                                hash[1]-IndexBASE<netgen::PointIndex>(),
+                                hash[2]-IndexBASE<netgen::PointIndex>()), mask); }
+  };
+
+
+  template <>
+  struct CHT_trait<netgen::SortedPointIndices<3>>
+  {
+    constexpr static inline netgen::SortedPointIndices<3> Invalid()
+    { return netgen::SortedPointIndices<3>::Ordered ({ netgen::PointIndex::INVALID, netgen::PointIndex::INVALID, netgen::PointIndex::INVALID }); }
+    constexpr static inline size_t HashValue (const netgen::SortedPointIndices<3> & hash, size_t mask)
+    { return CHT_trait<netgen::PointIndices<3>>::HashValue (hash, mask); }
+  };
+
 
   template <>
   constexpr inline netgen::PointIndices<3> InvalidHash<netgen::PointIndices<3>> ()
@@ -438,97 +473,361 @@ namespace std
   template <auto N>
   struct tuple_size<netgen::PointIndices<N>> : std::integral_constant<std::size_t, N> {};
   template<size_t N, auto M> struct tuple_element<N,netgen::PointIndices<M>> { using type = netgen::PointIndex; };
+  template <auto N>
+  struct tuple_size<netgen::SortedPointIndices<N>> : std::integral_constant<std::size_t, N> {};
+  template<size_t N, auto M> struct tuple_element<N,netgen::SortedPointIndices<M>> { using type = netgen::PointIndex; };
 }
 
 namespace netgen
 {
 
-  class ElementIndex : public Index<int,ElementIndex,0>
-  {
-  public:
-    using Index::Index; // <int,ElementIndex,0>::Index;
-  };
-  
-  inline istream & operator>> (istream & ist, ElementIndex & ei)
-  {
-    int i; ist >> i; ei = ElementIndex::Base()+i; return ist;
-  }
+  class AnyElementIndex;
 
-  inline ostream & operator<< (ostream & ost, const ElementIndex & ei)
-  {
-    return ost << int(ei-ElementIndex::Base());
-  }
-
-
-  /*
-  // these should not be needed soon
-  inline bool operator== (Index<int,ElementIndex,0> ei1, int ei2) { return int(ei1) == int(ei2); };  
-  inline bool operator< (size_t s, Index<int,ElementIndex,0> ei2) { return int(s) < int(ei2); };    
-  inline bool operator< ( Index<int,ElementIndex,0> ei1, size_t s) { return int(ei1) < int(s); };   // should not need
-  inline bool operator< ( Index<int,ElementIndex,0> ei1, int s) { return int(ei1) < int(s); };   // should not need
-  inline bool operator>= (size_t s,  Index<int,ElementIndex,0> ei2) { return int(s) >= int(ei2); };
+  /**
+     Element number of a D-dimensional mesh element:
+     ElIndex<3> is a volume element, ElIndex<2> a surface element, ElIndex<1> a segment.
   */
-
-  class SurfaceElementIndex : public Index<int,SurfaceElementIndex,0>
+  template <int D>
+  class ElIndex : public Index<int,ElIndex<D>,0>
   {
+    typedef Index<int,ElIndex<D>,0> TBase;
+    friend class Index<int,ElIndex<D>,0>;
+    constexpr ElIndex (int ai) : TBase(ai) { }   // use IndexBASE<ElIndex<D>>()+nr, or FromNr0/FromNr1
   public:
-    using Index::Index;
+    using TBase::TBase;
+    operator int () const = delete;    // an ElIndex stays an ElIndex
+    operator int & () = delete;
+    /// narrowing from AnyElementIndex is explicit - name the kind you mean
+    explicit constexpr ElIndex (AnyElementIndex bi);
   };
 
-  
-  // these should not be needed soon
-  /*
-  inline bool operator== (Index<int, SurfaceElementIndex,0> ei1, int ei2) { return int(ei1) == int(ei2); };
-  inline bool operator== (int ei2, Index<int, SurfaceElementIndex,0> ei1) { return int(ei1) == int(ei2); };
-  inline bool operator!= (Index<int, SurfaceElementIndex,0> ei1, int ei2) { return int(ei1) != int(ei2); };    
-  inline bool operator< (size_t s, Index<int, SurfaceElementIndex,0> ei2) { return int(s) < int(ei2); };    
-  inline bool operator< (Index<int, SurfaceElementIndex,0> ei1, size_t s) { return int(ei1) < int(s); };   // should not need
-  inline bool operator< (Index<int, SurfaceElementIndex,0> ei1, int s) { return int(ei1) < int(s); };   // should not need
-  inline bool operator>= (size_t s, Index<int, SurfaceElementIndex,0> ei2) { return int(s) >= int(ei2); };
-  inline bool operator>= (Index<int, SurfaceElementIndex,0> ei1, int s) { return int(ei1) >= int(s); };
+  using ElementIndex = ElIndex<3>;
+  using SurfaceElementIndex = ElIndex<2>;
+  using SegmentIndex = ElIndex<1>;
+}
+
+namespace ngcore
+{
+  template <int D>
+  struct CHT_trait<netgen::ElIndex<D>>
+  {
+    constexpr static inline netgen::ElIndex<D> Invalid() { return netgen::ElIndex<D>::INVALID; }
+    constexpr static inline size_t HashValue (const netgen::ElIndex<D> & hash, size_t mask)
+    { return (hash-IndexBASE<netgen::ElIndex<D>>()) & mask; }
+  };
+}
+
+namespace netgen
+{
+
+  template <int D>
+  inline istream & operator>> (istream & ist, ElIndex<D> & ei)
+  {
+    int i; ist >> i; ei = ElIndex<D>::FromNr0(i); return ist;
+  }
+
+  template <int D>
+  inline ostream & operator<< (ostream & ost, const ElIndex<D> & ei)
+  {
+    return ost << ei.Nr0();
+  }
+
+
+  /**
+     An element number whose kind (volume element, surface element or segment)
+     is fixed by the context, not by the value - e.g. HPRefElement::coarse_elnr.
+     Widening from a concrete index is implicit, narrowing back is explicit.
   */
-  
-  // inline void SetInvalid (SurfaceElementIndex & id) { id.Invalidate(); }
-  // inline bool IsInvalid (SurfaceElementIndex & id) { return !id.IsValid(); }
-
-  inline istream & operator>> (istream & ist, SurfaceElementIndex & pi)
-  {
-    int i; ist >> i; pi = i; return ist;
-  }
-
-  inline ostream & operator<< (ostream & ost, const SurfaceElementIndex & si)
-  {
-    return ost << (si-IndexBASE(si));
-  }
-
-
-  class SegmentIndex : public Index<int,SegmentIndex,0>
+  class AnyElementIndex : public Index<int,AnyElementIndex,0>
   {
   public:
     using Index::Index;
+    template <int D>
+    constexpr AnyElementIndex (ElIndex<D> ei) : Index(ei.Nr0()) { }
   };
 
-  // these should not be needed soon
-  /*
-  inline bool operator== (Index<int, SegmentIndex,0> ei1, int ei2) { return int(ei1) == int(ei2); };  
-  inline bool operator< (size_t s, Index<int,SegmentIndex,0> ei2) { return int(s) < int(ei2); };
-  inline bool operator< (Index<int, SegmentIndex,0> ei1, size_t s) { return int(ei1) < int(s); };
-  inline bool operator< (Index<int, SegmentIndex,0> ei1, int s) { return int(ei1) < int(s); };   
+  template <int D>
+  constexpr ElIndex<D>::ElIndex (AnyElementIndex bi)
+    : Index<int,ElIndex<D>,0>(bi.Nr0()) { }
+
+
+  /**
+     Point number in the advancing front (AdFront3), not a mesh point number.
+     AdFront3::GetGlobalIndex maps it to the PointIndex of the mesh.
   */
-  
-  // inline void SetInvalid (SegmentIndex & id) { id = -1; }
-  // inline bool IsInvalid (SegmentIndex & id) { return id == -1; }
-
-
-  inline istream & operator>> (istream & ist, SegmentIndex & pi)
+  class Front3PointIndex : public Index<int,Front3PointIndex,0>
   {
-    int i; ist >> i; pi = i; return ist;
+    friend class Index<int,Front3PointIndex,0>;
+    constexpr Front3PointIndex (int ai) : Index(ai) { }   // use IndexBASE<Front3PointIndex>()+nr
+  public:
+    using Index::Index;
+    operator int () const = delete;
+    operator int & () = delete;
+  };
+
+  /**
+     Point number in the 2D advancing front (AdFront2), not a mesh point number.
+     AdFront2::GetGlobalIndex maps it to the PointIndex of the mesh.
+  */
+  class Front2PointIndex : public Index<int,Front2PointIndex,0>
+  {
+    friend class Index<int,Front2PointIndex,0>;
+    constexpr Front2PointIndex (int ai) : Index(ai) { }   // use IndexBASE<Front2PointIndex>()+nr
+  public:
+    using Index::Index;
+    operator int () const = delete;
+    operator int & () = delete;
+  };
+
+  /**
+     Point number in the local numbering of AdFront3::GetLocals,
+     i.e. an index into the local point array handed to the meshing rules.
+  */
+  class LocalPointIndex : public Index<int,LocalPointIndex,0>
+  {
+    friend class Index<int,LocalPointIndex,0>;
+    constexpr LocalPointIndex (int ai) : Index(ai) { }   // use IndexBASE<LocalPointIndex>()+nr
+  public:
+    using Index::Index;
+    operator int () const = delete;
+    operator int & () = delete;
+  };
+
+  /**
+     Point number within a meshing rule (as parsed from the .rls files),
+     mapped to a LocalPointIndex by the rule application.
+  */
+  class RulePointIndex : public Index<int,RulePointIndex,1>
+  {
+    friend class Index<int,RulePointIndex,1>;
+    constexpr RulePointIndex (int ai) : Index(ai) { }   // use IndexBASE<RulePointIndex>()+nr
+  public:
+    using Index::Index;
+    operator int () const = delete;
+    operator int & () = delete;
+  };
+
+  /**
+     Vertex number within a single element, 1 .. GetNP().
+  */
+  class ElementVertexIndex : public Index<int,ElementVertexIndex,1>
+  {
+    friend class Index<int,ElementVertexIndex,1>;
+    constexpr ElementVertexIndex (int ai) : Index(ai) { }   // use IndexBASE<ElementVertexIndex>()+nr
+  public:
+    using Index::Index;
+    operator int () const = delete;
+    operator int & () = delete;
+  };
+
+  /**
+     1-based index into the regions of entity dimension D, Mesh::Regions<D>().
+     INVALID (= 0) means unset. Only constructed via FromNr0/FromNr1.
+  */
+  class AnyRegionIndex;
+
+  template <int D>
+  class RegionIndex : public Index<int,RegionIndex<D>,1>
+  {
+    typedef Index<int,RegionIndex<D>,1> TBase;
+    friend class Index<int,RegionIndex<D>,1>;
+    constexpr RegionIndex (int ai) : TBase(ai) { }
+  public:
+    using TBase::TBase;
+    /// narrowing from AnyRegionIndex - the dimension is fixed by the context
+    constexpr RegionIndex (AnyRegionIndex ai);
+    operator int () const = delete;    // use Nr1() / Nr0() / IsValid()
+    operator int & () = delete;
+  };
+
+  using VertexRegionIndex = RegionIndex<0>;
+  using EdgeRegionIndex = RegionIndex<1>;
+  using FaceRegionIndex = RegionIndex<2>;
+  using VolumeRegionIndex = RegionIndex<3>;
+
+  // old names
+  using FaceDescriptorIndex = FaceRegionIndex;
+  using EdgeDescriptorIndex = EdgeRegionIndex;
+
+  /**
+     A region index whose dimension (vertex, edge, face or volume region) is
+     fixed by the context, not by the value - e.g. HPRefElement::index.
+     Converts implicitly from and to the four RegionIndex<D>.
+  */
+  class AnyRegionIndex : public Index<int,AnyRegionIndex,1>
+  {
+  public:
+    using Index::Index;
+    template <int D>
+    constexpr AnyRegionIndex (RegionIndex<D> ri) : Index(ri.Nr1()) { }
+    operator int () const = delete;
+    operator int & () = delete;
+  };
+
+  template <int D>
+  constexpr RegionIndex<D>::RegionIndex (AnyRegionIndex ai)
+    : TBase(ai.Nr1()) { }
+
+  template <int D>
+  inline ostream & operator<< (ostream & ost, const RegionIndex<D> & i) { return ost << i.Nr1(); }
+  template <int D>
+  inline istream & operator>> (istream & ist, RegionIndex<D> & i)
+  {
+    int nr; ist >> nr; i = RegionIndex<D>::FromNr1(nr); return ist;
   }
 
-  inline ostream & operator<< (ostream & ost, const SegmentIndex & si)
+  inline ostream & operator<< (ostream & ost, const Front2PointIndex & fpi)
   {
-    return ost << (si - IndexBASE(si));
-  } 
+    return ost << (fpi - IndexBASE<Front2PointIndex>());
+  }
+
+  inline ostream & operator<< (ostream & ost, const Front3PointIndex & fpi)
+  {
+    return ost << (fpi - IndexBASE<Front3PointIndex>());
+  }
+
+  inline ostream & operator<< (ostream & ost, const LocalPointIndex & lpi)
+  {
+    return ost << (lpi - IndexBASE<LocalPointIndex>());
+  }
+
+  // rule files number their points 1-based
+  inline constexpr RulePointIndex RuleP (int nr) { return RulePointIndex::FromNr1(nr); }
+
+  inline istream & operator>> (istream & ist, RulePointIndex & rpi)
+  {
+    int i; ist >> i;
+    rpi = RulePointIndex::FromNr1(i);
+    return ist;
+  }
+
+  inline ostream & operator<< (ostream & ost, const RulePointIndex & rpi)
+  {
+    return ost << (rpi - IndexBASE<RulePointIndex>());
+  }
+
+  inline ostream & operator<< (ostream & ost, const ElementVertexIndex & evi)
+  {
+    return ost << (evi - IndexBASE<ElementVertexIndex>());
+  }
+
+
+template <typename TINDEX>
+class MiniElement2dT
+{
+protected:
+  int np;
+  TINDEX pnum[4];
+  bool deleted;
+public:
+  MiniElement2dT ()
+  { np = 3; deleted = 0; }
+  MiniElement2dT (int anp)
+  { np = anp; deleted = 0; }
+
+  int GetNP() const { return np; }
+  void SetNP (int anp) { np = anp; }
+  TINDEX & operator[] (int i) { return pnum[i]; }
+  const TINDEX operator[] (int i) const { return pnum[i]; }
+
+  const TINDEX PNum (int i) const { return pnum[i-1]; }
+  TINDEX & PNum (int i) { return pnum[i-1]; }
+  const TINDEX PNumMod (int i) const { return pnum[(i-1)%np]; }
+  auto PNums() { return FlatArray<TINDEX> (np, &pnum[0]); }
+  auto PNums() const { return FlatArray<const TINDEX> (np, &pnum[0]); }
+  void Delete () { deleted = true; for (TINDEX & p : pnum) p.Invalidate(); }
+  bool IsDeleted () const { return deleted; }
+};
+
+/// face in local (GetLocals) numbering
+using MiniElement2d = MiniElement2dT<LocalPointIndex>;
+/// face in advancing-front numbering
+using FrontElement2d = MiniElement2dT<Front3PointIndex>;
+/// 2d element / face in rule numbering
+using RuleElement2d = MiniElement2dT<RulePointIndex>;
+/// face of a volume element, in element-vertex numbering
+using ElementFace = MiniElement2dT<ElementVertexIndex>;
+
+
+/// volume element in a non-mesh numbering (local or rule)
+template <typename TINDEX>
+class MiniElementT
+{
+  ELEMENT_TYPE typ;
+  int np;
+  TINDEX pnum[8];
+public:
+  MiniElementT () : typ(TET), np(4) { }
+  MiniElementT (int anp) { SetNP(anp); }
+
+  ELEMENT_TYPE GetType () const { return typ; }
+  int GetNP () const { return np; }
+
+  void SetNP (int anp)
+  {
+    np = anp;
+    switch (np)
+      {
+      case 4: typ = TET; break;
+      case 5: typ = PYRAMID; break;
+      case 6: typ = PRISM; break;
+      case 7: typ = HEX7; break;
+      case 8: typ = HEX; break;
+      default: cerr << "MiniElementT::SetNP unknown element with " << np << " points" << endl;
+      }
+  }
+
+  void SetType (ELEMENT_TYPE atyp)
+  {
+    typ = atyp;
+    switch (typ)
+      {
+      case TET: np = 4; break;
+      case PYRAMID: np = 5; break;
+      case PRISM: np = 6; break;
+      case HEX7: np = 7; break;
+      case HEX: np = 8; break;
+      default: cerr << "MiniElementT::SetType unknown type " << int(typ) << endl;
+      }
+  }
+
+  TINDEX & operator[] (int i) { return pnum[i]; }
+  TINDEX operator[] (int i) const { return pnum[i]; }
+  TINDEX & PNum (int i) { return pnum[i-1]; }
+  TINDEX PNum (int i) const { return pnum[i-1]; }
+  auto PNums() { return FlatArray<TINDEX> (np, &pnum[0]); }
+  auto PNums() const { return FlatArray<const TINDEX> (np, &pnum[0]); }
+};
+
+/// volume element in local (GetLocals) numbering, as produced by the meshing rules
+using LocalElement = MiniElementT<LocalPointIndex>;
+/// volume element in rule numbering
+using RuleElement = MiniElementT<RulePointIndex>;
+/// sub-tet of a volume element, in element-vertex numbering
+using ElementTet = MiniElementT<ElementVertexIndex>;
+
+template <typename TINDEX>
+inline ostream & operator<< (ostream & ost, const MiniElementT<TINDEX> & el)
+{
+  ost << "np = " << el.GetNP();
+  for (int j = 0; j < el.GetNP(); j++)
+    ost << " " << el[j];
+  return ost;
+}
+
+
+template <typename TINDEX>
+inline ostream & operator<<(ostream  & s, const MiniElement2dT<TINDEX> & el)
+{
+  s << "np = " << el.GetNP();
+  for (int j = 0; j < el.GetNP(); j++)
+    s << " " << el[j];
+  return s;
+}
+
+
+
+
 
 
 
@@ -545,16 +844,10 @@ namespace netgen
 
 
   public:
-    MeshPoint () 
-    { 
-      ;
-    }
+    MeshPoint () = default;
 
     MeshPoint (const Point<3> & ap, int alayer = 1, POINTTYPE apt = INNERPOINT)
-      : Point<3> (ap), singular(0.), layer(alayer), type(apt) 
-    { 
-      ;
-    }
+      : Point<3> (ap), singular(0.), layer(alayer), type(apt) { }
   
     void SetPoint (const Point<3> & ap)
     { 
@@ -563,7 +856,7 @@ namespace netgen
       singular = 0; 
     }
 
-    void Scale(double factor) { *testout << "before: " << x[0] << endl; x[0] *= factor; x[1] *= factor; x[2] *= factor; *testout << "after: " << x[0] << endl;}
+    void Scale(double factor) { x[0] *= factor; x[1] *= factor; x[2] *= factor; }
 
     int GetLayer() const { return layer; }
 
@@ -580,10 +873,6 @@ namespace netgen
 
     void DoArchive (Archive & ar)
     {
-      // ar & x[0] & x[1] & x[2] & layer & singular;
-      // ar.Do(&x[0], 3);
-      // ar & layer & singular;
-      // ar & (unsigned char&)(type);
       ar.DoPacked (x[0], x[1], x[2], layer, singular, (unsigned char&)(type));
     }
   };
@@ -601,311 +890,231 @@ namespace netgen
   /**
      Triangle element for surface mesh generation.
   */
-  class Element2d
-  { 
-    /// point numbers
-    PointIndex pnum[ELEMENT2D_MAXPOINTS];
-    /// geom info of points
-    PointGeomInfo geominfo[ELEMENT2D_MAXPOINTS];
-
-    /// surface nr
-    int index;
-    ///
-    ELEMENT_TYPE typ;
-    /// number of points
-    int8_t np;
-    bool refflag;  // marked for refinement
-    bool badel:1;
-    bool strongrefflag:1;
-    bool deleted:1;  // element is deleted
-
-    // Philippose - 08 August 2010
-    // Set a new property for each element, to 
-    // control whether it is visible or not
-    bool visible:1;  // element visible
-    bool is_curved;   // element is (high order) curved
+  struct Element2dHeader
+  {
+    ELEMENT_TYPE typ;   // number of points and vertices follow from the type: element_info
     int8_t newest_vertex = -1; // from refinement via bisection
-    /// order for hp-FEM
-    unsigned int orderx:6;
-    unsigned int ordery:6;
-
+    bool refflag;     // marked for refinement
+    bool is_curved;   // element is (high order) curved
+    /// face descriptor index (1-based)
+    FaceRegionIndex index = FaceRegionIndex::INVALID;
     /// a linked list for all elements in the same face
     SurfaceElementIndex next;
-    ///
-    int hp_elnr;
+
+    class flagstruct {
+    public:
+      bool badel:1;
+      bool strongrefflag:1;
+      bool deleted:1;  // element is deleted
+      bool visible:1;  // element visible
+    };
+    flagstruct flags;
+  };
+
+  /*
+    Handle to a surface element: header, point numbers, geom info and the number of point slots.
+    Refers to a slot of the mesh's surface element array or to the storage of an Element2d value.
+    Copying the handle rebinds it, assigning through it copies the element contents.
+  */
+  class Element2dRef
+  {
+  protected:
+    Element2dHeader * h;
+    PointIndex * pn;
+    PointGeomInfo * gi;
+    int maxnp;
 
   public:
+    typedef Element2dHeader::flagstruct flagstruct;
+
+    Element2dRef (Element2dHeader * ah, PointIndex * apn, PointGeomInfo * agi, int amaxnp)
+      : h(ah), pn(apn), gi(agi), maxnp(amaxnp) { }
+    Element2dRef (DynStrideView<Element2dHeader, false, PointIndex, PointGeomInfo> v)
+      : h(&v.Head()), pn(v.TailPtr<0>()), gi(v.TailPtr<1>()), maxnp(int(v.Width())) { }
+    Element2dRef (DynStrideView<Element2dHeader, true, PointIndex, PointGeomInfo> v)
+      : h(const_cast<Element2dHeader*>(&v.Head())), pn(const_cast<PointIndex*>(v.TailPtr<0>())),
+        gi(const_cast<PointGeomInfo*>(v.TailPtr<1>())), maxnp(int(v.Width())) { }
+    Element2dRef (const Element2dRef &) = default;
+
+    /// copies header, point numbers and geom info, throws if the element does not fit
+    DLL_HEADER Element2dRef & operator= (const Element2dRef & el2);
+
+    Element2dRef & operator= (initializer_list<PointIndex> list)
+    {
+      size_t cnt = 0;
+      for (auto val : list)
+        pn[cnt++] = val;
+      return *this;
+    }
+    Element2dRef & operator= (initializer_list<std::tuple<PointIndex,PointGeomInfo>> list)
+    {
+      size_t cnt = 0;
+      for (auto val : list)
+        {
+          pn[cnt] = get<0>(val);
+          gi[cnt++] = get<1>(val);
+        }
+      return *this;
+    }
+
+    Element2dHeader & Header () const { return *h; }
+    int MaxNP () const { return maxnp; }
+
+    ELEMENT_TYPE GetType () const { return h->typ; }
+    DLL_HEADER void SetType (ELEMENT_TYPE atyp);
+    int GetNP() const { return element_info::np[h->typ]; }
+    int GetNV() const { return element_info::nv[h->typ]; }
+
+    PointIndex & operator[] (int i) { NETGEN_CHECK_RANGE(i, 0, maxnp); return pn[i]; }
+    const PointIndex & operator[] (int i) const { NETGEN_CHECK_RANGE(i, 0, maxnp); return pn[i]; }
+
+    auto PNums () const { return FlatArray<const PointIndex> (GetNP(), pn); }
+    auto PNums ()  { return FlatArray<PointIndex> (GetNP(), pn); }
+    template <int NP>
+    auto PNums() const { return FlatArray<const PointIndex> (NP, pn); }
+    auto Vertices() const { return FlatArray<const PointIndex> (GetNV(), pn); }
+    auto GeomInfo() const { return FlatArray<const PointGeomInfo> (GetNP(), gi); }
+    auto GeomInfo() { return FlatArray<PointGeomInfo> (GetNP(), gi); }
+
+    PointIndex & PNum (int i) { NETGEN_CHECK_RANGE(i, 1, maxnp+1); return pn[i-1]; }
+    /// vertex i of this element
+    PointIndex & PNum (ElementVertexIndex i) { return pn[i-IndexBASE<ElementVertexIndex>()]; }
+    const PointIndex & PNum (int i) const { NETGEN_CHECK_RANGE(i, 1, maxnp+1); return pn[i-1]; }
+    const PointIndex & PNum (ElementVertexIndex i) const { return pn[i-IndexBASE<ElementVertexIndex>()]; }
+    PointIndex & PNumMod (int i) { return pn[(i-1) % GetNP()]; }
+    const PointIndex & PNumMod (int i) const { return pn[(i-1) % GetNP()]; }
+
+    PointGeomInfo & GeomInfoPi (int i) { NETGEN_CHECK_RANGE(i, 1, maxnp+1); return gi[i-1]; }
+    const PointGeomInfo & GeomInfoPi (int i) const { NETGEN_CHECK_RANGE(i, 1, maxnp+1); return gi[i-1]; }
+    PointGeomInfo & GeomInfoPiMod (int i) { return gi[(i-1) % GetNP()]; }
+    const PointGeomInfo & GeomInfoPiMod (int i) const { return gi[(i-1) % GetNP()]; }
+
+    auto & NewestVertex() { return h->newest_vertex; }
+    auto NewestVertex() const { return h->newest_vertex; }
+
+    DLL_HEADER void DoArchive (Archive & ar);
+
+    void SetIndex (FaceRegionIndex si) { h->index = si; }
+    FaceRegionIndex GetIndex () const { return h->index; }
+
+    DLL_HEADER void GetBox (const T_POINTS & points, Box3d & box) const;
+    /// invert orientation
+    inline void Invert ();
+    DLL_HEADER void Invert2 ();
+    /// first point number is smallest
+    inline void NormalizeNumbering ();
+    DLL_HEADER void NormalizeNumbering2 ();
+
+    bool BadElement() const { return h->flags.badel; }
+
+    /// get number of 'integration points'
+    DLL_HEADER int GetNIP () const;
+    DLL_HEADER void GetIntegrationPoint (int ip, Point<2> & p, double & weight) const;
+
+    DLL_HEADER void GetTransformation (int ip, FlatArray<Point<2>, PointIndex> points,
+                                       class DenseMatrix & trans) const;
+    DLL_HEADER void GetTransformation (int ip, class DenseMatrix & pmat,
+                                       class DenseMatrix & trans) const;
+
+    DLL_HEADER void GetShape (const Point<2> & p, class Vector & shape) const;
+    DLL_HEADER void GetShapeNew (const Point<2> & p, class FlatVector & shape) const;
+    template <typename T>
+    DLL_HEADER void GetShapeNew (const Point<2,T> & p, TFlatVector<T> shape) const;
+    /// matrix 2 * GetNP()
+    DLL_HEADER void GetDShape (const Point<2> & p, class DenseMatrix & dshape) const;
+    template <typename T>
+    DLL_HEADER void GetDShapeNew (const Point<2,T> & p, class MatrixFixWidth<2,T> & dshape) const;
+    /// matrix 2 * GetNP()
+    DLL_HEADER void GetPointMatrix (FlatArray<Point<2>, PointIndex> points,
+                                    class DenseMatrix & pmat) const;
+
+    DLL_HEADER void ComputeIntegrationPointData () const;
+
+    DLL_HEADER double CalcJacobianBadness (FlatArray<Point<2>, PointIndex> points) const;
+    DLL_HEADER double CalcJacobianBadness (const T_POINTS & points,
+                                           const Vec<3> & n) const;
+    DLL_HEADER double CalcJacobianBadnessDirDeriv (FlatArray<Point<2>, PointIndex> points,
+                                                   int pi, Vec<2> & dir, double & dd) const;
+
+    void Delete () { h->flags.deleted = true; }
+    bool IsDeleted () const
+    {
+#ifdef DEBUG
+      if ((pn[0]-IndexBASE<PointIndex>() < 0) && !h->flags.deleted)
+        cerr << "Surfelement has illegal pnum, but not marked as deleted" << endl;
+#endif
+      return h->flags.deleted;
+    }
+
+    void Visible (bool vis = true) { h->flags.visible = vis; }
+    bool IsVisible () const { return h->flags.visible; }
+
+    void SetRefinementFlag (bool rflag = true) { h->refflag = rflag; }
+    bool TestRefinementFlag () const { return h->refflag; }
+
+    void SetStrongRefinementFlag (bool rflag = true) { h->flags.strongrefflag = rflag; }
+    bool TestStrongRefinementFlag () const { return h->flags.strongrefflag; }
+
+    bool IsCurved () const { return h->is_curved; }
+    void SetCurved (bool acurved) { h->is_curved = acurved; }
+
+    SurfaceElementIndex NextElement() const { return h->next; }
+
+    DLL_HEADER bool operator== (const Element2dRef & el2) const;
+    DLL_HEADER int HasFace (const Element2dRef & el) const;
+  };
+
+  /// surface element value type: own storage for ELEMENT2D_MAXPOINTS points, handled through Element2dRef
+  class Element2d : public Element2dRef
+  {
+    Element2dHeader hstore;
+    PointIndex pnstore[ELEMENT2D_MAXPOINTS];
+    PointGeomInfo gistore[ELEMENT2D_MAXPOINTS];
+  public:
+    static constexpr const char * archive_width_version = "v6.2.2607-149";
+    static constexpr size_t archive_max_width = ELEMENT2D_MAXPOINTS;
+    DLL_HEADER Element2d ();
+    DLL_HEADER Element2d (int anp);
+    DLL_HEADER Element2d (ELEMENT_TYPE type);
+    DLL_HEADER Element2d (PointIndex pi1, PointIndex pi2, PointIndex pi3);
+    DLL_HEADER Element2d (PointIndex pi1, PointIndex pi2, PointIndex pi3, PointIndex pi4);
+    /// copy of a stored element; explicit, a handle is what you usually want
+    explicit Element2d (const Element2dRef & el) : Element2d() { Element2dRef::operator= (el); }
+    Element2d (const Element2d & e2) : Element2dRef(&hstore, pnstore, gistore, ELEMENT2D_MAXPOINTS), hstore(e2.hstore)
+    {
+      for (int i = 0; i < ELEMENT2D_MAXPOINTS; i++)
+        { pnstore[i] = e2.pnstore[i]; gistore[i] = e2.gistore[i]; }
+    }
+    Element2d & operator= (const Element2d & e2)
+    {
+      hstore = e2.hstore;
+      for (int i = 0; i < ELEMENT2D_MAXPOINTS; i++)
+        { pnstore[i] = e2.pnstore[i]; gistore[i] = e2.gistore[i]; }
+      return *this;
+    }
+    Element2d & operator= (const Element2dRef & el) { Element2dRef::operator= (el); return *this; }
+    Element2d & operator= (initializer_list<PointIndex> list) { Element2dRef::operator= (list); return *this; }
+    Element2d & operator= (initializer_list<std::tuple<PointIndex,PointGeomInfo>> list) { Element2dRef::operator= (list); return *this; }
+
     static auto GetDataLayout()
     {
+      Element2d hel;
+      auto off = [&hel] (const void * p) { return int((const char*)p - (const char*)&hel); };
       return std::map<string, int>({
-          { "pnum", offsetof(Element2d, pnum)},
-          { "index", offsetof(Element2d, index) },
-          { "np", offsetof(Element2d, np) },
-          { "refine", offsetof(Element2d, refflag) },
-          { "curved", offsetof(Element2d, is_curved)}
+          { "pnum", off(&hel.pnstore[0]) },
+          { "index", off(&hel.hstore.index) },
+          { "type", off(&hel.hstore.typ) },
+          { "refine", off(&hel.hstore.refflag) },
+          { "curved", off(&hel.hstore.is_curved) }
         });
-    }
-
-    ///
-    DLL_HEADER Element2d ();
-    Element2d (const Element2d &) = default;
-    Element2d (Element2d &&) = default;
-    Element2d & operator= (const Element2d &) = default;
-    Element2d & operator= (Element2d &&) = default;
-    Element2d & operator= (initializer_list<PointIndex> list)
-    {
-      size_t cnt = 0;
-      for (auto val : list)
-        pnum[cnt++] = val;
-      return *this;
-    }
-    Element2d & operator= (initializer_list<std::tuple<PointIndex,PointGeomInfo>> list)
-    {
-      size_t cnt = 0;
-      for (auto val : list)
-        {
-          pnum[cnt] = get<0>(val);
-          geominfo[cnt++] = get<1>(val);
-        }
-      return *this;
-    }
-    ///
-    DLL_HEADER Element2d (int anp);
-    ///
-    DLL_HEADER Element2d (ELEMENT_TYPE type);
-    ///
-    DLL_HEADER Element2d (PointIndex pi1, PointIndex pi2, PointIndex pi3);
-    ///
-    DLL_HEADER Element2d (PointIndex pi1, PointIndex pi2, PointIndex pi3, PointIndex pi4);
-    ///
-    ELEMENT_TYPE GetType () const { return typ; }
-    /// 
-    void SetType (ELEMENT_TYPE atyp)
-    {
-      typ = atyp;
-      switch (typ)
-	{
-	case TRIG: np = 3; break;
-	case QUAD: np = 4; break;
-	case TRIG6: np = 6; break;
-	case QUAD6: np = 6; break;
-	case QUAD8: np = 8; break;
-	default:
-	  PrintSysError ("Element2d::SetType, illegal type ", int(typ));
-	}
-      is_curved = (np >= 4); 
-    }
-    ///
-    int GetNP() const { return np; }
-    ///
-    int GetNV() const
-    {
-      if (typ == TRIG || typ == TRIG6)
-        return 3;
-      else
-        {
-#ifdef DEBUG
-          if (typ != QUAD && typ != QUAD6 && typ != QUAD8)
-            PrintSysError ("element2d::GetNV not implemented for typ", int(typ));
-#endif
-          return 4;
-        }
-      /*
-      switch (typ)
-	{
-	case TRIG:
-	case TRIG6: return 3;
-          
-	case QUAD:
-	case QUAD8:
-	case QUAD6: return 4;
-	default:
-#ifdef DEBUG
-	  PrintSysError ("element2d::GetNV not implemented for typ", typ)
-#endif
-	    ;
-	}
-      return np;
-      */
-    }
-
-    ///
-    PointIndex & operator[] (int i) { return pnum[i]; }
-    ///
-    const PointIndex & operator[] (int i) const { return pnum[i]; }
-
-    auto PNums () const { return FlatArray<const PointIndex> (np, &pnum[0]); }
-    auto PNums ()  { return FlatArray<PointIndex> (np, &pnum[0]); }
-    template <int NP>
-    auto PNums() const { return FlatArray<const PointIndex> (NP, &pnum[0]); }
-    auto Vertices() const { return FlatArray<const PointIndex> (GetNV(), &pnum[0]); }
-
-    auto GeomInfo() const { return FlatArray<const PointGeomInfo> (np, &geominfo[0]); }
-    auto GeomInfo() { return FlatArray<PointGeomInfo> (np, &geominfo[0]); }
-    
-    ///
-    PointIndex & PNum (int i) { return pnum[i-1]; }
-    ///
-    const PointIndex & PNum (int i) const { return pnum[i-1]; }
-    ///
-    PointIndex & PNumMod (int i) { return pnum[(i-1) % np]; }
-    ///
-    const PointIndex & PNumMod (int i) const { return pnum[(i-1) % np]; }
-    ///
-
-    ///
-    PointGeomInfo & GeomInfoPi (int i) { return geominfo[i-1]; }
-    ///
-    const PointGeomInfo & GeomInfoPi (int i) const { return geominfo[i-1]; }
-    ///
-    PointGeomInfo & GeomInfoPiMod (int i) { return geominfo[(i-1) % np]; }
-    ///
-    const PointGeomInfo & GeomInfoPiMod (int i) const { return geominfo[(i-1) % np]; }
-
-    auto & NewestVertex() { return newest_vertex; }
-    auto NewestVertex() const { return newest_vertex; }
-
-    void DoArchive (Archive & ar)
-    {
-      short _np, _typ;
-      bool _curved, _vis, _deleted;
-      if (ar.Output())
-        { _np = np; _typ = typ; _curved = is_curved;
-          _vis = visible; _deleted = deleted; }
-      // ar & _np & _typ & index & _curved & _vis & _deleted;
-      ar.DoPacked (_np, _typ, index, _curved, _vis, _deleted);
-      // ar & next; don't need 
-      if (ar.Input())
-        { np = _np; typ = ELEMENT_TYPE(_typ); is_curved = _curved;
-          visible = _vis; deleted = _deleted; }
-      /*
-      for (size_t i = 0; i < np; i++)
-        ar & pnum[i];
-      */
-      static_assert(sizeof(int) == sizeof (PointIndex));
-      ar.Do( (int*)&pnum[0], np);
     }
 
 #ifdef PARALLEL
     static NG_MPI_Datatype MyGetMPIType();
 #endif
-    
-
-    void SetIndex (int si) { index = si; }
-    ///
-    int GetIndex () const { return index; }
-
-    int GetOrder () const { return orderx; }
-    void SetOrder (int aorder) { orderx = ordery = aorder; }
-
-
-    void GetOrder (int & ox, int & oy) const { ox = orderx, oy =ordery;};
-    void GetOrder (int & ox, int & oy, int & oz) const { ox = orderx; oy = ordery; oz=0; }
-    void SetOrder (int ox, int oy, int  /* oz */) { orderx = ox; ordery = oy;}
-    void SetOrder (int ox, int oy) { orderx = ox; ordery = oy;}
-
-    int GetHpElnr() const { return hp_elnr; }
-    void SetHpElnr(int _hp_elnr) { hp_elnr = _hp_elnr; }
-
-    ///
-    void GetBox (const T_POINTS & points, Box3d & box) const;
-    /// invert orientation
-    inline void Invert ();
-    ///
-    DLL_HEADER void Invert2 ();
-    /// first point number is smallest
-    inline void NormalizeNumbering ();
-    ///
-    void NormalizeNumbering2 ();
-
-    bool BadElement() const { return badel; }
-
-    // friend ostream & operator<<(ostream  & s, const Element2d & el);
-    friend class Mesh;
-
-
-    /// get number of 'integration points'
-    int GetNIP () const;
-    void GetIntegrationPoint (int ip, Point<2> & p, double & weight) const;
-
-    void GetTransformation (int ip, const NgArray<Point<2>> & points,
-			    class DenseMatrix & trans) const;
-    void GetTransformation (int ip, class DenseMatrix & pmat,
-			    class DenseMatrix & trans) const;
-
-    void GetShape (const Point<2> & p, class Vector & shape) const;
-    DLL_HEADER void GetShapeNew (const Point<2> & p, class FlatVector & shape) const;
-    template <typename T>
-    DLL_HEADER void GetShapeNew (const Point<2,T> & p, TFlatVector<T> shape) const;
-    /// matrix 2 * np
-    DLL_HEADER void GetDShape (const Point<2> & p, class DenseMatrix & dshape) const;
-    template <typename T>
-    DLL_HEADER void GetDShapeNew (const Point<2,T> & p, class MatrixFixWidth<2,T> & dshape) const;
-    
-    /// matrix 2 * np
-    void GetPointMatrix (const NgArray<Point<2>> & points,
-			 class DenseMatrix & pmat) const; 
-
-    void ComputeIntegrationPointData () const;
-  
-
-    double CalcJacobianBadness (const NgArray<Point<2>> & points) const;
-    double CalcJacobianBadness (const T_POINTS & points, 
-				const Vec<3> & n) const;
-    double CalcJacobianBadnessDirDeriv (const NgArray<Point<2>> & points,
-					int pi, Vec<2> & dir, double & dd) const;
-
-
-    
-    void Delete ()
-    {
-      deleted = true;
-      // for (PointIndex & p : pnum) p.Invalidate(); 
-    }
-    
-    bool IsDeleted () const 
-    {
-#ifdef DEBUG
-      if ((pnum[0]-IndexBASE<PointIndex>() < 0) && !deleted)
-	cerr << "Surfelement has illegal pnum, but not marked as deleted" << endl;
-#endif    
-      return deleted; 
-    }
-
-    // Philippose - 08 August 2010
-    // Access functions for the new property: visible
-    void Visible(bool vis = true) 
-    { visible = vis; }
-    bool IsVisible () const 
-    { return visible; }
-   
-    void SetRefinementFlag (bool rflag = true) 
-    { refflag = rflag; }
-    bool TestRefinementFlag () const
-    { return refflag; }
-
-    void SetStrongRefinementFlag (bool rflag = true) 
-    { strongrefflag = rflag; }
-    bool TestStrongRefinementFlag () const
-    { return strongrefflag; }
-
-
-    bool IsCurved () const { return is_curved; }
-    void SetCurved (bool acurved) { is_curved = acurved; }
-  
-    SurfaceElementIndex NextElement() { return next; }
-
-    bool operator==(const Element2d & el2) const;
-
-    int HasFace(const Element2d& el) const;
   };
 
-  DLL_HEADER ostream & operator<<(ostream  & s, const Element2d & el);
-
-
-
-
-
+  DLL_HEADER ostream & operator<<(ostream  & s, const Element2dRef & el);
   class IntegrationPointData
   {
   public:
@@ -925,340 +1134,337 @@ namespace netgen
   /**
      Volume element
   */
-  class Element
+  struct ElementHeader
   {
-  private:
-    /// point numbers
-    PointIndex pnum[ELEMENT_MAXPOINTS];
-    ///
-    ELEMENT_TYPE typ;
-    /// number of points (4..tet, 5..pyramid, 6..prism, 8..hex, 10..quad tet, 12..quad prism)
-    int8_t np;
+    ELEMENT_TYPE typ;   // number of points, vertices, ... follow from the type: element_info
     int8_t newest_vertex = -1; // from refinement via bisection
-    
     /// sub-domain index
-    int index;
-    /// order for hp-FEM
-    unsigned int orderx:6;
-    unsigned int ordery:6;
-    unsigned int orderz:6;
-    /* unsigned int levelx:6;
-       unsigned int levely:6;
-       unsigned int levelz:6; */ 
-    /// stored shape-badness of element
-    float badness;
+    VolumeRegionIndex index;
     bool is_curved;   // element is (high order) curved
+    bool refflag;     // mark element for refinement
 
     class flagstruct {
     public:
-      bool refflag;     // mark element for refinement
       bool marked:1;  // marked for refinement
       bool badel:1;   // angles worse then limit
       bool reverse:1; // for refinement a la Bey
       bool illegal:1; // illegal, will be split or swapped
       bool illegal_valid:1; // is illegal-flag valid ?
-      bool badness_valid:1; // is badness valid ?
       bool strongrefflag:1;
       bool deleted:1;   // element is deleted, will be removed from array
       bool fixed:1;     // don't change element in optimization
     };
 
     flagstruct flags;
-    int hp_elnr;
+  };
+
+  class Element;
+
+  /*
+    Handle to a volume element: header, point numbers and the number of point slots.
+    Refers to a slot of the mesh's element array or to the storage of an Element value.
+    Copying the handle rebinds it, assigning through it copies the element contents.
+    Read access is const, modification is not.
+  */
+  class ElementRef
+  {
+  protected:
+    ElementHeader * h;
+    PointIndex * pn;
+    int maxnp;
+
   public:
+    typedef ElementHeader::flagstruct flagstruct;
 
-    static auto GetDataLayout()
-    {
-      return std::map<string, int>({
-          { "pnum", offsetof(Element, pnum)},
-          { "index", offsetof(Element, index) },
-          { "np", offsetof(Element, np) },
-          { "refine", offsetof(Element, flags.refflag) },
-          { "curved", offsetof(Element, is_curved)}
-        });
-    }
+    ElementRef (ElementHeader * ah, PointIndex * apn, int amaxnp) : h(ah), pn(apn), maxnp(amaxnp) { }
+    ElementRef (DynStrideView<ElementHeader, false, PointIndex> v)
+      : h(&v.Head()), pn(v.TailPtr<0>()), maxnp(int(v.Width())) { }
+    ElementRef (DynStrideView<ElementHeader, true, PointIndex> v)
+      : h(const_cast<ElementHeader*>(&v.Head())), pn(const_cast<PointIndex*>(v.TailPtr<0>())), maxnp(int(v.Width())) { }
+    ElementRef (const ElementRef &) = default;
 
-    ///
-    DLL_HEADER Element () = default;
-    Element (const Element &) = default;
-    Element (Element &&) = default;
-    Element & operator= (const Element &) = default;
-    Element & operator= (Element &&) = default;
+    /// copies header and point numbers, throws if the element does not fit
+    DLL_HEADER ElementRef & operator= (const ElementRef & el2);
 
-    ///
-    DLL_HEADER Element (int anp);
-    ///
-    DLL_HEADER Element (ELEMENT_TYPE type);
-    ///
-    // Element & operator= (const Element & el2);
+    ElementHeader & Header () const { return *h; }
+    int MaxNP () const { return maxnp; }
 
-    const flagstruct& Flags() const { return flags; }
-    flagstruct& Flags() { return flags; }
-  
-    ///
+    const flagstruct& Flags() const { return h->flags; }
+    flagstruct& Flags() { return h->flags; }
+
     DLL_HEADER void SetNP (int anp);
-    ///
     DLL_HEADER void SetType (ELEMENT_TYPE atyp);
-    ///
-    int GetNP () const { return np; }
-    ///
-    uint8_t GetNV() const
-    {
-      // __assume(typ >= TET && typ <= PYRAMID13);
-      switch (typ)
-	{
-        case TET: 
-        case TET10: 
-          return 4;
-        case PRISM12:
-        case PRISM15:
-        case PRISM:
-	  return 6; 
-	case PYRAMID:
-        case PYRAMID13:
-	  return 5;
-	case HEX7:
-	  return 7;
-	case HEX:
-	case HEX20:
-	  return 8;
-        default: // not a 3D element
-#ifdef DEBUG
-          PrintSysError ("Element3d::GetNV not implemented for typ ", int(typ));
-#endif
-          __assume(false);
-          return -1;
-        }
-    }
-
-    DLL_HEADER bool operator==(const Element & el2) const;
-
+    int GetNP () const { return element_info::np[h->typ]; }
     // old style:
-    int NP () const { return np; }
+    int NP () const { return element_info::np[h->typ]; }
 
-    ///
-    ELEMENT_TYPE GetType () const { return typ; }
+    uint8_t GetNV() const { return element_info::nv[h->typ]; }
 
-    ///
-    PointIndex & operator[] (int i) { return pnum[i]; }
-    ///
-    const PointIndex & operator[] (int i) const { return pnum[i]; }
+    ELEMENT_TYPE GetType () const { return h->typ; }
 
-    auto PNums () const { return FlatArray<const PointIndex> (np, &pnum[0]); }
-    auto PNums () { return FlatArray<PointIndex> (np, &pnum[0]); }    
+    PointIndex & operator[] (int i) { NETGEN_CHECK_RANGE(i, 0, maxnp); return pn[i]; }
+    const PointIndex & operator[] (int i) const { NETGEN_CHECK_RANGE(i, 0, maxnp); return pn[i]; }
+
+    auto PNums () const { return FlatArray<const PointIndex> (GetNP(), pn); }
+    auto PNums () { return FlatArray<PointIndex> (GetNP(), pn); }
     template <int NP>
-    auto PNums() const { return FlatArray<const PointIndex> (NP, &pnum[0]); }
+    auto PNums() const { return FlatArray<const PointIndex> (NP, pn); }
+    FlatArray<const PointIndex> Vertices() const { return { GetNV(), pn }; }
 
-    FlatArray<const PointIndex> Vertices() const { return { GetNV(), &pnum[0] }; }
+    PointIndex & PNum (int i) { NETGEN_CHECK_RANGE(i, 1, maxnp+1); return pn[i-1]; }
+    /// vertex i of this element
+    PointIndex & PNum (ElementVertexIndex i) { return pn[i-IndexBASE<ElementVertexIndex>()]; }
+    const PointIndex & PNum (int i) const { NETGEN_CHECK_RANGE(i, 1, maxnp+1); return pn[i-1]; }
+    const PointIndex & PNum (ElementVertexIndex i) const { return pn[i-IndexBASE<ElementVertexIndex>()]; }
+    PointIndex & PNumMod (int i) { return pn[(i-1) % GetNP()]; }
+    const PointIndex & PNumMod (int i) const { return pn[(i-1) % GetNP()]; }
 
-    ///
-    PointIndex & PNum (int i) { return pnum[i-1]; }
-    ///
-    const PointIndex & PNum (int i) const { return pnum[i-1]; }
-    ///
-    PointIndex & PNumMod (int i) { return pnum[(i-1) % np]; }
-    ///
-    const PointIndex & PNumMod (int i) const { return pnum[(i-1) % np]; }
+    auto & NewestVertex() { return h->newest_vertex; }
+    auto NewestVertex() const { return h->newest_vertex; }
 
-    auto & NewestVertex() { return newest_vertex; }
-    auto NewestVertex() const { return newest_vertex; }
+    DLL_HEADER void DoArchive (Archive & ar);
 
-    void DoArchive (Archive & ar)
-    {
-      short _np, _typ;
-      bool _curved;
-      if (ar.Output())
-        { _np = np; _typ = typ; _curved = is_curved; }
-      // ar & _np & _typ & index & _curved;
-      ar.DoPacked (_np, _typ, index, _curved);                
-
-      if (ar.Input())
-        {
-          np = _np;
-          typ = ELEMENT_TYPE(_typ);
-          is_curved = _curved;
-          flags.marked = 1;
-          flags.badel = 0;
-          flags.reverse = 0;
-          flags.illegal = 0;
-          flags.illegal_valid = 0;
-          flags.badness_valid = 0;
-          flags.refflag = 1;
-          flags.strongrefflag = false;
-          flags.deleted = 0;
-          flags.fixed = 0;
-        }
-
-      static_assert(sizeof(int) == sizeof (PointIndex));
-      ar.Do( (int*)&pnum[0], np);
-    }
-    
-#ifdef PARALLEL
-    static NG_MPI_Datatype MyGetMPIType();
-#endif
-
-    ///
-    void SetIndex (int si) { index = si; }
-    ///
-    int GetIndex () const { return index; }
-
-    int GetOrder () const { return orderx; }
-    void SetOrder (const int aorder) ; 
-
-    void GetOrder (int & ox, int & oy, int & oz) const { ox = orderx; oy = ordery; oz = orderz; }
-    void SetOrder (const int ox, const int oy, const int oz);
-    // void GetLevel (int & ox, int & oy, int & oz) const { ox = levelx; oy = levely; oz = levelz; }
-    // void SetLevel (int ox, int oy, int oz) { levelx = ox; levely = oy; levelz = oz; }
+    void SetIndex (VolumeRegionIndex si) { h->index = si; }
+    VolumeRegionIndex GetIndex () const { return h->index; }
 
 
-    ///
-    void GetBox (const T_POINTS & points, Box3d & box) const;
+    DLL_HEADER void GetBox (const T_POINTS & points, Box3d & box) const;
     /// Calculates Volume of element
-    double Volume (const T_POINTS & points) const;
-    ///
+    DLL_HEADER double Volume (const T_POINTS & points) const;
     DLL_HEADER void Print (ostream & ost) const;
-    ///
-    int GetNFaces () const
-    {
-      switch (typ)
-	{
-	case TET: 
-	case TET10: return 4;
-	case PYRAMID: case PYRAMID13: return 5;
-	case PRISM:
-        case PRISM15:
-	case PRISM12: return 5;
-        case HEX7: return 6;
-        case HEX: case HEX20:
-          return 6;
-	default:
-#ifdef DEBUG
-	  PrintSysError ("element3d::GetNFaces not implemented for typ", int(typ))
-#endif
-	    ;
-	}
-      return 0;
-    }
-    ///
-    inline void GetFace (int i, Element2d & face) const;
-    ///
-    DLL_HEADER void GetFace2 (int i, Element2d & face) const;
-    ///
+    int GetNFaces () const { return element_info::nfaces[h->typ]; }
+    inline void GetFace (int i, Element2dRef face) const;
+    DLL_HEADER void GetFace2 (int i, Element2dRef face) const;
     DLL_HEADER void Invert ();
 
-    int GetHpElnr() const { return hp_elnr; }
-    void SetHpElnr(int _hp_elnr) { hp_elnr = _hp_elnr; }
 
     /// split into 4 node tets
-    void GetTets (NgArray<Element> & locels) const;
+    DLL_HEADER void GetTets (Array<Element> & locels) const;
     /// split into 4 node tets, local point nrs
-    void GetTetsLocal (NgArray<Element> & locels) const;
+    DLL_HEADER void GetTetsLocal (Array<ElementTet> & locels) const;
     /// returns coordinates of nodes
-    // void GetNodesLocal (NgArray<Point<3> > & points) const;
-    void GetNodesLocalNew (NgArray<Point<3> > & points) const;
-
+    DLL_HEADER void GetNodesLocalNew (Array<Point<3> > & points) const;
     /// split surface into 3 node trigs
-    DLL_HEADER void GetSurfaceTriangles (NgArray<Element2d> & surftrigs) const;
-
+    DLL_HEADER void GetSurfaceTriangles (Array<ElementFace> & surftrigs) const;
 
     /// get number of 'integration points'
-    int GetNIP () const;
-    void GetIntegrationPoint (int ip, Point<3> & p, double & weight) const;
+    DLL_HEADER int GetNIP () const;
+    DLL_HEADER void GetIntegrationPoint (int ip, Point<3> & p, double & weight) const;
 
-    void GetTransformation (int ip, const T_POINTS & points,
-			    class DenseMatrix & trans) const;
-    void GetTransformation (int ip, class DenseMatrix & pmat,
-			    class DenseMatrix & trans) const;
+    DLL_HEADER void GetTransformation (int ip, const T_POINTS & points,
+                                       class DenseMatrix & trans) const;
+    DLL_HEADER void GetTransformation (int ip, class DenseMatrix & pmat,
+                                       class DenseMatrix & trans) const;
 
-    void GetShape (const Point<3> & p, class Vector & shape) const;
-    // void GetShapeNew (const Point<3> & p, class FlatVector & shape) const;
+    DLL_HEADER void GetShape (const Point<3> & p, class Vector & shape) const;
     template <typename T>
     DLL_HEADER void GetShapeNew (const Point<3,T> & p, TFlatVector<T> shape) const;
     /// matrix 2 * np
-    void GetDShape (const Point<3> & p, class DenseMatrix & dshape) const;
+    DLL_HEADER void GetDShape (const Point<3> & p, class DenseMatrix & dshape) const;
     template <typename T>
-    void GetDShapeNew (const Point<3,T> & p, class MatrixFixWidth<3,T> & dshape) const;
+    DLL_HEADER void GetDShapeNew (const Point<3,T> & p, class MatrixFixWidth<3,T> & dshape) const;
     /// matrix 3 * np
-    void GetPointMatrix (const T_POINTS & points,
-			 class DenseMatrix & pmat) const; 
+    DLL_HEADER void GetPointMatrix (const T_POINTS & points,
+                                    class DenseMatrix & pmat) const;
 
-    void ComputeIntegrationPointData () const;
-  
+    DLL_HEADER void ComputeIntegrationPointData () const;
 
-    double CalcJacobianBadness (const T_POINTS & points) const;
-    double CalcJacobianBadnessDirDeriv (const T_POINTS & points,
-					int pi, Vec<3> & dir, double & dd) const;
-    double CalcJacobianBadnessGradient (const T_POINTS & points,
-					int pi, Vec<3> & grad) const;
+    DLL_HEADER double CalcJacobianBadness (const T_POINTS & points) const;
+    DLL_HEADER double CalcJacobianBadnessDirDeriv (const T_POINTS & points,
+                                                   int pi, Vec<3> & dir, double & dd) const;
+    DLL_HEADER double CalcJacobianBadnessGradient (const T_POINTS & points,
+                                                   int pi, Vec<3> & grad) const;
 
-    ///
-    // friend ostream & operator<<(ostream  & s, const Element & el);
+    void SetRefinementFlag (bool rflag = 1) { h->refflag = rflag; }
+    int TestRefinementFlag () const { return h->refflag; }
 
-    void SetRefinementFlag (bool rflag = 1) 
-    { flags.refflag = rflag; }
-    int TestRefinementFlag () const
-    { return flags.refflag; }
-
-    void SetStrongRefinementFlag (bool rflag = 1) 
-    { flags.strongrefflag = rflag; }
-    int TestStrongRefinementFlag () const
-    { return flags.strongrefflag; }
+    void SetStrongRefinementFlag (bool rflag = 1) { h->flags.strongrefflag = rflag; }
+    int TestStrongRefinementFlag () const { return h->flags.strongrefflag; }
 
     int Illegal () const
     {
-      NETGEN_CHECK_SAME(flags.illegal_valid, true);
-      return flags.illegal;
+      NETGEN_CHECK_SAME(h->flags.illegal_valid, true);
+      return h->flags.illegal;
     }
-    int IllegalValid () const
-    { return flags.illegal_valid; }
+    int IllegalValid () const { return h->flags.illegal_valid; }
     void SetIllegal (int aillegal)
     {
-      flags.illegal = aillegal ? 1 : 0;
-      flags.illegal_valid = 1;
+      h->flags.illegal = aillegal ? 1 : 0;
+      h->flags.illegal_valid = 1;
     }
     void SetLegal (int alegal)
     {
-      flags.illegal = alegal ? 0 : 1;
-      flags.illegal_valid = 1;
+      h->flags.illegal = alegal ? 0 : 1;
+      h->flags.illegal_valid = 1;
     }
 
-    bool BadnessValid()
-    { return flags.badness_valid; }
+    void Touch() { h->flags.illegal_valid = 0; }
 
-    float GetBadness()
+    void Delete () { h->flags.deleted = 1; }
+    bool IsDeleted () const
     {
-      NETGEN_CHECK_SAME(flags.badness_valid, true);
-      return badness;
-    }
-
-    void SetBadness(float value)
-    {
-      badness = value;
-      flags.badness_valid = 1;
-    }
-
-    void Touch() {
-      flags.illegal_valid = 0;
-      flags.badness_valid = 0;
-    }
-  
-    void Delete () { flags.deleted = 1; }
-    bool IsDeleted () const 
-    { 
 #ifdef DEBUG
-      if (pnum[0]-IndexBASE<PointIndex>() < 0 && !flags.deleted)
-	cerr << "Volelement has illegal pnum, but not marked as deleted" << endl;
-#endif    
-
-      return flags.deleted; 
+      if (pn[0]-IndexBASE<PointIndex>() < 0 && !h->flags.deleted)
+        cerr << "Volelement has illegal pnum, but not marked as deleted" << endl;
+#endif
+      return h->flags.deleted;
     }
 
-    bool IsCurved () const { return is_curved; }
-    void SetCurved (bool acurved) { is_curved = acurved; }
+    bool IsCurved () const { return h->is_curved; }
+    void SetCurved (bool acurved) { h->is_curved = acurved; }
 
+    DLL_HEADER bool operator== (const ElementRef & el2) const;
   };
 
-  ostream & operator<<(ostream  & s, const Element & el);
+
+  /// volume element value type: own storage for ELEMENT_MAXPOINTS points, handled through ElementRef
+  class Element : public ElementRef
+  {
+    ElementHeader hstore;
+    PointIndex pnstore[ELEMENT_MAXPOINTS];
+  public:
+    static constexpr const char * archive_width_version = "v6.2.2607-128";
+    static constexpr size_t archive_max_width = ELEMENT_MAXPOINTS;
+    DLL_HEADER Element ();
+    DLL_HEADER Element (int anp);
+    DLL_HEADER Element (ELEMENT_TYPE type);
+    /// copy of a stored element; explicit, a handle is what you usually want
+    explicit Element (const ElementRef & el) : Element() { ElementRef::operator= (el); }
+    Element (const Element & e2) : ElementRef(&hstore, pnstore, ELEMENT_MAXPOINTS), hstore(e2.hstore)
+    { for (int i = 0; i < ELEMENT_MAXPOINTS; i++) pnstore[i] = e2.pnstore[i]; }
+    Element & operator= (const Element & e2)
+    { hstore = e2.hstore; for (int i = 0; i < ELEMENT_MAXPOINTS; i++) pnstore[i] = e2.pnstore[i]; return *this; }
+    Element & operator= (const ElementRef & el) { ElementRef::operator= (el); return *this; }
+
+    static auto GetDataLayout()
+    {
+      Element hel;
+      auto off = [&hel] (const void * p) { return int((const char*)p - (const char*)&hel); };
+      return std::map<string, int>({
+          { "pnum", off(&hel.pnstore[0]) },
+          { "index", off(&hel.hstore.index) },
+          { "type", off(&hel.hstore.typ) },
+          { "refine", off(&hel.hstore.refflag) },
+          { "curved", off(&hel.hstore.is_curved) }
+        });
+    }
+
+#ifdef PARALLEL
+    static NG_MPI_Datatype MyGetMPIType();
+#endif
+  };
+
+  /// array of volume elements with run-time number of point slots
+  typedef DynStrideArray<ElementHeader, TailList<PointIndex>, ElementIndex> T_VOLELEMENTS_BASE;
+
+  /// adds TREF handle access and iteration to a (flat or owning) strided element array
+  // the template parameter must not be called BASE: the strided array has a static member of that name
+  template <class TBASE, class TREF>
+  class ElementRefArray : public TBASE
+  {
+  public:
+    using TBASE::TBASE;
+    ElementRefArray (const TBASE & b) : TBASE(b) { }
+
+    TREF operator[] (typename TBASE::index_type i) { return TREF (TBASE::operator[] (i)); }
+    const TREF operator[] (typename TBASE::index_type i) const { return TREF (TBASE::operator[] (i)); }
+    TREF First () { return TREF (TBASE::First()); }
+    const TREF First () const { return TREF (TBASE::First()); }
+    TREF Last () { return TREF (TBASE::Last()); }
+    const TREF Last () const { return TREF (TBASE::Last()); }
+
+    template <class IT>
+    class Iterator
+    {
+      IT it;
+    public:
+      Iterator (IT ait) : it(ait) { }
+      Iterator & operator++ () { ++it; return *this; }
+      TREF operator* () const { return TREF (*it); }
+      bool operator!= (const Iterator & it2) const { return it != it2.it; }
+      bool operator== (const Iterator & it2) const { return it == it2.it; }
+    };
+    auto begin () { return Iterator<decltype(TBASE::begin())> (TBASE::begin()); }
+    auto end () { return Iterator<decltype(TBASE::end())> (TBASE::end()); }
+    auto begin () const { return Iterator<decltype(TBASE::begin())> (TBASE::begin()); }
+    auto end () const { return Iterator<decltype(TBASE::end())> (TBASE::end()); }
+
+    auto Range () const { return TBASE::Range(); }
+    template <typename... ARGS>
+    auto Range (ARGS... args) const
+    {
+      auto r = TBASE::Range (args...);
+      return ElementRefArray<decltype(r), TREF> (r);
+    }
+  };
+
+  /// owning strided element array: Append grows the width to the element's number of points if needed
+  template <class TBASE, class TREF, class TVAL>
+  class StridedElementArray : public ElementRefArray<TBASE, TREF>
+  {
+    typedef ElementRefArray<TBASE, TREF> TREFARRAY;
+  public:
+    typedef typename TBASE::index_type index_type;
+    using TREFARRAY::TREFARRAY;
+    using TREFARRAY::Append;
+    using TREFARRAY::Size;
+    using TREFARRAY::Width;
+    using TREFARRAY::SetWidth;
+    using TREFARRAY::SetSize;
+
+    index_type Append (const TREF & el)
+    {
+      if (size_t(el.GetNP()) > Width()) SetWidth (el.GetNP());
+      index_type ei = TBASE::Append();
+      TREF v = (*this)[ei];
+      v = el;
+      for (int k = el.GetNP(); k < int(Width()); k++) v[k].Invalidate();
+      return ei;
+    }
+
+    void DoArchive (Archive & ar)
+    {
+      constexpr const char * width_version = TVAL::archive_width_version;
+      if (ar.Input() && ar.GetVersion("netgen") < width_version)
+        {
+          size_t s;
+          ar & s;
+          SetSize (0);
+          for (size_t i = 0; i < s; i++)
+            {
+              TVAL el;
+              el.DoArchive (ar);
+              Append (el);
+            }
+          return;
+        }
+      ar.NeedsVersion ("netgen", width_version);
+      size_t s = Size(), w = Width();
+      ar & s & w;
+      if (ar.Input())
+        {
+          if (w > TVAL::archive_max_width)
+            throw Exception("element array: archive of netgen " + ar.GetVersion("netgen").to_string() +
+                            " does not have the element width, but is not recognized as the old format"
+                            " (width_version " + width_version + " too low?)");
+          SetWidth (w); SetSize (s);
+        }
+      for (auto el : *this) el.DoArchive (ar);
+    }
+  };
+
+  typedef StridedElementArray<T_VOLELEMENTS_BASE, ElementRef, Element> VolumeElementArray;
+  typedef VolumeElementArray T_VOLELEMENTS;
+
+  /// array of surface elements with run-time number of point slots
+  typedef DynStrideArray<Element2dHeader, TailList<PointIndex, PointGeomInfo>, SurfaceElementIndex> T_SURFELEMENTS_BASE;
+  typedef StridedElementArray<T_SURFELEMENTS_BASE, Element2dRef, Element2d> SurfaceElementArray;
+  typedef SurfaceElementArray T_SURFELEMENTS;
+
+  /// explicit value copy of a stored element (auto x = mesh[i] yields a handle)
+  inline Element Copy (const ElementRef & el) { return Element(el); }
+
+  DLL_HEADER ostream & operator<<(ostream  & s, const ElementRef & el);
 
 
 
@@ -1311,96 +1517,43 @@ namespace netgen
   
   class Segment
   {
+  PointIndex pnums[3];
+  EdgePointGeomInfo epgeominfo[2]; // combines PointGeomInfo + dist
+  /// 1-based edge descriptor index into mesh.Regions<1>() (INVALID = 0)
+  EdgeRegionIndex index = EdgeRegionIndex::INVALID;
+
   public:
     ///
     DLL_HEADER Segment();
     Segment (const Segment& other) = default;
-
-    // friend ostream & operator<<(ostream  & s, const Segment & seg);
-
-    PointIndex pnums[3];  // p1, p2, pmid
-
-    int edgenr;
-    ///
-    double singedge_left;
-    double singedge_right;
-
-    /// 0.. not first segment of segs, 1..first of class, 2..first of class, inverse
-    unsigned int seginfo:2;
-
-    /// surface decoding index
-    int si;
-    /// co dim 2 decoding index
-    // int cd2i
-    /// index for boundary conditions (1-based)
-    int index; 
-    
-    /// domain number inner side
-    int domin;
-    /// domain number outer side
-    int domout;  
-    /// top-level object number of surface
-    int tlosurf;
-    ///
-    PointGeomInfo geominfo[2];
-
-    /// surfaces describing edge
-    int surfnr1, surfnr2;
-    ///
-    EdgePointGeomInfo epgeominfo[2];
-    ///
-    // int pmid; // for second order
-    ///
-    int meshdocval;
-
-    bool is_curved;
-    int hp_elnr;
-    /*
-      PointIndex operator[] (int i) const
-      { return (i == 0) ? p1 : p2; }
-
-      PointIndex & operator[] (int i) 
-      { return (i == 0) ? p1 : p2; }
-    */
-
     Segment& operator=(const Segment & other) = default;
 
-  
-
-    int GetNP() const
-    {
-      return pnums[2].IsValid() ? 3 : 2;
-    }
-
-    auto PNums() const { return FlatArray<const PointIndex> (GetNP(), &pnums[0]); }
-    auto PNums() { return FlatArray<PointIndex> (GetNP(), &pnums[0]); }
-    
-    auto Vertices() const { return FlatArray<const PointIndex> (2, &pnums[0]); }
-    
-    ELEMENT_TYPE GetType() const
-    {
-      return pnums[2].IsValid() ? SEGMENT3 : SEGMENT;
-    }
-  
     PointIndex & operator[] (int i) { return pnums[i]; }
     const PointIndex & operator[] (int i) const { return pnums[i]; }
 
+    int GetNP() const { return pnums[2].IsValid() ? 3 : 2; }
+    auto PNums() const { return FlatArray<const PointIndex> (GetNP(), &pnums[0]); }
+    auto PNums() { return FlatArray<PointIndex> (GetNP(), &pnums[0]); }
+    auto Vertices() const { return FlatArray<const PointIndex> (2, &pnums[0]); }
+    ELEMENT_TYPE GetType() const { return pnums[2].IsValid() ? SEGMENT3 : SEGMENT; }
 
-    bool IsCurved () const { return is_curved; }
-    void SetCurved (bool acurved) { is_curved = acurved; }
+    PointGeomInfo & GeomInfo (int i) { return epgeominfo[i].gi; }
+    const PointGeomInfo & GeomInfo (int i) const { return epgeominfo[i].gi; }
+
+    EdgePointGeomInfo & EPGeomInfo (int i) { return epgeominfo[i]; }
+    const EdgePointGeomInfo & EPGeomInfo (int i) const { return epgeominfo[i]; }
 
 
-    int GetEdgeNr() const { return epgeominfo[0].edgenr; }  // 0 or 1-based (geometry dependent)
-    void SetEdgeNr (int nr) { epgeominfo[0].edgenr=nr; epgeominfo[1].edgenr=nr; }
+    EdgeRegionIndex GetIndex() const { return index; }
+    void SetIndex (EdgeRegionIndex i) { index = i; }
 
-    int GetIndex() const { return index; }   // 1-based
-    void SetIndex (int i) { index=i; }   // 1-based
-    
     void DoArchive (Archive & ar);
 #ifdef PARALLEL
     static NG_MPI_Datatype MyGetMPIType();
 #endif
-    
+
+    static size_t OffsetPnums() { return offsetof(Segment, pnums); }
+    static size_t OffsetIndex() { return offsetof(Segment, index); }
   };
 
   ostream & operator<<(ostream  & s, const Segment & seg);
@@ -1411,10 +1564,13 @@ namespace netgen
   public:
     PointIndex pnum;
     string name;
-    int index;
+    VertexRegionIndex index = VertexRegionIndex::INVALID;
     Element0d () = default;
-    Element0d (PointIndex _pnum, int _index)
+    Element0d (PointIndex _pnum, VertexRegionIndex _index)
       : pnum(_pnum), index(_index) { ; }
+
+    VertexRegionIndex GetIndex () const { return index; }
+    void SetIndex (VertexRegionIndex i) { index = i; }
 
 #ifdef PARALLEL
     static NG_MPI_Datatype MyGetMPIType();
@@ -1425,11 +1581,46 @@ namespace netgen
 
   ostream & operator<<(ostream  & s, const Element0d & el);
 
-  // class Surface;  
-  // class FaceDescriptor;
+  /// common part of the regions of all dimensions
+  class RegionBase
+  {
+    optional<string> name;   // nullopt: not set, reported as "default"
+  public:
+    DLL_HEADER static const string default_name;
+
+    const string & GetName () const { return name ? *name : default_name; }
+    bool HasName () const { return name.has_value(); }
+    void SetName (optional<string> aname) { name = std::move(aname); }
+    void ResetName () { name = nullopt; }
+    const optional<string> & OptName () const { return name; }
+  };
+
+  /**
+     Geometric entity of dimension D the mesh elements of dimension D belong to:
+     Region<3> volume (material), Region<2> face, Region<1> edge, Region<0> vertex.
+     Indexed by RegionIndex<D>.
+  */
+  template <int D> class Region;
+
+  template <>
+  class Region<3> : public RegionBase
+  {
+  public:
+    Region () = default;
+    explicit Region (optional<string> aname) { SetName(std::move(aname)); }
+  };
+
+  template <>
+  class Region<0> : public RegionBase
+  {
+  public:
+    Region () = default;
+    explicit Region (optional<string> aname) { SetName(std::move(aname)); }
+  };
 
   ///
-  class FaceDescriptor
+  template <>
+  class Region<2> : public RegionBase
   {
     /// which surface, 0 if not available
     int surfnr;
@@ -1447,10 +1638,6 @@ namespace netgen
     /// surface colour (Default: R=0.0 ; G=1.0 ; B=0.0)
     Vec<4> surfcolour;
     
-    ///
-    // static string default_bcname;
-    // string * bcname = &default_bcname;
-    string bcname = "default";
     /// root of linked list 
     SurfaceElementIndex firstelement;
   
@@ -1458,13 +1645,10 @@ namespace netgen
     double domout_singular;
 
   public:
-    DLL_HEADER FaceDescriptor();
-    DLL_HEADER FaceDescriptor(int surfnri, int domini, int domouti, int tlosurfi);
-    DLL_HEADER FaceDescriptor(const Segment & seg);
-    DLL_HEADER FaceDescriptor(const FaceDescriptor& other);
-    DLL_HEADER ~FaceDescriptor()  { ; }
-
-    DLL_HEADER int SegmentFits (const Segment & seg);
+    DLL_HEADER Region();
+    DLL_HEADER Region(int surfnri, int domini, int domouti, int tlosurfi);
+    DLL_HEADER Region(const Region& other);
+    Region & operator= (const Region & other) = default;
 
     int SurfNr () const { return surfnr; }
     int DomainIn () const { return domin; }
@@ -1479,15 +1663,12 @@ namespace netgen
     // Philippose - 06/07/2009
     // Get Surface colour
     Vec<4> SurfColour () const { return surfcolour; }
-    /* DLL_HEADER */ const string & GetBCName () const { return bcname; }
-    // string * BCNamePtr () { return bcname; }
-    // const string * BCNamePtr () const  { return bcname; }
+    const string & GetBCName () const { return GetName(); }
     void SetSurfNr (int sn) { surfnr = sn; }
     void SetDomainIn (int di) { domin = di; }
     void SetDomainOut (int dom) { domout = dom; }
     void SetBCProperty (int bc) { bcprop = bc; }
-    DLL_HEADER void SetBCName (string * bcn); //  { bcname = bcn; }
-    void SetBCName (const string & bcn) { bcname = bcn; }    
+    void SetBCName (const string & bcn) { SetName(bcn); }
     // Philippose - 06/07/2009
     // Set the surface colour
     void SetSurfColour (Vec<4> colour) { surfcolour = colour; }
@@ -1496,32 +1677,94 @@ namespace netgen
     void SetDomainOutSingular (double v) { domout_singular = v; }
 
     SurfaceElementIndex FirstElement() { return firstelement; }
-    // friend ostream & operator<<(ostream  & s, const FaceDescriptor & fd);
     friend class Mesh;
 
     void DoArchive (Archive & ar);
   };
 
-  ostream & operator<< (ostream  & s, const FaceDescriptor & fd);
+  using FaceRegion = Region<2>;
+
+  ostream & operator<< (ostream  & s, const FaceRegion & fd);
 
   
  
-  class EdgeDescriptor
+  template <>
+  class Region<1> : public RegionBase
   {
-    int tlosurf;
-    int surfnr[2];
+    int edgenr = -1;
+    int surfnr[2] = {-1, -1};
+    double singedge_left = 0;
+    double singedge_right = 0;
+
+    // legacy, kept for CSG compatibility
+    int tlosurf = -1;
+    int domin = -1, domout = -1;
+
+    /// transient index: face descriptor index (1-based) in 3D, not serialized - recomputed by RebuildFDIndices()
+    FaceRegionIndex index_ = FaceRegionIndex::INVALID;
+
   public:
-    EdgeDescriptor ()
-      : tlosurf(-1)
-    { surfnr[0] = surfnr[1] = -1; }
+    Region () = default;
+    Region (int edgenri, int surfnr1 = -1, int surfnr2 = -1,
+                    int domini = -1, int domouti = -1, int tlosurfi = -1)
+      : edgenr(edgenri), surfnr{surfnr1, surfnr2}, tlosurf(tlosurfi), domin(domini), domout(domouti)
+    { ; }
+
+    int EdgeNr () const { return edgenr; }
+    void SetEdgeNr (int nr) { edgenr = nr; }
 
     int SurfNr (int i) const { return surfnr[i]; }
     void SetSurfNr (int i, int nr) { surfnr[i] = nr; }
 
-    int TLOSurface() const { return tlosurf; }
+    double SingEdgeLeft () const { return singedge_left; }
+    void SetSingEdgeLeft (double s) { singedge_left = s; }
+
+    double SingEdgeRight () const { return singedge_right; }
+    void SetSingEdgeRight (double s) { singedge_right = s; }
+
+    // legacy CSG support
+    int TLOSurface () const { return tlosurf; }
     void SetTLOSurface (int nr) { tlosurf = nr; }
+
+    int DomainIn () const { return domin; }
+    void SetDomainIn (int nr) { domin = nr; }
+
+    int DomainOut () const { return domout; }
+    void SetDomainOut (int nr) { domout = nr; }
+
+    /// face descriptor index (1-based), INVALID if not yet set. Transient, recomputed by RebuildFDIndices().
+    FaceRegionIndex GetIndex () const { return index_; }
+    void SetIndex (FaceRegionIndex i) { index_ = i; }
+
+    // deprecated aliases
+    [[deprecated("use GetIndex()")]] int FDIndex () const { return index_.Nr1(); }
+
+    void DoArchive (Archive & ar)
+    {
+      string aname = GetName();
+      ar & edgenr & surfnr[0] & surfnr[1] & aname
+        & singedge_left & singedge_right & tlosurf
+        & domin & domout;
+      if (ar.Input()) SetName(aname);
+    }
+
+    friend inline ostream & operator<< (ostream & ost, const Region & ed)
+    {
+      ost << "EdgeDescriptor(edgenr=" << ed.edgenr << ", surfnr=(" << ed.surfnr[0] << "," << ed.surfnr[1] << "), domin=" << ed.domin << ", domout=" << ed.domout << ", name=" << ed.GetName() << ")";
+      return ost;
+    }
   };
 
+  using EdgeRegion = Region<1>;
+  using VolumeRegion = Region<3>;
+  using VertexRegion = Region<0>;
+
+  // old names
+  using FaceDescriptor = FaceRegion;
+  using EdgeDescriptor = EdgeRegion;
+
+  template <int D>
+  using RegionArray = Array<Region<D>, RegionIndex<D>>;
 
   struct BoundaryLayerParameters
   {
@@ -1691,7 +1934,7 @@ namespace netgen
       MeshSizePoint & operator= (const MeshSizePoint &) = default;
       MeshSizePoint & operator= (MeshSizePoint &&) = default;      
     };
-    NgArray<MeshSizePoint> meshsize_points;
+    Array<MeshSizePoint> meshsize_points;
     
     void (*render_function)(bool) = NULL;
     void Render(bool blocking = false) const
@@ -1745,9 +1988,9 @@ namespace netgen
 
 
 
-  inline void Element2d :: Invert()
+  inline void Element2dRef :: Invert()
   {
-    if (typ == TRIG)
+    if (h->typ == TRIG)
       Swap (PNum(2), PNum(3));
     else
       Invert2();
@@ -1756,29 +1999,29 @@ namespace netgen
 
 
 
-  inline void Element2d :: NormalizeNumbering ()
+  inline void Element2dRef :: NormalizeNumbering ()
   {
     if (GetNP() == 3)
       {
-	if (PNum(1) < PNum(2) && PNum(1) < PNum(3))
-	  return;
-	else
-	  {
-	    if (PNum(2) < PNum(3))
-	      {
-		PointIndex pi1 = PNum(2);
-		PNum(2) = PNum(3);
-		PNum(3) = PNum(1);
-		PNum(1) = pi1;
-	      }
-	    else
-	      {
-		PointIndex pi1 = PNum(3);
-		PNum(3) = PNum(2);
-		PNum(2) = PNum(1);
-		PNum(1) = pi1;
-	      }
-	  }
+        if (PNum(1) < PNum(2) && PNum(1) < PNum(3))
+          return;
+        else
+          {
+            if (PNum(2) < PNum(3))
+              {
+                PointIndex pi1 = PNum(2);
+                PNum(2) = PNum(3);
+                PNum(3) = PNum(1);
+                PNum(1) = pi1;
+              }
+            else
+              {
+                PointIndex pi1 = PNum(3);
+                PNum(3) = PNum(2);
+                PNum(2) = PNum(1);
+                PNum(1) = pi1;
+              }
+          }
       }
     else
       NormalizeNumbering2();
@@ -1792,14 +2035,14 @@ namespace netgen
       { 0, 1, 3 },
       { 1, 0, 2 } };
 
-  inline void Element :: GetFace (int i, Element2d & face) const
+  inline void ElementRef :: GetFace (int i, Element2dRef face) const
   {
-    if (typ == TET)
+    if (h->typ == TET)
       {
-	face.SetType(TRIG);
-	face[0] = pnum[gftetfacesa[i-1][0]];
-	face[1] = pnum[gftetfacesa[i-1][1]];
-	face[2] = pnum[gftetfacesa[i-1][2]];
+        face.SetType(TRIG);
+        face[0] = pn[gftetfacesa[i-1][0]];
+        face[1] = pn[gftetfacesa[i-1][1]];
+        face[2] = pn[gftetfacesa[i-1][2]];
       }
     else
       GetFace2 (i, face);
@@ -1807,7 +2050,7 @@ namespace netgen
 
 
 
-  // typedef NgArray<PointIndex,PointIndex::BASE> idmap_type;
+  // typedef Array<PointIndex,PointIndex::BASE> idmap_type;
   typedef Array<PointIndex,PointIndex> idmap_type;
   
 
@@ -1818,7 +2061,7 @@ namespace netgen
   class Identifications
   {
   public:
-    enum ID_TYPE : unsigned char { UNDEFINED = 1, PERIODIC = 2, CLOSESURFACES = 3, CLOSEEDGES = 4};
+    enum ID_TYPE : unsigned char { UNDEFINED = 1, PERIODIC = 2, CLOSESURFACES = 3, CLOSEEDGES = 4, OFFSET_POINT = 5};
   
 
   private:
@@ -1835,7 +2078,7 @@ namespace netgen
     /// sorted by identification nr
     TABLE<PointIndices<2>> idpoints_table;
 
-    NgArray<ID_TYPE> type;
+    Array<ID_TYPE> type;
 
     /// number of identifications (or, actually used identifications ?)
     int maxidentnr;
@@ -1879,15 +2122,15 @@ namespace netgen
 
     bool Used (PointIndex pi1, PointIndex pi2)
     {
-      // return identifiedpoints.Used (INDEX_2 (pi1, pi2));
+      // return identifiedpoints.Used (IVec<2> (pi1, pi2));
       return identifiedpoints.Used (PointIndices<2>(pi1, pi2));
     }
 
     bool UsedSymmetric (PointIndex pi1, PointIndex pi2)
     {
       return 
-	identifiedpoints.Used (PointIndices<2>(pi1, pi2)) ||
-	identifiedpoints.Used (PointIndices<2>(pi2, pi1));
+        identifiedpoints.Used (PointIndices<2>(pi1, pi2)) ||
+        identifiedpoints.Used (PointIndices<2>(pi2, pi1));
     }
 
     ///
@@ -1896,20 +2139,20 @@ namespace netgen
     ID_TYPE GetType(int identnr) const
     {
       if(identnr <= type.Size())
-	return type[identnr-1];
+        return type[identnr-1];
       else
-	return UNDEFINED;
+        return UNDEFINED;
     }
     void SetType(int identnr, ID_TYPE t)
     {
       while(type.Size() < identnr)
-	type.Append(UNDEFINED);
+        type.Append(UNDEFINED);
       type[identnr-1] = t;
     }
     
     ///
-    DLL_HEADER void GetPairs (int identnr, NgArray<INDEX_2> & identpairs) const;
-    DLL_HEADER Array<INDEX_3> GetPairs () const;
+    DLL_HEADER void GetPairs (int identnr, Array<PointIndices<2>> & identpairs) const;
+    DLL_HEADER Array<std::tuple<PointIndices<2>, int>> GetPairs () const;
     ///
     int GetMaxNr () const { return maxidentnr; }  
 
@@ -1949,6 +2192,9 @@ namespace netgen
 namespace ngcore
 {
   template <> struct MPI_typetrait<netgen::PointIndex> {
+    static NG_MPI_Datatype MPIType ()  { return NG_MPI_INT; }
+  };
+  template <int D> struct MPI_typetrait<netgen::RegionIndex<D>> {
     static NG_MPI_Datatype MPIType ()  { return NG_MPI_INT; }
   };
 

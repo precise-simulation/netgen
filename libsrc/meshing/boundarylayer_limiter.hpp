@@ -25,7 +25,7 @@ struct GrowthVectorLimiter
   Array<double, PointIndex> limits;
   FlatArray<Vec<3>, PointIndex> growthvectors;
   BitArray changed_domains;
-  unique_ptr<BoxTree<3>> tree;
+  unique_ptr<BoxTree<3, SurfaceElementIndex>> tree;
   Array<PointIndex, PointIndex> map_from;
   Table<SurfaceElementIndex, PointIndex> p2sel;
 
@@ -46,7 +46,7 @@ struct GrowthVectorLimiter
       mesh.GetNP());
   }
 
-  auto SurfaceElementsRange () { return Range(tool.nse + tool.new_sels.Size()); }
+  auto SurfaceElementsRange () { return T_Range<SurfaceElementIndex>(tool.nse + tool.new_sels.Size()); }
 
   void WriteErrorMesh (string name)
   {
@@ -62,11 +62,11 @@ struct GrowthVectorLimiter
     out_mesh.Save(name);
   }
 
-  const auto& Get (SurfaceElementIndex sei)
+  const Element2dRef Get (SurfaceElementIndex sei)
   {
-    if (sei < tool.nse)
+    if (sei.Nr0() < tool.nse)
       return mesh[sei];
-    return tool.new_sels[sei - tool.nse];
+    return tool.new_sels[SurfaceElementIndex::FromNr0(sei.Nr0() - tool.nse)];
   }
 
   std::pair<double, double> GetMinMaxLimit (SurfaceElementIndex sei)
@@ -326,7 +326,7 @@ struct GrowthVectorLimiter
 
       // ignore new surface elements, side trigs are only built
       // from original surface elements
-      if (sei >= tool.nse)
+      if (sei.Nr0() >= tool.nse)
         return false;
       const auto sel = Get(sei);
       auto np = sel.GetNP();
@@ -356,9 +356,9 @@ struct GrowthVectorLimiter
     for (SurfaceElementIndex sei : mesh.SurfaceElements().Range())
       {
         auto sel = mesh[sei];
-        if (sei >= tool.nse)
+        if (sei.Nr0() >= tool.nse)
           continue;
-        if (!tool.moved_surfaces[sel.GetIndex()])
+        if (!tool.moved_surfaces[sel.GetIndex().Nr1()])
           continue;
         if (sel.GetNP() == 4)
           continue;
@@ -409,20 +409,20 @@ struct GrowthVectorLimiter
 
     auto p = seg[0] + intersection.lam0 * (seg[1] - seg[0]) - trig[0];
 
-    Vec3d col1 = trig[1] - trig[0];
-    Vec3d col2 = trig[2] - trig[0];
-    Vec3d col3 = Cross(col1, col2);
-    Vec3d rhs = p;
-    Vec3d bary;
+    Vec<3> col1 = trig[1] - trig[0];
+    Vec<3> col2 = trig[2] - trig[0];
+    Vec<3> col3 = Cross(col1, col2);
+    Vec<3> rhs = p;
+    Vec<3> bary;
     SolveLinearSystem(col1, col2, col3, rhs, bary);
 
     intersection.lam1 = 0;
     double eps = 1e-4;
-    if (bary.X() >= -eps && bary.Y() >= -eps && bary.X() + bary.Y() <= 1 + eps)
+    if (bary(0) >= -eps && bary(1) >= -eps && bary(0) + bary(1) <= 1 + eps)
       {
-        intersection.bary[0] = bary.X();
-        intersection.bary[1] = bary.Y();
-        intersection.bary[2] = 1.0 - bary.X() - bary.Y();
+        intersection.bary[0] = bary(0);
+        intersection.bary[1] = bary(1);
+        intersection.bary[2] = 1.0 - bary(0) - bary(1);
       }
     else
       intersection.is_intersecting = false;
@@ -432,7 +432,7 @@ struct GrowthVectorLimiter
   Intersection_ isIntersectingTrig (PointIndex pi_from, PointIndex pi_to, SurfaceElementIndex sei, double shift = 0.0)
   {
     // JS: where is that GetSeg function ?
-    return isIntersectingTrig(GetSeg(pi_from, pi_to), GetTrig(sei, shift));
+    return isIntersectingTrig(GetSeg(pi_from, pi_to.Nr0()), GetTrig(sei, shift));
   }
 
   void BuildSearchTree (double trig_shift)
@@ -446,7 +446,7 @@ struct GrowthVectorLimiter
         bbox.Add(GetPoint(pi, 1.1));
       }
 
-    tree = make_unique<BoxTree<3>>(bbox);
+    tree = make_unique<BoxTree<3, SurfaceElementIndex>>(bbox);
 
     for (auto sei : SurfaceElementsRange())
       {
@@ -515,7 +515,7 @@ struct GrowthVectorLimiter
             special_points.insert(group.new_points.Last());
         }
 
-    auto skip_trig = [&] (const Element2d& tri) {
+    auto skip_trig = [&] (const Element2dRef & tri) {
       if (!tool.insert_only_volume_elements)
         return false;
       for (auto pi : tri.PNums())
@@ -527,13 +527,13 @@ struct GrowthVectorLimiter
     while (changed)
       {
         changed = false;
-        Point3d pmin, pmax;
+        Point<3> pmin, pmax;
         mesh.GetBox(pmin, pmax);
         BoxTree<3, SurfaceElementIndex> setree(pmin, pmax);
 
         for (auto sei : SurfaceElementsRange())
           {
-            const Element2d& tri = Get(sei);
+            const Element2dRef & tri = Get(sei);
 
             if (skip_trig(tri))
               continue;
@@ -548,7 +548,7 @@ struct GrowthVectorLimiter
 
         for (auto sei : SurfaceElementsRange())
           {
-            const Element2d& tri = Get(sei);
+            const Element2dRef & tri = Get(sei);
 
             if (skip_trig(tri))
               continue;
@@ -557,8 +557,8 @@ struct GrowthVectorLimiter
             for (PointIndex pi : tri.PNums())
               box.Add(GetPoint(pi, 1.0, true));
 
-            setree.GetFirstIntersecting(box.PMin(), box.PMax(), [&] (size_t sej) {
-              const Element2d& tri2 = Get(sej);
+            setree.GetFirstIntersecting(box.PMin(), box.PMax(), [&] (SurfaceElementIndex sej) {
+              const Element2dRef & tri2 = Get(sej);
 
               if (mesh[tri[0]].GetLayer() != mesh[tri2[0]].GetLayer())
                 return false;
@@ -637,7 +637,7 @@ struct GrowthVectorLimiter
     double seg_shift = safety;
     FindTreeIntersections(
       trig_shift, seg_shift, [&] (PointIndex pi_to, SurfaceElementIndex sei) {
-        if (sei >= tool.nse)
+        if (sei.Nr0() >= tool.nse)
           return; // ignore new surface elements in first pass
         LimitGrowthVector(pi_to, sei, trig_shift, seg_shift);
       });

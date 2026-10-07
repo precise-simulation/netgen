@@ -86,13 +86,13 @@ namespace netgen
          outfile << "$Nodes\n";
          outfile << np << "\n";
 
-         for (int i = 1; i <= np; i++)
+         for (PointIndex pi : mesh.Points().Range())
          {
-            const Point3d & p = mesh.Point(i);
-            outfile << i << " "; /// node number
-            outfile << p.X() << " ";
-            outfile << p.Y() << " ";
-            outfile << p.Z() << "\n";
+            const Point<3> & p = mesh[pi];
+            outfile << pi.Nr1() << " "; /// node number
+            outfile << p(0) << " ";
+            outfile << p(1) << " ";
+            outfile << p(2) << "\n";
          }
 
          outfile << "$EndNodes\n";
@@ -105,10 +105,10 @@ namespace netgen
          {
             int elType = 0;
 
-            Element2d el = mesh[sei]; // .SurfaceElement(i);
+            Element2d el (mesh[sei]); // .SurfaceElement(i);
             if(invertsurf) el.Invert();
             
-            if(el.GetNP() == 3) elType = GMSH_TRIG;	//// GMSH Type for a 3 node triangle
+            if(el.GetNP() == 3) elType = GMSH_TRIG;     //// GMSH Type for a 3 node triangle
             if(el.GetNP() == 6) elType = GMSH_TRIG6;  //// GMSH Type for a 6 node triangle
             if(elType == 0)
             {
@@ -138,7 +138,7 @@ namespace netgen
            int i = ei-IndexBASE(ei)+1;
             int elType = 0;
 
-            Element el = mesh[ei];
+            Element el (mesh[ei]);
             if (inverttets) el.Invert();
 
             if(el.GetNP() == 4) elType = GMSH_TET;    //// GMSH Element type for 4 node tetrahedron
@@ -193,13 +193,13 @@ namespace netgen
          outfile << "$Nodes\n";
          outfile << np << "\n";
 
-         for (int i = 1; i <= np; i++)
+         for (PointIndex pi : mesh.Points().Range())
          {
-            const Point3d & p = mesh.Point(i);
-            outfile << i << " "; /// node number
-            outfile << p.X() << " ";
-            outfile << p.Y() << " ";
-            outfile << p.Z() << "\n";
+            const Point<3> & p = mesh[pi];
+            outfile << pi.Nr1() << " "; /// node number
+            outfile << p(0) << " ";
+            outfile << p(1) << " ";
+            outfile << p(2) << "\n";
          }
          outfile << "$EndNodes\n";
 
@@ -207,11 +207,11 @@ namespace netgen
          outfile << "$Elements\n";
          outfile << nse << "\n";
 
-         for (int k = 1; k <= nse; k++)
+         for (SurfaceElementIndex k : T_Range<SurfaceElementIndex>(nse))
          {
             int elType = 0;
 
-            const Element2d & el = mesh.SurfaceElement(k);
+            const Element2dRef & el = mesh[k];
 
             if(el.GetNP() == 3) elType = GMSH_TRIG;   //// GMSH Type for a 3 node triangle
             if(el.GetNP() == 6) elType = GMSH_TRIG6;  //// GMSH Type for a 6 node triangle
@@ -223,7 +223,7 @@ namespace netgen
                return;
             }
 
-            outfile << k;
+            outfile << k.Nr1();
             outfile << " ";
             outfile << elType;
             outfile << " ";

@@ -111,6 +111,25 @@ DLL_HEADER void ExportNgOCC(py::module &m)
     }
   });
   
+  py::class_<OCCAssemblyNode, shared_ptr<OCCAssemblyNode>>
+    (m, "OCCAssemblyNode",
+     "A node of the STEP/IGES product structure: a named sub-assembly (with "
+     "children) or a leaf part (with a `shape` placed in global coordinates).")
+    .def_readonly("name", &OCCAssemblyNode::name)
+    .def_readonly("is_assembly", &OCCAssemblyNode::is_assembly)
+    .def_property_readonly("shape", [](shared_ptr<OCCAssemblyNode> n) -> py::object
+                           {
+                             if(n->shape.IsNull()) return py::none();
+                             return py::cast(n->shape);
+                           })
+    .def_property_readonly("children", [](shared_ptr<OCCAssemblyNode> n)
+                           {
+                             py::list out;
+                             for(auto & c : n->children) out.append(c);
+                             return out;
+                           })
+    ;
+
   py::class_<OCCGeometry, shared_ptr<OCCGeometry>, NetgenGeometry> (m, "OCCGeometry", R"raw_string(Use LoadOCCGeometry to load the geometry from a *.step file.)raw_string")
     /*
     .def(py::init<const TopoDS_Shape&>(), py::arg("shape"),
@@ -159,7 +178,8 @@ DLL_HEADER void ExportNgOCC(py::module &m)
                     ng_geometry = geo;
                     return geo;
                   }), py::arg("filename"), py::arg("dim")=3,
-        "Load OCC geometry from step, brep or iges file")
+        "Load OCC geometry from step, brep or iges file",
+        py::call_guard<py::gil_scoped_release>())
     .def(NGSPickle<OCCGeometry>())
     .def("Glue", &OCCGeometry::GlueGeometry)
     .def("Heal",[](OCCGeometry & self, double tolerance, bool fixsmalledges, bool fixspotstripfaces, bool sewfaces, bool makesolids, bool splitpartitions)
@@ -210,7 +230,8 @@ DLL_HEADER void ExportNgOCC(py::module &m)
              vertices.push_back(geo->vmap(i));
            return vertices;
          }, "Get vertices in order that they will be in the mesh")
-    .def("_visualizationData", [] (shared_ptr<OCCGeometry> occ_geo)
+    .def("_visualizationData", [] (shared_ptr<OCCGeometry> occ_geo,
+                                   double deflection, double angle)
          {
            std::vector<float> vertices;
            std::vector<uint32_t> indices;
@@ -231,7 +252,7 @@ DLL_HEADER void ExportNgOCC(py::module &m)
                min[i] = box.PMin()[i];
                max[i] = box.PMax()[i];
              }
-           occ_geo->BuildVisualizationMesh(0.01);
+           occ_geo->BuildVisualizationMesh(deflection, angle);
            gp_Pnt2d uv;
            gp_Pnt pnt;
            gp_Vec n;
@@ -372,7 +393,8 @@ DLL_HEADER void ExportNgOCC(py::module &m)
             res["min"] = MoveToNumpy(min);
             res["max"] = MoveToNumpy(max);
             return res;
-         }, py::call_guard<py::gil_scoped_release>())
+         }, py::arg("deflection")=0.01, py::arg("angle")=0.5,
+            py::call_guard<py::gil_scoped_release>())
     .def("GenerateMesh", [](shared_ptr<OCCGeometry> geo,
                             MeshingParameters* pars, NgMPI_Comm comm,
                             shared_ptr<Mesh> mesh, py::kwargs kwargs)
@@ -416,6 +438,11 @@ DLL_HEADER void ExportNgOCC(py::module &m)
          py::arg("mesh")=nullptr,
          (meshingparameter_description + occparameter_description).c_str())
     .def_property_readonly("shape", [](const OCCGeometry & self) { return self.GetShape(); })
+    .def("GetAssemblyTree", [](shared_ptr<OCCGeometry> geo) -> py::object
+         {
+           if(!geo->assembly_tree) return py::none();
+           return py::cast(geo->assembly_tree);
+         }, "Product/assembly structure read from the file (STEP/IGES), or None.")
     ;
 
   

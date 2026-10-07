@@ -209,20 +209,20 @@ namespace netgen
     else
       {
         gp_Pnt pnt;
-        Point3d p3d;
+        Point<3> p3d;
 
         prop->SetParameters (parmid.X(), parmid.Y());
         pnt = prop->Value();
-        p3d = Point3d(pnt.X(), pnt.Y(), pnt.Z());
+        p3d = Point<3>(pnt.X(), pnt.Y(), pnt.Z());
         mesh.RestrictLocalH (p3d, h, layer);
 
-        p3d = Point3d(pnt0.X(), pnt0.Y(), pnt0.Z());
+        p3d = Point<3>(pnt0.X(), pnt0.Y(), pnt0.Z());
         mesh.RestrictLocalH (p3d, h, layer);
 
-        p3d = Point3d(pnt1.X(), pnt1.Y(), pnt1.Z());
+        p3d = Point<3>(pnt1.X(), pnt1.Y(), pnt1.Z());
         mesh.RestrictLocalH (p3d, h, layer);
 
-        p3d = Point3d(pnt2.X(), pnt2.Y(), pnt2.Z());
+        p3d = Point<3>(pnt2.X(), pnt2.Y(), pnt2.Z());
         mesh.RestrictLocalH (p3d, h, layer);
 
         //(*testout) << "p = " << p3d << ", h = " << h << ", maxside = " << maxside << endl;
@@ -248,7 +248,7 @@ namespace netgen
     multithread.percent = 100 * k / (mesh.GetNFD() + VSMALL);
     geom.facemeshstatus[k-1] = -1;
 
-    // FaceDescriptor & fd = mesh.GetFaceDescriptor(k);
+    // FaceRegion & fd = mesh.GetFaceDescriptor(k);
     auto face = TopoDS::Face(geom.fmap(k));
     const auto& occface = dynamic_cast<const OCCFace&>(geom.GetFace(k-1));
 
@@ -324,13 +324,13 @@ namespace netgen
             {
               PointGeomInfo gi0, gi1;
               gi0.trignum = gi1.trignum = k;
-              gi0.u = seg.epgeominfo[0].u;
-              gi0.v = seg.epgeominfo[0].v;
-              gi1.u = seg.epgeominfo[1].u;
-              gi1.v = seg.epgeominfo[1].v;
+              gi0.u = seg.GeomInfo(0).u;
+              gi0.v = seg.GeomInfo(0).v;
+              gi1.u = seg.GeomInfo(1).u;
+              gi1.v = seg.GeomInfo(1).v;
               
               //if(orientation & 1)
-              meshing.AddBoundaryElement (glob2loc[seg[0]], glob2loc[seg[1]], gi0, gi1);
+              meshing.AddBoundaryElement (seg[0], seg[1], gi0, gi1);
 
             }
       }
@@ -346,14 +346,14 @@ namespace netgen
         Box<2> uv_box(Box<2>::EMPTY_BOX);
         for(auto & seg : segments)
             for(auto i : Range(2))
-                uv_box.Add( {seg.epgeominfo[i].u, seg.epgeominfo[i].v } );
+                uv_box.Add( {seg.GeomInfo(i).u, seg.GeomInfo(i).v } );
 
         BoxTree<2> uv_tree(uv_box);
         double tol = 1e99;
         for(auto& seg : segments)
           {
-            Point<2> p1 = { seg.epgeominfo[0].u, seg.epgeominfo[0].v };
-            Point<2> p2 = { seg.epgeominfo[1].u, seg.epgeominfo[1].v };
+            Point<2> p1 = { seg.GeomInfo(0).u, seg.GeomInfo(0).v };
+            Point<2> p2 = { seg.GeomInfo(1).u, seg.GeomInfo(1).v };
             tol = min2(tol, Dist(p1, p2));
           }
         uv_tree.SetTolerance(0.9 * tol);
@@ -363,12 +363,12 @@ namespace netgen
         {
             PointGeomInfo gi[2];
             gi[0].trignum = gi[1].trignum = k;
-            gi[0].u = seg.epgeominfo[0].u;
-            gi[0].v = seg.epgeominfo[0].v;
-            gi[1].u = seg.epgeominfo[1].u;
-            gi[1].v = seg.epgeominfo[1].v;
+            gi[0].u = seg.GeomInfo(0).u;
+            gi[0].v = seg.GeomInfo(0).v;
+            gi[1].u = seg.GeomInfo(1).u;
+            gi[1].v = seg.GeomInfo(1).v;
 
-            int locpnum[2] = {0, 0};
+            Front2PointIndex locpnum[2];
 
             for (int j = 0; j < 2; j++)
             {
@@ -378,19 +378,19 @@ namespace netgen
                 bool found = false;
                 for(auto& fp : found_points)
                   {
-                    if(meshing.GetGlobalIndex(fp - 1) == seg[j])
+                    if(meshing.GetGlobalIndex(Front2PointIndex::FromNr1(fp)) == seg[j])
                       {
-                        locpnum[j] = fp;
+                        locpnum[j] = Front2PointIndex::FromNr1(fp);   // uv_tree stores front nr + 1
                         found = true;
                       }
                   }
                 if(!found)
                 {
                     PointIndex pi = seg[j];
-                    locpnum[j] = meshing.AddPoint (mesh.Point(pi), pi) + 1;
-                    glob2loc[pi] = locpnum[j];
+                    locpnum[j] = meshing.AddPoint (mesh.Point(pi), pi);
+                    glob2loc[pi] = locpnum[j].Nr1();
                     gis.Append (gi[j]);
-                    uv_tree.Insert(uv, locpnum[j]);
+                    uv_tree.Insert(uv, locpnum[j].Nr1());
                 }
             }
 
@@ -404,7 +404,7 @@ namespace netgen
                 auto gi = occface.Project(mesh[pi]);
                 MultiPointGeomInfo mgi;
                 mgi.AddPointGeomInfo(gi);
-                glob2loc[pi] = meshing.AddPoint(mesh[pi], pi, &mgi) + 1;
+                glob2loc[pi] = meshing.AddPoint(mesh[pi], pi, &mgi).Nr1();
                 gis.Append(gi);
                 Point<2> uv = { gi.u, gi.v };
                 uv_tree.Insert(uv, glob2loc[pi]);
@@ -456,14 +456,14 @@ namespace netgen
     bool meshing_failed = res != MESHING2_OK;
     if(meshing_failed && delete_on_failure)
     {
-        for (SurfaceElementIndex sei = noldsurfel; sei < mesh.GetNSE(); sei++)
+        for (SurfaceElementIndex sei : mesh.SurfaceElements().Range().Modify(noldsurfel, 0))
             mesh.Delete(sei);
 
         mesh.Compress();
     }
 
-    for (SurfaceElementIndex sei = oldnf; sei < mesh.GetNSE(); sei++)
-      mesh[sei].SetIndex (k);
+    for (SurfaceElementIndex sei : mesh.SurfaceElements().Range().Modify(oldnf, 0))
+      mesh[sei].SetIndex (FaceRegionIndex::FromNr1(k));
 
     auto n_illegal_trigs = mesh.FindIllegalTrigs();
     PrintMessage (3, n_illegal_trigs, " illegal triangles");
@@ -479,7 +479,7 @@ namespace netgen
     mesh.SetGlobalH (mparam.maxh);
     mesh.SetMinimalH (mparam.minh);
 
-    NgArray<double> maxhdom;
+    Array<double> maxhdom;
     maxhdom.SetSize (geom.NrSolids());
     maxhdom = mparam.maxh;
     int maxlayer = 1;
@@ -579,7 +579,7 @@ namespace netgen
             for (int j = 0; j <= maxj; j++)
               {
                 gp_Pnt pnt = c->Value (s0+double(j)/maxj*(s1-s0));
-                mesh.RestrictLocalH (Point3d(pnt.X(), pnt.Y(), pnt.Z()), localh, props.layer);
+                mesh.RestrictLocalH (Point<3>(pnt.X(), pnt.Y(), pnt.Z()), localh, props.layer);
               }
           }
 
@@ -615,7 +615,7 @@ namespace netgen
 
                 gp_Pnt pnt = c->Value (s);
 
-                mesh.RestrictLocalH (Point3d(pnt.X(), pnt.Y(), pnt.Z()), ComputeH (fabs(curvature), mparam), layer);
+                mesh.RestrictLocalH (Point<3>(pnt.X(), pnt.Y(), pnt.Z()), ComputeH (fabs(curvature), mparam), layer);
               }
           }
 
@@ -684,7 +684,7 @@ namespace netgen
 
             int sections = 100;
 
-            NgArray<Line> lines(sections*nedges);
+            Array<Line> lines(sections*nedges);
 
             /*
             BoxTree<3> * searchtree =
@@ -719,7 +719,7 @@ namespace netgen
                     if(d1.Magnitude() > gp::Resolution())
                         d1 = d1.Normalized();
                     double cosalpha = fabs(d0*d1);
-                    if ((j == sections) || (cosalpha < cos(10.0/180.0*M_PI)))
+                    if ((j == sections) || (cosalpha < 0.98480775301220805937)) // 10 degrees
                       {
                         // count++;
                         gp_Pnt p0 = c->Value (s_start);
@@ -729,8 +729,8 @@ namespace netgen
                         lines[nlines].layer = layer;
 
                         Box3d box;
-                        box.SetPoint (Point3d(lines[nlines].p0));
-                        box.AddPoint (Point3d(lines[nlines].p1));
+                        box.SetPoint (Point<3>(lines[nlines].p0));
+                        box.AddPoint (Point<3>(lines[nlines].p1));
 
                         searchtree.Insert (box.PMin(), box.PMax(), nlines+1);
                         nlines++;
@@ -742,7 +742,7 @@ namespace netgen
                   }
               }
 
-            NgArray<int> linenums;
+            Array<int> linenums;
             auto is_identified_edge = [&](int e0, int e1) {
                 const auto& edge0 = geom.GetEdge(e0-1);
                 const auto& edge1 = geom.GetEdge(e1-1);
@@ -766,8 +766,8 @@ namespace netgen
                 Line & line = lines[i];
 
                 Box3d box;
-                box.SetPoint (Point3d(line.p0));
-                box.AddPoint (Point3d(line.p1));
+                box.SetPoint (Point<3>(line.p0));
+                box.AddPoint (Point<3>(line.p1));
                 double maxhline = max (mesh.GetH(box.PMin(), line.layer),
                                        mesh.GetH(box.PMax(), line.layer));
                 box.Increase(maxhline);

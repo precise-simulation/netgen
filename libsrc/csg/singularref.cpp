@@ -41,7 +41,7 @@ void SingularEdge :: FindPointsOnEdge (class Mesh & mesh)
   segms.SetSize(0);
 
 
-  NgArray<int> si1, si2;
+  Array<int> si1, si2;
   sol1->GetSurfaceIndices (si1);
   sol2->GetSurfaceIndices (si2);
 
@@ -51,53 +51,56 @@ void SingularEdge :: FindPointsOnEdge (class Mesh & mesh)
     si2[i] = geom.GetSurfaceClassRepresentant(si2[i]);
 
 
-  for (SegmentIndex si = 0; si < mesh.GetNSeg(); si++)
+  for (auto & seg : mesh.LineSegments())
     {
-      PointIndices<2> i2 (mesh[si][0], mesh[si][1]);
+      PointIndices<2> i2 (seg[0], seg[1]);
       /*
       
       bool onedge = 1;
       for (j = 1; j <= 2; j++)
-	{
-	  const Point<3> p = mesh[ PointIndex (i2.I(j)) ];
-	  if (sol1->IsIn (p, 1e-3) && sol2->IsIn(p, 1e-3) &&
-	      !sol1->IsStrictIn (p, 1e-3) && !sol2->IsStrictIn(p, 1e-3))
-	    {
-	      ;
-	    }
-	  else
-	    onedge = 0;
-	}
+        {
+          const Point<3> p = mesh[ PointIndex (i2.I(j)) ];
+          if (sol1->IsIn (p, 1e-3) && sol2->IsIn(p, 1e-3) &&
+              !sol1->IsStrictIn (p, 1e-3) && !sol2->IsStrictIn(p, 1e-3))
+            {
+              ;
+            }
+          else
+            onedge = 0;
+        }
       */
 
-      if (domnr != -1 && domnr != mesh[si].domin && domnr != mesh[si].domout)
-	continue;
+      {
+        const auto & ed = mesh.GetEdgeDescriptor(seg.GetIndex());
+        if (domnr != -1 && domnr != ed.DomainIn() && domnr != ed.DomainOut())
+          continue;
+      }
 
       /*
       bool onedge = 1;
       for (int j = 0; j < 2; j++)
-	{
-	  int surfi = (j == 0) ? mesh[si].surfnr1 : mesh[si].surfnr2;
-	  surfi = geom.GetSurfaceClassRepresentant(surfi);
-	  if (!si1.Contains(surfi) && !si2.Contains(surfi))
-	    onedge = 0;
-	}
+        {
+          int surfi = (j == 0) ? seg.surfnr1 : seg.surfnr2;
+          surfi = geom.GetSurfaceClassRepresentant(surfi);
+          if (!si1.Contains(surfi) && !si2.Contains(surfi))
+            onedge = 0;
+        }
       */
-      int surfi1 = geom.GetSurfaceClassRepresentant(mesh[si].surfnr1);
-      int surfi2 = geom.GetSurfaceClassRepresentant(mesh[si].surfnr2);
+      int surfi1 = geom.GetSurfaceClassRepresentant(mesh.GetEdgeDescriptor(seg.GetIndex()).SurfNr(0));
+      int surfi2 = geom.GetSurfaceClassRepresentant(mesh.GetEdgeDescriptor(seg.GetIndex()).SurfNr(1));
 
       if ( (si1.Contains(surfi1) && si2.Contains(surfi2)) ||
            (si1.Contains(surfi2) && si2.Contains(surfi1)) )
 
-	// if (onedge)
-	{
-	  segms.Append (i2);
-	  //	  PrintMessage (5, "sing segment ", i2.I1(), " - ", i2.I2());
-	  points.Append (mesh[i2.I1()]);
-	  points.Append (mesh[i2.I2()]);
-	  mesh[si].singedge_left = factor;
-	  mesh[si].singedge_right = factor;
-	}	    
+        // if (onedge)
+        {
+          segms.Append (i2);
+          //      PrintMessage (5, "sing segment ", i2.I1(), " - ", i2.I2());
+          points.Append (mesh[i2[0]]);
+          points.Append (mesh[i2[1]]);
+          mesh.GetEdgeDescriptor(seg.GetIndex()).SetSingEdgeLeft(factor);
+          mesh.GetEdgeDescriptor(seg.GetIndex()).SetSingEdgeRight(factor);
+        }           
     }
   
   /*
@@ -115,29 +118,29 @@ void SingularEdge :: SetMeshSize (class Mesh & mesh, double globalh)
     {
       hloc = maxhinit;
       if(points.Size() > 1)
-	{
-	  for (int i = 0; i < points.Size()-1; i++)
-	    mesh.RestrictLocalHLine(points[i],points[i+1],hloc);
-	}
+        {
+          for (int i = 0; i < points.Size()-1; i++)
+            mesh.RestrictLocalHLine(points[i],points[i+1],hloc);
+        }
       else
-	{
-	  for (int i = 0; i < points.Size(); i++)
-	    mesh.RestrictLocalH (points[i], hloc);
-	}
+        {
+          for (int i = 0; i < points.Size(); i++)
+            mesh.RestrictLocalH (points[i], hloc);
+        }
     }
   else
     {
       for (int i = 0; i < points.Size(); i++)
-	mesh.RestrictLocalH (points[i], hloc);
+        mesh.RestrictLocalH (points[i], hloc);
     }
 }
 
 
 
 SingularPoint :: SingularPoint (double abeta, 
-				const Solid * asol1, 
-				const Solid * asol2,
-				const Solid * asol3, double sf)
+                                const Solid * asol1, 
+                                const Solid * asol2,
+                                const Solid * asol3, double sf)
 {
   beta = abeta;
   sol1 = asol1;
@@ -150,7 +153,7 @@ SingularPoint :: SingularPoint (double abeta,
 void SingularPoint :: FindPoints (class Mesh & mesh)
 {
   points.SetSize(0);
-  NgArray<int> surfk, surf;
+  Array<int> surfk, surf;
 
 
   for (PointIndex pi = IndexBASE<PointIndex>(); 
@@ -162,48 +165,48 @@ void SingularPoint :: FindPoints (class Mesh & mesh)
       (*testout) << "check singular point" << p << endl;
 
       if (sol1->IsIn (p) && sol2->IsIn(p) && sol3->IsIn(p) &&
-	  !sol1->IsStrictIn (p) && !sol2->IsStrictIn(p) && !sol3->IsStrictIn(p))
-	{
-	  surf.SetSize (0);
-	  for (int k = 1; k <= 3; k++)
-	    {
-	      const Solid * solk(NULL);
-	      // Solid *tansol;
-	      switch (k)
-		{
-		case 1:  solk = sol1; break;
-		case 2:  solk = sol2; break;
-		case 3:  solk = sol3; break;
-		}
+          !sol1->IsStrictIn (p) && !sol2->IsStrictIn(p) && !sol3->IsStrictIn(p))
+        {
+          surf.SetSize (0);
+          for (int k = 1; k <= 3; k++)
+            {
+              const Solid * solk(NULL);
+              // Solid *tansol;
+              switch (k)
+                {
+                case 1:  solk = sol1; break;
+                case 2:  solk = sol2; break;
+                case 3:  solk = sol3; break;
+                }
 
-	      auto tansol = solk -> TangentialSolid (p, surfk, 1e-3);
-	      (*testout) << "Tansol = " << *tansol << endl;
+              auto tansol = solk -> TangentialSolid (p, surfk, 1e-3);
+              (*testout) << "Tansol = " << *tansol << endl;
 
-	      if (!tansol) continue;
+              if (!tansol) continue;
 
-	      ReducePrimitiveIterator rpi(Box<3> (p-Vec<3> (1e-3,1e-3,1e-3),
-						  p+Vec<3> (1e-3,1e-3,1e-3)));
-	      UnReducePrimitiveIterator urpi;
-	      
-	      tansol -> IterateSolid (rpi);
-	      tansol->GetSurfaceIndices (surfk);
-	      tansol -> IterateSolid (urpi);
+              ReducePrimitiveIterator rpi(Box<3> (p-Vec<3> (1e-3,1e-3,1e-3),
+                                                  p+Vec<3> (1e-3,1e-3,1e-3)));
+              UnReducePrimitiveIterator urpi;
+              
+              tansol -> IterateSolid (rpi);
+              tansol->GetSurfaceIndices (surfk);
+              tansol -> IterateSolid (urpi);
 
-	      (*testout) << "surfinds = " << surfk << endl;
+              (*testout) << "surfinds = " << surfk << endl;
 
-	      for (int i = 0; i < surfk.Size(); i++)
-		if (!surf.Contains (surfk[i]))
-		  surf.Append (surfk[i]);
-	      
-	      // delete tansol;
-	    }
+              for (int i = 0; i < surfk.Size(); i++)
+                if (!surf.Contains (surfk[i]))
+                  surf.Append (surfk[i]);
+              
+              // delete tansol;
+            }
 
-	  if (surf.Size() < 3) continue;
+          if (surf.Size() < 3) continue;
 
-	  points.Append (p);
-	  PrintMessage (5, "Point (", p(0), ", ", p(1), ", ", p(2), ") is singular");
-	  mesh[pi].Singularity(factor);
-	}
+          points.Append (p);
+          PrintMessage (5, "Point (", p(0), ", ", p(1), ", ", p(2), ") is singular");
+          mesh[pi].Singularity(factor);
+        }
     }  
 }
 
@@ -211,7 +214,7 @@ void SingularPoint :: FindPoints (class Mesh & mesh)
 void SingularPoint :: SetMeshSize (class Mesh & mesh, double globalh)
 {
   double hloc = pow (globalh, 1/beta);
-  for (int i = 1; i <= points.Size(); i++)
-    mesh.RestrictLocalH (points.Get(i), hloc);  
+  for (int i = 0; i < points.Size(); i++)
+    mesh.RestrictLocalH (points[i], hloc);  
 }
 }

@@ -78,11 +78,11 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
 
   int new_max_edge_nr = max_edge_nr;
   for (const auto& seg : segments)
-    if (seg.edgenr > new_max_edge_nr)
-      new_max_edge_nr = seg.edgenr;
+    if (seg.GetIndex().Nr1() > new_max_edge_nr)
+      new_max_edge_nr = seg.GetIndex().Nr1();
   for (const auto& seg : new_segments)
-    if (seg.edgenr > new_max_edge_nr)
-      new_max_edge_nr = seg.edgenr;
+    if (seg.GetIndex().Nr1() > new_max_edge_nr)
+      new_max_edge_nr = seg.GetIndex().Nr1();
 
   auto getGW = [&] (PointIndex pi) -> Vec<3> {
     if (growth_vector_map.count(pi) == 0)
@@ -105,17 +105,17 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
     Range(segments.Size() + new_segments.Size()),
     [&] (auto& table, size_t segi) {
       auto& seg = segi < segments.Size()
-                    ? segments[segi]
-                    : new_segments[segi - segments.Size()];
-      table.Add(seg.edgenr, &seg);
+                    ? segments[SegmentIndex::FromNr0(segi)]
+                    : new_segments[SegmentIndex::FromNr0(segi - segments.Size())];
+      table.Add(seg.GetIndex().Nr1(), &seg);
     },
     new_max_edge_nr + 1);
   auto point2seg = ngcore::CreateSortedTable<Segment*, PointIndex>(
     Range(segments.Size() + new_segments.Size()),
     [&] (auto& table, size_t segi) {
       auto& seg = segi < segments.Size()
-                    ? segments[segi]
-                    : new_segments[segi - segments.Size()];
+                    ? segments[SegmentIndex::FromNr0(segi)]
+                    : new_segments[SegmentIndex::FromNr0(segi - segments.Size())];
       table.Add(seg[0], &seg);
       table.Add(seg[1], &seg);
     },
@@ -135,7 +135,7 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
           if (seg[0] < IndexBASE<PointIndex>() + p2sel.Size())
             {
               for (auto sei : p2sel[seg[0]])
-                if (moved_surfaces.Test(mesh[sei].GetIndex()) && p2sel[seg[1]].Contains(sei))
+                if (moved_surfaces.Test(mesh[sei].GetIndex().Nr1()) && p2sel[seg[1]].Contains(sei))
                   faces.Append(sei);
             }
 
@@ -153,7 +153,7 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
         }
 
       if (no_angles && faces.Size() == 2 && have_material_map)
-        if (par_new_mat[mesh.GetBCName(mesh[faces[0]].GetIndex() - 1)] != par_new_mat[mesh.GetBCName(mesh[faces[1]].GetIndex() - 1)])
+        if (par_new_mat[mesh.GetBCName(mesh[faces[0]].GetIndex())] != par_new_mat[mesh.GetBCName(mesh[faces[1]].GetIndex())])
           no_angles = false;
 
       if (no_angles)
@@ -194,9 +194,9 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
         auto segs = point2seg[pi];
         if (segs.Size() == 1)
           return true;
-        auto first_edgenr = (*segs[0]).edgenr;
+        auto first_edgenr = (*segs[0]).GetIndex();
         for (auto* p_seg : segs)
-          if (p_seg->edgenr != first_edgenr)
+          if (p_seg->GetIndex() != first_edgenr)
             return true;
         return false;
       };
@@ -222,7 +222,7 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
 
       if (!any_grows)
         {
-          PrintMessage(1, "BLayer: skip interpolating growth vectors at edge ", edgenr + 1);
+          PrintMessage(5, "BLayer: skip interpolating growth vectors at edge ", edgenr + 1);
           continue;
         }
 
@@ -246,7 +246,7 @@ void BoundaryLayerTool ::InterpolateGrowthVectors ()
           for (auto* p_seg : point2seg[points.Last()])
             {
               const auto& seg = *p_seg;
-              if (seg.edgenr != edgenr)
+              if (seg.GetIndex().Nr1() != edgenr)
                 continue;
               auto plast = points.Last();
               if (plast != seg[0] && plast != seg[1])
@@ -334,12 +334,12 @@ void BoundaryLayerTool ::InterpolateSurfaceGrowthVectors ()
   for (auto sei : mesh.SurfaceElements().Range())
     surf_normals[sei] = getNormal(mesh[sei]);
 
-  BitArray interpolate_tangent(mesh.GetNP() + 1);
+  TBitArray<PointIndex> interpolate_tangent(mesh.GetNP());
   interpolate_tangent = false;
   for (auto pi : points)
     {
       for (auto sei : p2sel[pi])
-        if (is_boundary_moved[mesh[sei].GetIndex()])
+        if (is_boundary_moved[mesh[sei].GetIndex().Nr1()])
           interpolate_tangent.SetBit(pi);
     }
 
@@ -431,10 +431,10 @@ void BoundaryLayerTool ::FixSurfaceElements ()
 
   std::set<PointIndex> points_set;
   // only smooth over old surface elements
-  for (SurfaceElementIndex sei : Range(nse))
+  for (SurfaceElementIndex sei : T_Range<SurfaceElementIndex>(nse))
     {
       const auto& sel = mesh[sei];
-      if (sel.GetNP() == 3 && is_boundary_moved[sel.GetIndex()])
+      if (sel.GetNP() == 3 && is_boundary_moved[sel.GetIndex().Nr1()])
         for (auto pi : sel.PNums())
           if (point_types[pi] == SURFACEPOINT)
             points_set.insert(pi);

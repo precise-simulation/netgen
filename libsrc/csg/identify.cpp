@@ -28,7 +28,7 @@ ostream & operator<< (ostream & ost, Identification & ident)
 
 
 /*
-void Identification :: IdentifySpecialPoints (NgArray<class SpecialPoint> & points)
+void Identification :: IdentifySpecialPoints (Array<class SpecialPoint> & points)
 {
   ;
 }
@@ -37,8 +37,8 @@ void Identification :: IdentifySpecialPoints (NgArray<class SpecialPoint> & poin
 
 int Identification :: 
 Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
-	      const TABLE<int> & specpoint2solid,
-	      const TABLE<int> & specpoint2surface) const
+              const DynamicTable<int> & specpoint2solid,
+              const DynamicTable<int> & specpoint2surface) const
 {
   cout << "Identification::Identifiable called for base-class" << endl;
   return 0;
@@ -84,8 +84,8 @@ void Identification :: IdentifyFaces (class Mesh & mesh)
 }
 
 void Identification :: 
-BuildSurfaceElements (NgArray<Segment> & segs,
-		      Mesh & mesh, const Surface * surf)
+BuildSurfaceElements (Array<Segment> & segs,
+                      Mesh & mesh, const Surface * surf)
 {
   cout << "Identification::BuildSurfaceElements called for base-class" << endl;
   ;
@@ -93,24 +93,18 @@ BuildSurfaceElements (NgArray<Segment> & segs,
 
 
 void Identification :: 
-BuildVolumeElements (NgArray<class Element2d> & surfels,
-			  class Mesh & mesh)
+BuildVolumeElements (Array<class Element2d> & surfels,
+                          class Mesh & mesh)
 {
   ;
 }
 
 void Identification :: 
-GetIdentifiedFaces (NgArray<INDEX_2> & idfaces) const
+GetIdentifiedFaces (Array<IVec<2>> & idfaces) const
 {
   idfaces.SetSize(0);
-  for (int i = 1; i <= identfaces.GetNBags(); i++)
-    for (int j = 1; j <= identfaces.GetBagSize(i); j++)
-      {
-	INDEX_2 i2;
-	int val;
-	identfaces.GetData (i, j, i2, val);
-	idfaces.Append (i2);
-      }
+  for (auto [i2, val] : identfaces)
+    idfaces.Append (IVec<2>(i2[0], i2[1]));
 }
 
 
@@ -118,9 +112,9 @@ GetIdentifiedFaces (NgArray<INDEX_2> & idfaces) const
 
 PeriodicIdentification ::
 PeriodicIdentification (int anr,
-			const CSGeometry & ageom,
-			const Surface * as1,
-			const Surface * as2,
+                        const CSGeometry & ageom,
+                        const Surface * as1,
+                        const Surface * as2,
                         Transformation<3> atrafo)
   : Identification(anr, ageom), trafo(atrafo)
 {
@@ -136,7 +130,7 @@ PeriodicIdentification :: ~PeriodicIdentification ()
 
 /*
 void PeriodicIdentification :: IdentifySpecialPoints 
-(NgArray<class SpecialPoint> & points)
+(Array<class SpecialPoint> & points)
 {
   int i, j;
   int bestj;
@@ -153,78 +147,78 @@ void PeriodicIdentification :: IdentifySpecialPoints
       s1->GetNormalVector (p1, n1);
       n1 /= n1.Length();
       if ( fabs(n1 * points.Get(i).v) > 1e-3)
-	continue;
+        continue;
 
       bestval = 1e8;
       bestj = 1;
       for (j = 1; j <= points.Size(); j++)
-	{
-	  Point<3> p2= points.Get(j).p;
-	  Point<3> hp2 = p2;
-	  s2->Project (hp2);
-	  if (Dist (p2, hp2) > 1e-6) continue;
-	  
-	  Vec<3> n2;
-	  s2->GetNormalVector (p2, n2);
-	  n2 /= n2.Length();
-	  if ( fabs(n2 * points.Get(j).v) > 1e-3)
-	    continue;
+        {
+          Point<3> p2= points.Get(j).p;
+          Point<3> hp2 = p2;
+          s2->Project (hp2);
+          if (Dist (p2, hp2) > 1e-6) continue;
+          
+          Vec<3> n2;
+          s2->GetNormalVector (p2, n2);
+          n2 /= n2.Length();
+          if ( fabs(n2 * points.Get(j).v) > 1e-3)
+            continue;
 
 
-	  Vec<3> v(p1, p2);
-	  double vl = v.Length();
-	  double cl = fabs (v*n1);
+          Vec<3> v(p1, p2);
+          double vl = v.Length();
+          double cl = fabs (v*n1);
 
-	  val = 1 - cl*cl/(vl*vl);
+          val = 1 - cl*cl/(vl*vl);
 
-	  val += (points.Get(i).v - points.Get(j).v).Length();
+          val += (points.Get(i).v - points.Get(j).v).Length();
 
-	  if (val < bestval)
-	    {
-	      bestj = j;
-	      bestval = val;
-	    }
-	}
+          if (val < bestval)
+            {
+              bestj = j;
+              bestval = val;
+            }
+        }
 
       (*testout) << "Identify Periodic special points: pi = " 
-		 << points.Get(i).p << ", vi = " << points.Get(i).v 
-		 << " pj = " << points.Get(bestj).p 
-		 << ", vj = " << points.Get(bestj).v 
-		 << " bestval = " << bestval << endl;
+                 << points.Get(i).p << ", vi = " << points.Get(i).v 
+                 << " pj = " << points.Get(bestj).p 
+                 << ", vj = " << points.Get(bestj).v 
+                 << " bestval = " << bestval << endl;
     }
 }
 */
 
 int PeriodicIdentification :: 
 Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
-	      const TABLE<int> & specpoint2solid,
-	      const TABLE<int> & specpoint2surface) const
+              const DynamicTable<int> & specpoint2solid,
+              const DynamicTable<int> & specpoint2surface) const
 {
   SpecialPoint hsp1 = sp1;
   SpecialPoint hsp2 = sp2;
 
-  for (int i = 1; i <= 1; i++)
+  for (int i = 0; i < 1; i++)
     {
       //      Swap (hsp1, hsp2);
 
       if (!s1->PointOnSurface (hsp1.p))
-	continue;
+        continue;
 
       Vec<3> n1;
       n1 = s1->GetNormalVector (hsp1.p);
       n1 /= n1.Length();
       if ( fabs(n1 * hsp1.v) > 1e-3)
-	continue;
+        continue;
 
 
       if (!s2->PointOnSurface(hsp2.p))
-	continue;
+        continue;
 
       Vec<3> n2;
       n2 = s2->GetNormalVector (hsp2.p);
       n2 /= n2.Length();
       if ( fabs(n2 * hsp2.v) > 1e-3)
-	continue;
+        continue;
       
       if ((trafo(hsp1.v)-hsp2.v).Length2() > 1e-12)
         return false;
@@ -255,7 +249,7 @@ int PeriodicIdentification ::
 Identifiable (const Point<3> & p1, const Point<3> & p2) const
 {
   return (s1->PointOnSurface (p1) &&
-	  s2->PointOnSurface (p2));
+          s2->PointOnSurface (p2));
 }
   
 
@@ -276,14 +270,14 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
   else
     {
       if (s2->PointOnSurface (p))
-	{
-	  snew = s1;
+        {
+          snew = s1;
           hp = inv_trafo(hp);
-	}
+        }
       else
-	{
+        {
           throw NgException("GetIdenfifiedPoint: Not possible");
-	}    
+        }    
     }
   
   // project to other surface
@@ -293,8 +287,8 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
   for (PointIndex pi : Range(mesh.Points()))
     if (Dist2 (mesh.Point(pi), hp) < 1e-12)
       {
-	newpi = pi;
-	break;
+        newpi = pi;
+        break;
       }
   if (!newpi.IsValid())
     newpi = mesh.AddPoint (hp);
@@ -305,12 +299,12 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
     mesh.GetIdentifications().Add (newpi, pi, nr);
 
   mesh.GetIdentifications().SetType(nr,Identifications::PERIODIC);
-	   
+           
   /* 
   (*testout) << "Identify points(periodic), nr = " << nr << ": " << mesh.Point(pi)
-	     << " and " << mesh.Point(newpi) 
-	     << ((snew == s2) ? "" : " inverse")
-	     << endl;
+             << " and " << mesh.Point(newpi) 
+             << ((snew == s2) ? "" : " inverse")
+             << endl;
   */
   return newpi;
 }
@@ -318,7 +312,7 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
 
 void PeriodicIdentification :: IdentifyPoints (class Mesh & mesh)
 {
-  Point3d p1, p2;
+  Point<3> p1, p2;
   mesh.GetBox(p1, p2);
   auto eps = 1e-6 * (p2-p1).Length();
 
@@ -327,16 +321,16 @@ void PeriodicIdentification :: IdentifyPoints (class Mesh & mesh)
     {
       Point<3> p = mesh.Point(i);
       if (s1->PointOnSurface (p))
-	{
-	  Point<3> pp = p;
+        {
+          Point<3> pp = p;
           pp = trafo(pp);
-	  s2->Project (pp);
-	  for (int j = 1; j <= mesh.GetNP(); j++)
-	    if (Dist2(mesh.Point(j), pp) < eps)
-	      {
-		mesh.GetIdentifications().Add (i, j, nr);
-	      }
-	}
+          s2->Project (pp);
+          for (int j = 1; j <= mesh.GetNP(); j++)
+            if (Dist2(mesh.Point(j), pp) < eps)
+              {
+                mesh.GetIdentifications().Add (i, j, nr);
+              }
+        }
     }
   */
 
@@ -344,14 +338,14 @@ void PeriodicIdentification :: IdentifyPoints (class Mesh & mesh)
     {
       Point<3> p = mesh[pi];
       if (s1->PointOnSurface (p))
-	{
-	  Point<3> pp = p;
+        {
+          Point<3> pp = p;
           pp = trafo(pp);
-	  s2->Project (pp);
+          s2->Project (pp);
           for (PointIndex pj : Range(mesh.Points()))
-	    if (Dist2(mesh[pj], pp) < eps)
+            if (Dist2(mesh[pj], pp) < eps)
               mesh.GetIdentifications().Add (pi, pj, nr);
-	}
+        }
     }
 
   mesh.GetIdentifications().SetType(nr,Identifications::PERIODIC);
@@ -360,130 +354,137 @@ void PeriodicIdentification :: IdentifyPoints (class Mesh & mesh)
 
 void PeriodicIdentification :: IdentifyFaces (class Mesh & mesh)
 {
-  int i, j, k, l;
+  auto seg_fdi = [&mesh](const Segment& s) -> int {
+    if (mesh.HasEdgeDescriptor(s))
+      return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+    return -1;
+  };
+
+  int i, j;
   int fi1, fi2, side;
   for (i = 1; i <= mesh.GetNFD(); i++)
     for (j = 1; j <= mesh.GetNFD(); j++)
       {
-	int surfi = mesh.GetFaceDescriptor(i).SurfNr();
-	int surfj = mesh.GetFaceDescriptor(j).SurfNr();
-	if (surfi == surfj)
-	  continue;
-	
-	if (geom.GetSurface (surfi) != s1 ||
-	    geom.GetSurface (surfj) != s2)
-	  continue;
-	    
-	int idok = 1;
+        int surfi = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(i)).SurfNr();
+        int surfj = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(j)).SurfNr();
+        if (surfi == surfj)
+          continue;
+        
+        if (geom.GetSurface (surfi) != s1 ||
+            geom.GetSurface (surfj) != s2)
+          continue;
+            
+        int idok = 1;
 
 
-	//	(*testout) << "check faces " << i << " and " << j << endl;
-	for (side = 1; side <= 2 && idok; side++)
-	  {
-	    if (side == 1)
-	      {
-		fi1 = i; 
-		fi2 = j;
-	      }
-	    else
-	      {
-		fi1 = j;
-		fi2 = i;
-	      }
+        //      (*testout) << "check faces " << i << " and " << j << endl;
+        for (side = 1; side <= 2 && idok; side++)
+          {
+            if (side == 1)
+              {
+                fi1 = i; 
+                fi2 = j;
+              }
+            else
+              {
+                fi1 = j;
+                fi2 = i;
+              }
 
-	    for (k = 1; k <= mesh.GetNSeg(); k++)
-	      {
-		const Segment & seg1 = mesh.LineSegment(k);
-		if (seg1.si != fi1)
-		  continue;
+            for (auto & seg1 : mesh.LineSegments())
+              {
+                if (seg_fdi(seg1) != fi1)
+                  continue;
 
-		int foundother = 0;
-		for (l = 1; l <= mesh.GetNSeg(); l++)
-		  {
-		    const Segment & seg2 = mesh.LineSegment(l);
-		    if (seg2.si != fi2)
-		      continue;
-		    
-		    //		    (*testout) << "seg1 = " << seg1[0] << "-" << seg1[1] << ", seg2 = " << seg2[0] << "-" << seg2[1];
+                int foundother = 0;
+                for (auto & seg2 : mesh.LineSegments())
+                  {
+                    if (seg_fdi(seg2) != fi2)
+                      continue;
+                    
+                    //              (*testout) << "seg1 = " << seg1[0] << "-" << seg1[1] << ", seg2 = " << seg2[0] << "-" << seg2[1];
 
-		    if (side == 1)
-		      {
-			if (mesh.GetIdentifications().Used (seg1[0], seg2[0]) &&
-			    mesh.GetIdentifications().Used (seg1[1], seg2[1]))
-			  {
-			    foundother = 1;
-			    break;
-			  }
-			
-			if (mesh.GetIdentifications().Used (seg1[0], seg2[1]) &&
-			    mesh.GetIdentifications().Used (seg1[1], seg2[0]))
-			  {
-			    foundother = 1;
-			    break;
-			  }
-		      }
-		    else
-		      {
-			if (mesh.GetIdentifications().Used (seg2[0], seg1[0]) &&
-			    mesh.GetIdentifications().Used (seg2[1], seg1[1]))
-			  {
-			    foundother = 1;
-			    break;
-			  }
-			
-			if (mesh.GetIdentifications().Used (seg2[0], seg1[1]) &&
-			    mesh.GetIdentifications().Used (seg2[1], seg1[0]))
-			  {
-			    foundother = 1;
-			    break;
-			  }
-		      }
-		  }
+                    if (side == 1)
+                      {
+                        if (mesh.GetIdentifications().Used (seg1[0], seg2[0]) &&
+                            mesh.GetIdentifications().Used (seg1[1], seg2[1]))
+                          {
+                            foundother = 1;
+                            break;
+                          }
+                        
+                        if (mesh.GetIdentifications().Used (seg1[0], seg2[1]) &&
+                            mesh.GetIdentifications().Used (seg1[1], seg2[0]))
+                          {
+                            foundother = 1;
+                            break;
+                          }
+                      }
+                    else
+                      {
+                        if (mesh.GetIdentifications().Used (seg2[0], seg1[0]) &&
+                            mesh.GetIdentifications().Used (seg2[1], seg1[1]))
+                          {
+                            foundother = 1;
+                            break;
+                          }
+                        
+                        if (mesh.GetIdentifications().Used (seg2[0], seg1[1]) &&
+                            mesh.GetIdentifications().Used (seg2[1], seg1[0]))
+                          {
+                            foundother = 1;
+                            break;
+                          }
+                      }
+                  }
 
-		if (!foundother)
-		  {
-		    idok = 0;
-		    break;
-		  }
-	      }
-	  }
+                if (!foundother)
+                  {
+                    idok = 0;
+                    break;
+                  }
+              }
+          }
 
 
-	if (idok)
-	  {
-	    // (*testout) << "Identify faces " << i << " and " << j << endl;
-	    INDEX_2 fpair(i,j);
-	    fpair.Sort();
-	    identfaces.Set (fpair, 1);
-	  }
+        if (idok)
+          {
+            // (*testout) << "Identify faces " << i << " and " << j << endl;
+            IVec<2> fpair = IVec<2>(i,j).Sort();
+            identfaces.Set (fpair, 1);
+          }
       }
 }
 
 
 
 void PeriodicIdentification :: 
-BuildSurfaceElements (NgArray<Segment> & segs,
-		      Mesh & mesh, const Surface * surf)
+BuildSurfaceElements (Array<Segment> & segs,
+                      Mesh & mesh, const Surface * surf)
 {
+  auto seg_fdi = [&mesh](const Segment& s) -> int {
+    if (mesh.HasEdgeDescriptor(s))
+      return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+    return -1;
+  };
+
   int found = 0;
   int fother = -1;
 
-  int facei = segs.Get(1).si;
-  int surfnr = mesh.GetFaceDescriptor(facei).SurfNr();
+  int facei = seg_fdi(segs[0]);
+  int surfnr = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(facei)).SurfNr();
 
   if (geom.GetSurface(surfnr) == s1 ||
       geom.GetSurface(surfnr) == s2)
     {
-      NgArray<int> copy_points;
+      Array<PointIndex> copy_points;
 
-      for (SurfaceElementIndex sei = 0; sei < mesh.GetNSE(); sei++)
-	{
-	  const Element2d & sel = mesh[sei];
-	  INDEX_2 fpair (facei, sel.GetIndex());
-	  fpair.Sort();
-	  if (identfaces.Used (fpair))
+      for (const Element2dRef & sel : mesh.SurfaceElements())
+        {
+          IVec<2> fpair = IVec<2>(facei, sel.GetIndex().Nr1()).Sort();
+          if (identfaces.Used (fpair))
             {
-	      for (int k = 0; k < sel.GetNP(); k++)
+              for (int k = 0; k < sel.GetNP(); k++)
                 if (!copy_points.Contains (sel[k]))
                   copy_points.Append (sel[k]);
             }      
@@ -494,32 +495,30 @@ BuildSurfaceElements (NgArray<Segment> & segs,
 
 
 
-      for (SurfaceElementIndex sei = 0; sei < mesh.GetNSE(); sei++)
-	{
-	  const Element2d & sel = mesh[sei];
-	  INDEX_2 fpair (facei, sel.GetIndex());
-	  fpair.Sort();
-	  if (identfaces.Used (fpair))
-	    {
-	      found = 1;
-	      fother = sel.GetIndex();
+      for (const Element2dRef & sel : mesh.SurfaceElements())
+        {
+          IVec<2> fpair = IVec<2>(facei, sel.GetIndex().Nr1()).Sort();
+          if (identfaces.Used (fpair))
+            {
+              found = 1;
+              fother = sel.GetIndex().Nr1();
 
-	      // copy element
-	      Element2d newel(sel.GetType());
-	      newel.SetIndex (facei);
-	      for (int k = 0; k < sel.GetNP(); k++)
+              // copy element
+              Element2d newel(sel.GetType());
+              newel.SetIndex (FaceRegionIndex::FromNr1(facei));
+              for (int k = 0; k < sel.GetNP(); k++)
                 newel[k] = GetIdentifiedPoint (mesh, sel[k]);
 
-	      Vec<3> nt = Cross (Point<3> (mesh[newel[1]])- Point<3> (mesh[newel[0]]),
-				 Point<3> (mesh[newel[2]])- Point<3> (mesh[newel[0]]));
-	      
-	      Vec<3> nsurf = geom.GetSurface (surfnr)->GetNormalVector (mesh[newel[0]]);
-	      if (nsurf * nt < 0)
+              Vec<3> nt = Cross (Point<3> (mesh[newel[1]])- Point<3> (mesh[newel[0]]),
+                                 Point<3> (mesh[newel[2]])- Point<3> (mesh[newel[0]]));
+              
+              Vec<3> nsurf = geom.GetSurface (surfnr)->GetNormalVector (mesh[newel[0]]);
+              if (nsurf * nt < 0)
                 Swap (newel[0], newel[2]);
-				
-	      mesh.AddSurfaceElement (newel);
-	    }
-	}
+                                
+              mesh.AddSurfaceElement (newel);
+            }
+        }
     }
   
   if (found)
@@ -562,11 +561,11 @@ void PeriodicIdentification :: GetData (ostream & ost) const
 
 CloseSurfaceIdentification ::
 CloseSurfaceIdentification (int anr,
-			    const CSGeometry & ageom,
-			    const Surface * as1,
-			    const Surface * as2,
-			    const TopLevelObject * adomain,
-			    const Flags & flags)
+                            const CSGeometry & ageom,
+                            const Surface * as1,
+                            const Surface * as2,
+                            const TopLevelObject * adomain,
+                            const Flags & flags)
   : Identification(anr, ageom)
 {
   s1 = as1;
@@ -590,13 +589,13 @@ CloseSurfaceIdentification (int anr,
   if (domain)
     for (int i = 0; i < geom.GetNTopLevelObjects(); i++)
       if (domain == geom.GetTopLevelObject(i))
-	dom_nr = i;
+        dom_nr = i;
 
   usedirection = flags.NumListFlagDefined("direction");
   if(usedirection)
     {
       for(int i=0; i<3; i++)
-	direction(i) = flags.GetNumListFlag("direction")[i];
+        direction(i) = flags.GetNumListFlag("direction")[i];
 
       direction.Normalize();
     }
@@ -625,7 +624,7 @@ void CloseSurfaceIdentification :: GetData (ostream & ost) const
 
 /*
 void CloseSurfaceIdentification :: IdentifySpecialPoints 
-(NgArray<class SpecialPoint> & points)
+(Array<class SpecialPoint> & points)
 {
   int i, j;
   int bestj;
@@ -637,93 +636,93 @@ void CloseSurfaceIdentification :: IdentifySpecialPoints
       Vec<3> n1;
 
       if (!s1->PointOnSurface (p1))
-	continue;
+        continue;
 
-	s1->GetNormalVector (p1, n1);
+        s1->GetNormalVector (p1, n1);
       n1 /= n1.Length();
       if ( fabs(n1 * points.Get(i).v) > 1e-3)
-	continue;
+        continue;
 
       bestval = 1e8;
       bestj = 1;
       for (j = 1; j <= points.Size(); j++)
-	{
-	  Point<3> p2= points.Get(j).p;
-	  if (!s2->PointOnSurface (p2))
-	    continue;
-	  
-	  Vec<3> n2;
-	  s2->GetNormalVector (p2, n2);
-	  n2 /= n2.Length();
-	  if ( fabs(n2 * points.Get(j).v) > 1e-3)
-	    continue;
+        {
+          Point<3> p2= points.Get(j).p;
+          if (!s2->PointOnSurface (p2))
+            continue;
+          
+          Vec<3> n2;
+          s2->GetNormalVector (p2, n2);
+          n2 /= n2.Length();
+          if ( fabs(n2 * points.Get(j).v) > 1e-3)
+            continue;
 
 
-	  Vec<3> v(p1, p2);
-	  double vl = v.Length();
-	  double cl = fabs (v*n1);
+          Vec<3> v(p1, p2);
+          double vl = v.Length();
+          double cl = fabs (v*n1);
 
-	  val = 1 - cl*cl/(vl*vl);
+          val = 1 - cl*cl/(vl*vl);
 
-	  val += (points.Get(i).v - points.Get(j).v).Length();
+          val += (points.Get(i).v - points.Get(j).v).Length();
 
-	  if (val < bestval)
-	    {
-	      bestj = j;
-	      bestval = val;
-	    }
-	}
+          if (val < bestval)
+            {
+              bestj = j;
+              bestval = val;
+            }
+        }
 
       (*testout) << "Identify close surfaces special points: pi = " 
-		 << points.Get(i).p << ", vi = " << points.Get(i).v 
-		 << " pj = " << points.Get(bestj).p 
-		 << ", vj = " << points.Get(bestj).v 
-		 << " bestval = " << bestval << endl;
+                 << points.Get(i).p << ", vi = " << points.Get(i).v 
+                 << " pj = " << points.Get(bestj).p 
+                 << ", vj = " << points.Get(bestj).v 
+                 << " bestval = " << bestval << endl;
     }
 }
 */
 
 int CloseSurfaceIdentification :: 
 Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
-	      const TABLE<int> & specpoint2solid,
-	      const TABLE<int> & specpoint2surface) const
+              const DynamicTable<int> & specpoint2solid,
+              const DynamicTable<int> & specpoint2surface) const
 {
   //(*testout) << "identcheck: " << sp1.p << "; " << sp2.p << endl;
 
   if (!dom_surf_valid)
     {
       const_cast<bool&> (dom_surf_valid) = 1;
-      NgArray<int> & hsurf = const_cast<NgArray<int>&> (domain_surfaces);
+      Array<int> & hsurf = const_cast<Array<int>&> (domain_surfaces);
 
       if (domain)
-	{
-	  BoxSphere<3> hbox (geom.BoundingBox());
-	  geom.GetIndependentSurfaceIndices (domain->GetSolid(), hbox, hsurf);
-	  //(*testout) << "surfs of identification " << nr << ": " << endl << hsurf << endl;
-	}
+        {
+          BoxSphere<3> hbox (geom.BoundingBox());
+          geom.GetIndependentSurfaceIndices (domain->GetSolid(), hbox, hsurf);
+          //(*testout) << "surfs of identification " << nr << ": " << endl << hsurf << endl;
+        }
       else
-	{
-	  hsurf.SetSize (geom.GetNSurf());
-	  for (int j = 0; j < hsurf.Size(); j++)
-	    hsurf[j] = j;
-	}
+        {
+          hsurf.SetSize (geom.GetNSurf());
+          for (int j = 0; j < hsurf.Size(); j++)
+            hsurf[j] = j;
+        }
     }
 
   if (domain)
     {
       bool has1 = 0, has2 = 0;
       for (int i = 0; i < specpoint2solid[sp1.nr].Size(); i++)
-	if (specpoint2solid[sp1.nr][i] == dom_nr)
-	  { has1 = 1; break; }
+        if (specpoint2solid[sp1.nr][i] == dom_nr)
+          { has1 = 1; break; }
       for (int i = 0; i < specpoint2solid[sp2.nr].Size(); i++)
-	if (specpoint2solid[sp2.nr][i] == dom_nr)
-	  { has2 = 1; break; }
+        if (specpoint2solid[sp2.nr][i] == dom_nr)
+          { has2 = 1; break; }
 
       if (!has1 || !has2) 
-	{
-	  //(*testout) << "failed at pos1" << endl;
-	  return 0;
-	}
+        {
+          //(*testout) << "failed at pos1" << endl;
+          return 0;
+        }
     }
 
   if (!s1->PointOnSurface (sp1.p))
@@ -733,8 +732,8 @@ Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
     }
 
 //   (*testout) << "sp1 " << sp1.p << " sp2 " << sp2.p << endl
-// 	     << "specpoint2solid[sp1.nr] " << specpoint2solid[sp1.nr] << endl
-// 	     << "specpoint2solid[sp2.nr] " << specpoint2solid[sp2.nr] << endl;
+//           << "specpoint2solid[sp1.nr] " << specpoint2solid[sp1.nr] << endl
+//           << "specpoint2solid[sp2.nr] " << specpoint2solid[sp2.nr] << endl;
 
 
   Vec<3> n1 = s1->GetNormalVector (sp1.p);
@@ -769,39 +768,39 @@ Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
       int snr1 = specpoint2surface[sp1.nr][j];
       int snr2 = specpoint2surface[sp2.nr][k];
       if (snr1 < snr2) 
-	{
-	  j++;
-	  if (j == specpoint2surface[sp1.nr].Size()) break;
-	}
+        {
+          j++;
+          if (j == specpoint2surface[sp1.nr].Size()) break;
+        }
       else if (snr2 < snr1) 
-	{
-	  k++;
-	  if (k == specpoint2surface[sp2.nr].Size()) break;
-	}
+        {
+          k++;
+          if (k == specpoint2surface[sp2.nr].Size()) break;
+        }
       else
-	{
-	  bool dom_surf = 0;
-	  for (int l = 0; l < domain_surfaces.Size(); l++)
-	    if (domain_surfaces[l] == snr1)
-	      dom_surf = 1;
+        {
+          bool dom_surf = 0;
+          for (int l = 0; l < domain_surfaces.Size(); l++)
+            if (domain_surfaces[l] == snr1)
+              dom_surf = 1;
 
-	  if (dom_surf)
-	    {
-	      Vec<3> hn1 = geom.GetSurface(snr1)->GetNormalVector (sp1.p);
-	      Vec<3> hn2 = geom.GetSurface(snr1)->GetNormalVector (sp2.p);
-	      
-	      if (hn1 * hn2 > 0)
-		{
-		  joint = 1;
-		  break;
-		}
-	    }
+          if (dom_surf)
+            {
+              Vec<3> hn1 = geom.GetSurface(snr1)->GetNormalVector (sp1.p);
+              Vec<3> hn2 = geom.GetSurface(snr1)->GetNormalVector (sp2.p);
+              
+              if (hn1 * hn2 > 0)
+                {
+                  joint = 1;
+                  break;
+                }
+            }
 
-	  j++;
-	  if (j == specpoint2surface[sp1.nr].Size()) break;
-	  k++;
-	  if (k == specpoint2surface[sp2.nr].Size()) break;
-	}
+          j++;
+          if (j == specpoint2surface[sp1.nr].Size()) break;
+          k++;
+          if (k == specpoint2surface[sp2.nr].Size()) break;
+        }
     }
 
   if (!joint)
@@ -866,7 +865,7 @@ IdentifiableCandidate (const SpecialPoint & sp1) const
       n1 = s1->GetNormalVector (sp1.p);
       n1.Normalize();
       if ( fabs(n1 * sp1.v) > eps_n)
-	return 0;
+        return 0;
       return 1;
     }
 
@@ -876,7 +875,7 @@ IdentifiableCandidate (const SpecialPoint & sp1) const
       n1 = s2->GetNormalVector (sp1.p);
       n1.Normalize();
       if ( fabs(n1 * sp1.v) > eps_n)
-	return 0;
+        return 0;
       return 1;
     }
   return 0;
@@ -922,7 +921,7 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
       (*testout)  << "GetIdenfifiedPoint: Not possible" << endl;
       (*testout) << "p = " << p << endl;
       (*testout) << "surf1: " << (*s1) << endl
-		 << "surf2: " << (*s2) << endl;
+                 << "surf2: " << (*s2) << endl;
       
       cerr << "GetIdenfifiedPoint: Not possible" << endl;
       throw NgException ("GetIdenfifiedPoint: Not possible");
@@ -937,15 +936,15 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
 
   //(*testout) << "projecting " << p << " to " << hp << endl;
 
-  int newpi = 0;
-  for (int i = 1; i <= mesh.GetNP(); i++)
-    if (Dist2 (mesh.Point(i), hp) < 1e-12)
+  PointIndex newpi = PointIndex::INVALID;
+  for (PointIndex i : mesh.Points().Range())
+    if (Dist2 (mesh[i], hp) < 1e-12)
       //    if (Dist2 (mesh.Point(i), hp) < 1 * Dist2 (hp, p))
       {
-	newpi = i;
-	break;
+        newpi = i;
+        break;
       }
-  if (!newpi)
+  if (!newpi.IsValid())
     newpi = mesh.AddPoint (hp);
 
   if (snew == s2)
@@ -959,13 +958,13 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
       //(*testout) << "add identification(2) " << newpi << " - " << pi << ", " << nr << endl;
     }
   mesh.GetIdentifications().SetType(nr,Identifications::CLOSESURFACES);
-	   
+           
 
   /*
   (*testout) << "Identify points(closesurface), nr = " << nr << ": " << mesh.Point(pi)
-	     << " and " << mesh.Point(newpi) 
-	     << ((snew == s2) ? "" : " inverse")
-	     << endl;
+             << " and " << mesh.Point(newpi) 
+             << ((snew == s2) ? "" : " inverse")
+             << endl;
   */
   return newpi;
 }
@@ -976,112 +975,110 @@ GetIdentifiedPoint (class Mesh & mesh, PointIndex pi)
 
 void CloseSurfaceIdentification :: IdentifyPoints (Mesh & mesh)
 {
-  int np = mesh.GetNP();
+  Array<PointIndex> points_on_surf2;
 
-  NgArray<int> points_on_surf2;
-
-  for (int i2 = 1; i2 <= np; i2++)
-    if (s2->PointOnSurface (mesh.Point(i2)))
-      points_on_surf2.Append (i2);
+  for (PointIndex pi : mesh.Points().Range())
+    if (s2->PointOnSurface (mesh[pi]))
+      points_on_surf2.Append (pi);
     
-  NgArray<int> surfs_of_p1;
+  Array<int> surfs_of_p1;
 
-  for (int i1 = 1; i1 <= np; i1++)
+  for (PointIndex i1 : mesh.Points().Range())
     {
-      Point<3> p1 = mesh.Point(i1);
+      Point<3> p1 = mesh[i1];
       //      (*testout) << "p1 = " << i1 << " = " << p1 << endl;
       if (domain && !domain->GetSolid()->IsIn (p1))
-	continue;
+        continue;
       
       //if(domain) (*testout) << "p1 is in " << domain->GetSolid()->Name() << endl;
 
       if (s1->PointOnSurface (p1))
-	{
-	  int candi2 = 0;
-	  double mindist = 1e10;
+        {
+          PointIndex candi2 = PointIndex::INVALID;
+          double mindist = 1e10;
 
-	  Vec<3> n1;
-	  n1 = s1->GetNormalVector (p1);
-	  n1.Normalize();
-	   
-	  surfs_of_p1.SetSize(0);
-	  for (int jj = 0; jj < domain_surfaces.Size(); jj++)
-	    {
-	      int j = domain_surfaces[jj];
-	      if (geom.GetSurface(j) -> PointOnSurface(p1))
-		surfs_of_p1.Append (j);
-	    }
-	  //(*testout) << " surfs of p1 = " << endl << surfs_of_p1 << endl;
+          Vec<3> n1;
+          n1 = s1->GetNormalVector (p1);
+          n1.Normalize();
+           
+          surfs_of_p1.SetSize(0);
+          for (int jj = 0; jj < domain_surfaces.Size(); jj++)
+            {
+              int j = domain_surfaces[jj];
+              if (geom.GetSurface(j) -> PointOnSurface(p1))
+                surfs_of_p1.Append (j);
+            }
+          //(*testout) << " surfs of p1 = " << endl << surfs_of_p1 << endl;
 
-	  for (int ii2 = 0; ii2 < points_on_surf2.Size(); ii2++)
-	    {
-	      int i2 = points_on_surf2[ii2];
-	      if (i2 == i1) continue;
-	      const Point<3> p2 = mesh.Point(i2);
-	      
-	      Vec<3> n = p2 - p1;
-	      n.Normalize();
-	      
-	      bool joint = 0;
-	      for (int jj = 0; jj < surfs_of_p1.Size(); jj++)
-		{
-		  int j = surfs_of_p1[jj];
-		  if (geom.GetSurface(j) -> PointOnSurface(p2))
-		    {
-		      Vec<3> hn1 = geom.GetSurface(j)->GetNormalVector (p1);
-		      Vec<3> hn2 = geom.GetSurface(j)->GetNormalVector (p2);
-		      
-		      if (hn1 * hn2 > 0)
-			{
-			  joint = 1;
-			  break;
-			}
-		    }
-		}
+          for (int ii2 = 0; ii2 < points_on_surf2.Size(); ii2++)
+            {
+              PointIndex i2 = points_on_surf2[ii2];
+              if (i2 == i1) continue;
+              const Point<3> p2 = mesh[i2];
+              
+              Vec<3> n = p2 - p1;
+              n.Normalize();
+              
+              bool joint = 0;
+              for (int jj = 0; jj < surfs_of_p1.Size(); jj++)
+                {
+                  int j = surfs_of_p1[jj];
+                  if (geom.GetSurface(j) -> PointOnSurface(p2))
+                    {
+                      Vec<3> hn1 = geom.GetSurface(j)->GetNormalVector (p1);
+                      Vec<3> hn2 = geom.GetSurface(j)->GetNormalVector (p2);
+                      
+                      if (hn1 * hn2 > 0)
+                        {
+                          joint = 1;
+                          break;
+                        }
+                    }
+                }
 
-	      if (!joint) continue;
-	      
-	      if(usedirection)
-		{
-		  if (fabs (n*direction) > 0.9)
-		    {
-		      Vec<3> p1p2 = p2-p1;
-		      double ndist = p1p2.Length2() - pow(p1p2*direction,2);
-		      if(ndist < mindist)
-			{
-			  candi2 = i2;
-			  mindist = ndist;
-			}
-		    }
-		      
-		}
-	      else
-		{
-		  if (fabs (n * n1) > 0.9 &&
-		      Dist (p1, p2) < mindist)
-		    {
-		      candi2 = i2;
-		      mindist = Dist (p1, p2);
-		    }
-		}
-	    
-	    }
+              if (!joint) continue;
+              
+              if(usedirection)
+                {
+                  if (fabs (n*direction) > 0.9)
+                    {
+                      Vec<3> p1p2 = p2-p1;
+                      double ndist = p1p2.Length2() - sqr(p1p2*direction);
+                      if(ndist < mindist)
+                        {
+                          candi2 = i2;
+                          mindist = ndist;
+                        }
+                    }
+                      
+                }
+              else
+                {
+                  if (fabs (n * n1) > 0.9 &&
+                      Dist (p1, p2) < mindist)
+                    {
+                      candi2 = i2;
+                      mindist = Dist (p1, p2);
+                    }
+                }
+            
+            }
 
-	  if (candi2)
-	    {
-	      //(*testout) << "identify points " << p1 << " - " << mesh.Point(candi2) << endl;
+          if (candi2.IsValid())
+            {
+              //(*testout) << "identify points " << p1 << " - " << mesh.Point(candi2) << endl;
 
-	      /*
-	      (*testout) << "Add Identification from CSI2, nr = " << nr << ", p1 = " 
-			 << i1 << " = " 
-			 << mesh[PointIndex(i1)] << ", p2 = " << candi2 << " = " 
-			 << mesh[PointIndex(candi2)] << endl;
-	      */
-	      mesh.GetIdentifications().Add (i1, candi2, nr);
-	      mesh.GetIdentifications().SetType(nr,Identifications::CLOSESURFACES);
-	      //(*testout) << "add identification " << i1 << " - " << candi2 << ", " << nr << endl;
-	    }
-	}
+              /*
+              (*testout) << "Add Identification from CSI2, nr = " << nr << ", p1 = " 
+                         << i1 << " = " 
+                         << mesh[PointIndex(i1)] << ", p2 = " << candi2 << " = " 
+                         << mesh[PointIndex(candi2)] << endl;
+              */
+              mesh.GetIdentifications().Add (i1, candi2, nr);
+              mesh.GetIdentifications().SetType(nr,Identifications::CLOSESURFACES);
+              //(*testout) << "add identification " << i1 << " - " << candi2 << ", " << nr << endl;
+            }
+        }
     }
 }
 
@@ -1089,42 +1086,48 @@ void CloseSurfaceIdentification :: IdentifyPoints (Mesh & mesh)
 
 void CloseSurfaceIdentification :: IdentifyFaces (class Mesh & mesh)
 {
+  auto seg_fdi = [&mesh](const Segment& s) -> int {
+    if (mesh.HasEdgeDescriptor(s))
+      return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+    return -1;
+  };
+
   int fi1, fi2, side;
   int s1rep = -1, s2rep = -1;
 
   for (int i = 0; i < geom.GetNSurf(); i++)
     {
       if (geom.GetSurface (i) == s1) 
-	s1rep = geom.GetSurfaceClassRepresentant(i);
+        s1rep = geom.GetSurfaceClassRepresentant(i);
       if (geom.GetSurface (i) == s2) 
-	s2rep = geom.GetSurfaceClassRepresentant(i);
+        s2rep = geom.GetSurfaceClassRepresentant(i);
     }
 
-  NgArray<int> segs_on_face1, segs_on_face2;
+  Array<int> segs_on_face1, segs_on_face2;
 
-  identfaces.DeleteData();
+  identfaces.SetSize(16);
 
   //(*testout) << "identify faces, nr = " << nr << endl;
   
   for (int i = 1; i <= mesh.GetNFD(); i++)
     {
-      auto & fdi = mesh.GetFaceDescriptor(i);
-      int surfi = mesh.GetFaceDescriptor(i).SurfNr();
+      auto & fdi = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(i));
+      int surfi = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(i)).SurfNr();
       if (s1rep != surfi) continue;
 
 
       if (domain &&
-	  domain != geom.GetTopLevelObject (mesh.GetFaceDescriptor(i).DomainIn()-1) &&
-	  domain != geom.GetTopLevelObject (mesh.GetFaceDescriptor(i).DomainOut()-1))
-	continue;
+          domain != geom.GetTopLevelObject (mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(i)).DomainIn()-1) &&
+          domain != geom.GetTopLevelObject (mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(i)).DomainOut()-1))
+        continue;
 
       for (int j = 1; j <= mesh.GetNFD(); j++)
-	{
-          auto & fdj = mesh.GetFaceDescriptor(j);          
-	  int surfj = mesh.GetFaceDescriptor(j).SurfNr();
+        {
+          auto & fdj = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(j));          
+          int surfj = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(j)).SurfNr();
 
-	  if (surfi == surfj) continue;
-	  if (s2rep != surfj) continue;
+          if (surfi == surfj) continue;
+          if (s2rep != surfj) continue;
 
           bool have_common = false;
           if (fdi.DomainIn() != 0)
@@ -1135,123 +1138,125 @@ void CloseSurfaceIdentification :: IdentifyFaces (class Mesh & mesh)
               have_common = true;
           if (!have_common) continue;
           
-	  int idok = 1;
-	  
-	  for (side = 1; side <= 2 && idok; side++)
-	    {
-	      if (side == 1)
-		{
-		  fi1 = i; 
-		  fi2 = j;
-		}
-	      else
-		{
-		  fi1 = j;
-		  fi2 = i;
-		}
-	      
+          int idok = 1;
+          
+          for (side = 1; side <= 2 && idok; side++)
+            {
+              if (side == 1)
+                {
+                  fi1 = i; 
+                  fi2 = j;
+                }
+              else
+                {
+                  fi1 = j;
+                  fi2 = i;
+                }
+              
 
-	      segs_on_face1.SetSize(0);
-	      segs_on_face2.SetSize(0);
+              segs_on_face1.SetSize(0);
+              segs_on_face2.SetSize(0);
 
-	      for (int k = 1; k <= mesh.GetNSeg(); k++)
-		{
-		  if (mesh.LineSegment(k).si == fi1)
-		    segs_on_face1.Append (k);
-		  if (mesh.LineSegment(k).si == fi2)
-		    segs_on_face2.Append (k);
-		}
+              for (SegmentIndex k : mesh.LineSegments().Range())
+                {
+                  if (seg_fdi(mesh[k]) == fi1)
+                    segs_on_face1.Append (k.Nr1());
+                  if (seg_fdi(mesh[k]) == fi2)
+                    segs_on_face2.Append (k.Nr1());
+                }
 
 
-	      for (int k = 1; k <= mesh.GetNSeg(); k++)
-		{
-		  const Segment & seg1 = mesh.LineSegment(k);
-		  if (seg1.si != fi1)
-		    continue;
-		  
-		  int foundother = 0;
-		  /*
-		  for (int l = 1; l <= mesh.GetNSeg(); l++)
-		    {
-		      const Segment & seg2 = mesh.LineSegment(l);
-		      if (seg2.si != fi2)
-			continue;
-		  */
-		  for (int ll = 0; ll < segs_on_face2.Size(); ll++)
-		    {
-		      int l = segs_on_face2[ll];
-		      const Segment & seg2 = mesh.LineSegment(l);
-		      
-		      if (side == 1)
-			{
-			  if (mesh.GetIdentifications().Used (seg1[0], seg2[0]) &&
-			      mesh.GetIdentifications().Used (seg1[1], seg2[1]))
-			    {
-			      foundother = 1;
-			      break;
-			    }
-			  
-			  if (mesh.GetIdentifications().Used (seg1[0], seg2[1]) &&
-			      mesh.GetIdentifications().Used (seg1[1], seg2[0]))
-			    {
-			      foundother = 1;
-			      break;
-			    }
-			}
-		      else
-			{
-			  if (mesh.GetIdentifications().Used (seg2[0], seg1[0]) &&
-			      mesh.GetIdentifications().Used (seg2[1], seg1[1]))
-			    {
-			      foundother = 1;
-			      break;
-			    }
-			  
-			  if (mesh.GetIdentifications().Used (seg2[0], seg1[1]) &&
-			      mesh.GetIdentifications().Used (seg2[1], seg1[0]))
-			    {
-			      foundother = 1;
-			      break;
-			    }
-			}
-		    }
-		  
-		  if (!foundother)
-		    {
-		      idok = 0;
-		      break;
-		    }
-		}
-	    }
-	  
-	  
-	  if (idok)
-	    {
-	      //(*testout) << "Identification " << nr << ", identify faces " << i << " and " << j << endl;
-	      INDEX_2 fpair(i,j);
-	      fpair.Sort();
-	      identfaces.Set (fpair, 1);
-	    }
-	}
+              for (auto & seg1 : mesh.LineSegments())
+                {
+                  if (seg_fdi(seg1) != fi1)
+                    continue;
+                  
+                  int foundother = 0;
+                  /*
+                  for (int l = 1; l <= mesh.GetNSeg(); l++)
+                    {
+                      const Segment & seg2 = mesh.LineSegment(l);
+                      if (seg2.si != fi2)
+                        continue;
+                  */
+                  for (int ll = 0; ll < segs_on_face2.Size(); ll++)
+                    {
+                      int l = segs_on_face2[ll];
+                      const Segment & seg2 = mesh[SegmentIndex::FromNr1(l)];
+                      
+                      if (side == 1)
+                        {
+                          if (mesh.GetIdentifications().Used (seg1[0], seg2[0]) &&
+                              mesh.GetIdentifications().Used (seg1[1], seg2[1]))
+                            {
+                              foundother = 1;
+                              break;
+                            }
+                          
+                          if (mesh.GetIdentifications().Used (seg1[0], seg2[1]) &&
+                              mesh.GetIdentifications().Used (seg1[1], seg2[0]))
+                            {
+                              foundother = 1;
+                              break;
+                            }
+                        }
+                      else
+                        {
+                          if (mesh.GetIdentifications().Used (seg2[0], seg1[0]) &&
+                              mesh.GetIdentifications().Used (seg2[1], seg1[1]))
+                            {
+                              foundother = 1;
+                              break;
+                            }
+                          
+                          if (mesh.GetIdentifications().Used (seg2[0], seg1[1]) &&
+                              mesh.GetIdentifications().Used (seg2[1], seg1[0]))
+                            {
+                              foundother = 1;
+                              break;
+                            }
+                        }
+                    }
+                  
+                  if (!foundother)
+                    {
+                      idok = 0;
+                      break;
+                    }
+                }
+            }
+          
+          
+          if (idok)
+            {
+              //(*testout) << "Identification " << nr << ", identify faces " << i << " and " << j << endl;
+              IVec<2> fpair = IVec<2>(i,j).Sort();
+              identfaces.Set (fpair, 1);
+            }
+        }
     }
 }
 
 
 
 void CloseSurfaceIdentification :: 
-BuildSurfaceElements (NgArray<Segment> & segs,
-		      Mesh & mesh, const Surface * surf)
+BuildSurfaceElements (Array<Segment> & segs,
+                      Mesh & mesh, const Surface * surf)
 {
+  auto seg_fdi = [&mesh](const Segment& s) -> int {
+    if (mesh.HasEdgeDescriptor(s))
+      return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+    return -1;
+  };
+
   bool found = 0;
   int cntquads = 0;
 
   idmap_type identmap;
-  identmap = 0;
-
   mesh.GetIdentifications().GetMap (nr, identmap);
-  
-  for (int i = PointIndex::BASE; i < identmap.Size()+PointIndex::BASE; i++)
-    if (identmap[i])  identmap[identmap[i]] = i;
+
+  for (PointIndex pi : identmap.Range())
+    if (identmap[pi].IsValid())  identmap[identmap[pi]] = pi;
 
     
   //(*testout) << "identification nr = " << nr << endl;
@@ -1260,31 +1265,31 @@ BuildSurfaceElements (NgArray<Segment> & segs,
   //(*testout) << "segs = " << endl << segs << endl;
   //(*testout) << "identmap = " << endl << identmap << endl;
   
-  //NgArray<bool> foundseg(segs.Size());
+  //Array<bool> foundseg(segs.Size());
   //foundseg = false;
 
   // insert quad layer:
   for (int i1 = 0; i1 < segs.Size(); i1++)
     {
       const Segment & s1 = segs[i1];
-      if (identmap[s1[0]] && identmap[s1[1]])
-	for (int i2 = 0; i2 < i1; i2++)
-	  {
-	    const Segment & s2 = segs[i2];
-	    //(*testout) << "checking " << s1 << " and " << s2 << " for ident." << endl;
+      if (identmap[s1[0]].IsValid() && identmap[s1[1]].IsValid())
+        for (int i2 = 0; i2 < i1; i2++)
+          {
+            const Segment & s2 = segs[i2];
+            //(*testout) << "checking " << s1 << " and " << s2 << " for ident." << endl;
 
-	    if(domain && !((s1.domin == dom_nr ||
-			    s1.domout == dom_nr) &&
-			   (s2.domin == dom_nr ||
-			    s2.domout == dom_nr)))
-	      continue;
-	 
-	    if ((mesh.GetIdentifications().Get (s1[0], s2[1], nr) && 
-		 mesh.GetIdentifications().Get (s1[1], s2[0], nr))    || 
-		(mesh.GetIdentifications().Get (s2[0], s1[1], nr) && 
-		 mesh.GetIdentifications().Get (s2[1], s1[0], nr)))
-	      {
-		Vec<3> ns = surf->GetNormalVector (mesh[s1[0]]);
+            if(domain && !((mesh.GetEdgeDescriptor(s1.GetIndex()).DomainIn() == dom_nr ||
+                            mesh.GetEdgeDescriptor(s1.GetIndex()).DomainOut() == dom_nr) &&
+                           (mesh.GetEdgeDescriptor(s2.GetIndex()).DomainIn() == dom_nr ||
+                            mesh.GetEdgeDescriptor(s2.GetIndex()).DomainOut() == dom_nr)))
+              continue;
+         
+            if ((mesh.GetIdentifications().Get (s1[0], s2[1], nr) && 
+                 mesh.GetIdentifications().Get (s1[1], s2[0], nr))    || 
+                (mesh.GetIdentifications().Get (s2[0], s1[1], nr) && 
+                 mesh.GetIdentifications().Get (s2[1], s1[0], nr)))
+              {
+                Vec<3> ns = surf->GetNormalVector (mesh[s1[0]]);
 
                 Vec<3> t1 = mesh[s1[1]] - mesh[s1[0]];
                 // Vec<3> t2 = mesh[s2[1]] - mesh[s2[0]];
@@ -1293,38 +1298,38 @@ BuildSurfaceElements (NgArray<Segment> & segs,
                 Vec<3> dvec = Center(mesh[s1[0]], mesh[s1[1]])-Center(mesh[s2[0]], mesh[s2[1]]);
                 if (nst1 * dvec < 0) continue;
                 
-		Element2d el(s1[0], s1[1], s2[0], s2[1]);
-                el.SetIndex(s1.si);
+                Element2d el(s1[0], s1[1], s2[0], s2[1]);
+                el.SetIndex(seg_fdi(s1) > 0 ? FaceRegionIndex::FromNr1(seg_fdi(s1)) : FaceRegionIndex::INVALID);
 
-		Vec<3> n = Cross (mesh[el[1]] - mesh[el[0]],
-				  mesh[el[3]] - mesh[el[0]]);
+                Vec<3> n = Cross (mesh[el[1]] - mesh[el[0]],
+                                  mesh[el[3]] - mesh[el[0]]);
 
-		if (n * ns < 0)
-		  {
-		    Swap (el.PNum(1), el.PNum(2));
-		    Swap (el.PNum(3), el.PNum(4));
-		  }
-			     
-		mesh.AddSurfaceElement (el);
-//  		(*testout) << "(id nr "<< nr <<") add rect element: "
-//  			   << mesh.Point (el.PNum(1)) << " - "
-//  			   << mesh.Point (el.PNum(2)) << " - "
-//  			   << mesh.Point (el.PNum(3)) << " - "
-//  			   << mesh.Point (el.PNum(4)) << endl;
-		found = true;
-		//foundseg[i1]=foundseg[i2] = true;
-		cntquads++;
-	      }
-	  }
+                if (n * ns < 0)
+                  {
+                    Swap (el[0], el[1]);
+                    Swap (el[2], el[3]);
+                  }
+                             
+                mesh.AddSurfaceElement (el);
+//              (*testout) << "(id nr "<< nr <<") add rect element: "
+//                         << mesh.Point (el[0]) << " - "
+//                         << mesh.Point (el[1]) << " - "
+//                         << mesh.Point (el[2]) << " - "
+//                         << mesh.Point (el[3]) << endl;
+                found = true;
+                //foundseg[i1]=foundseg[i2] = true;
+                cntquads++;
+              }
+          }
     }
   if (found)
     {
       PrintMessage(3, "insert quad layer of ", cntquads,
-		   " elements at face ", segs.Get(1).si);
-      //NgArray<Segment> aux;
+                   " elements at face ", seg_fdi(segs[0]));
+      //Array<Segment> aux;
       //for(int i=0; i<segs.Size();i++)
-      //	if(!foundseg[i])
-      //	  aux.Append(segs[i]);
+      //        if(!foundseg[i])
+      //          aux.Append(segs[i]);
       segs.SetSize(0);
     }
   else
@@ -1339,9 +1344,15 @@ BuildSurfaceElements (NgArray<Segment> & segs,
 
 
 void CloseSurfaceIdentification :: 
-BuildSurfaceElements2 (NgArray<Segment> & segs,
-		       Mesh & mesh, const Surface * surf)
+BuildSurfaceElements2 (Array<Segment> & segs,
+                       Mesh & mesh, const Surface * surf)
 {
+  auto seg_fdi = [&mesh](const Segment& s) -> int {
+    if (mesh.HasEdgeDescriptor(s))
+      return mesh.GetEdgeDescriptor(s).GetIndex().Nr1();
+    return -1;
+  };
+
   // copy mesh
 
 
@@ -1353,69 +1364,61 @@ BuildSurfaceElements2 (NgArray<Segment> & segs,
   bool found = 0;
   int fother = -1;
 
-  int facei = segs[0].si;
-  int surfnr = mesh.GetFaceDescriptor(facei).SurfNr();
+  int facei = seg_fdi(segs[0]);
+  int surfnr = mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(facei)).SurfNr();
 
   
   bool foundid = 0;
-  for (INDEX_2_HASHTABLE<int>::Iterator it = identfaces.Begin();
-       it != identfaces.End(); it++)
-    {
-      INDEX_2 i2;
-      int data;
-      identfaces.GetData (it, i2, data);
-      if (i2.I1() == facei || i2.I2() == facei)
-	foundid = 1;
-    }
+  for (auto [i2, data] : identfaces)
+    if (i2[0] == facei || i2[1] == facei)
+      foundid = 1;
 
   /*
   for (int i = 1; i <= identfaces.GetNBags(); i++)
     for (int j = 1; j <= identfaces.GetBagSize(i); j++)
       {
-	INDEX_2 i2;
-	int data;
-	identfaces.GetData (i, j, i2, data);
-	if (i2.I1() == facei || i2.I2() == facei)
-	  foundid = 1;
+        IVec<2> i2;
+        int data;
+        identfaces.GetData (i, j, i2, data);
+        if (i2[0] == facei || i2[1] == facei)
+          foundid = 1;
 
-	(*testout) << "identface = " << i2 << endl;
-	(*testout) << "face " << i2.I1() << " = " << mesh.GetFaceDescriptor(i2.I1()) << endl;
-	(*testout) << "face " << i2.I2() << " = " << mesh.GetFaceDescriptor(i2.I2()) << endl;
+        (*testout) << "identface = " << i2 << endl;
+        (*testout) << "face " << i2[0] << " = " << mesh.GetFaceDescriptor(i2[0]) << endl;
+        (*testout) << "face " << i2[1] << " = " << mesh.GetFaceDescriptor(i2[1]) << endl;
       }
   */
 
   if (foundid)
     {
-      //	  (*testout) << "surfaces found" << endl;
+      //          (*testout) << "surfaces found" << endl;
       // copy surface
-      for (SurfaceElementIndex sei = 0; sei < mesh.GetNSE(); sei++)
-	{
-	  const Element2d & sel = mesh[sei];
-	  INDEX_2 fpair (facei, sel.GetIndex());
-	  fpair.Sort();
-	  if (identfaces.Used (fpair))
-	    {
-	      found = 1;
-	      fother = sel.GetIndex();
-	      
-	      // copy element
-	      Element2d newel(sel.GetType());
-	      newel.SetIndex (facei);
-	      for (int k = 1; k <= sel.GetNP(); k++)
-                newel.PNum(k) = GetIdentifiedPoint (mesh, sel.PNum(k));
-	      
-	      Vec<3> nt = Cross (Point<3> (mesh.Point (newel.PNum(2)))- 
-				 Point<3> (mesh.Point (newel.PNum(1))),
-				 Point<3> (mesh.Point (newel.PNum(3)))- 
-				 Point<3> (mesh.Point (newel.PNum(1))));
-	      Vec<3> nsurf;
-	      nsurf = geom.GetSurface (surfnr)->GetNormalVector (mesh.Point(newel.PNum(1)));
-	      if (nsurf * nt < 0)
-		Swap (newel.PNum(2), newel.PNum(3));
-	      
-	      mesh.AddSurfaceElement (newel);
-	    }
-	}
+      for (const Element2dRef & sel : mesh.SurfaceElements())
+        {
+          IVec<2> fpair = IVec<2>(facei, sel.GetIndex().Nr1()).Sort();
+          if (identfaces.Used (fpair))
+            {
+              found = 1;
+              fother = sel.GetIndex().Nr1();
+              
+              // copy element
+              Element2d newel(sel.GetType());
+              newel.SetIndex (FaceRegionIndex::FromNr1(facei));
+              for (int k = 0; k < sel.GetNP(); k++)
+                newel[k] = GetIdentifiedPoint (mesh, sel[k]);
+              
+              Vec<3> nt = Cross (Point<3> (mesh.Point (newel[1]))- 
+                                 Point<3> (mesh.Point (newel[0])),
+                                 Point<3> (mesh.Point (newel[2]))- 
+                                 Point<3> (mesh.Point (newel[0])));
+              Vec<3> nsurf;
+              nsurf = geom.GetSurface (surfnr)->GetNormalVector (mesh.Point(newel[0]));
+              if (nsurf * nt < 0)
+                Swap (newel[1], newel[2]);
+              
+              mesh.AddSurfaceElement (newel);
+            }
+        }
     }
   
   if (found)
@@ -1440,8 +1443,8 @@ BuildSurfaceElements2 (NgArray<Segment> & segs,
 
 
 void CloseSurfaceIdentification :: 
-BuildVolumeElements (NgArray<class Element2d> & surfels,
-		     class Mesh & mesh)
+BuildVolumeElements (Array<class Element2d> & surfels,
+                     class Mesh & mesh)
 {
   ;
 }
@@ -1464,10 +1467,10 @@ BuildVolumeElements (NgArray<class Element2d> & surfels,
 
 CloseEdgesIdentification ::
 CloseEdgesIdentification (int anr,
-			  const CSGeometry & ageom,
-			  const Surface * afacet,
-			  const Surface * as1,
-			  const Surface * as2)
+                          const CSGeometry & ageom,
+                          const Surface * afacet,
+                          const Surface * as1,
+                          const Surface * as2)
   : Identification(anr, ageom)
 {
   facet = afacet;
@@ -1501,7 +1504,7 @@ void CloseEdgesIdentification :: GetData (ostream & ost) const
 
 /*
 void CloseEdgesIdentification :: IdentifySpecialPoints 
-(NgArray<class SpecialPoint> & points)
+(Array<class SpecialPoint> & points)
 {
   int i, j;
   int bestj;
@@ -1513,56 +1516,56 @@ void CloseEdgesIdentification :: IdentifySpecialPoints
       Vec<3> n1;
 
       if (!s1->PointOnSurface (p1))
-	continue;
+        continue;
 
-	s1->GetNormalVector (p1, n1);
+        s1->GetNormalVector (p1, n1);
       n1 /= n1.Length();
       if ( fabs(n1 * points.Get(i).v) > 1e-3)
-	continue;
+        continue;
 
       bestval = 1e8;
       bestj = 1;
       for (j = 1; j <= points.Size(); j++)
-	{
-	  Point<3> p2= points.Get(j).p;
-	  if (!s2->PointOnSurface (p2))
-	    continue;
-	  
-	  Vec<3> n2;
-	  s2->GetNormalVector (p2, n2);
-	  n2 /= n2.Length();
-	  if ( fabs(n2 * points.Get(j).v) > 1e-3)
-	    continue;
+        {
+          Point<3> p2= points.Get(j).p;
+          if (!s2->PointOnSurface (p2))
+            continue;
+          
+          Vec<3> n2;
+          s2->GetNormalVector (p2, n2);
+          n2 /= n2.Length();
+          if ( fabs(n2 * points.Get(j).v) > 1e-3)
+            continue;
 
 
-	  Vec<3> v(p1, p2);
-	  double vl = v.Length();
-	  double cl = fabs (v*n1);
+          Vec<3> v(p1, p2);
+          double vl = v.Length();
+          double cl = fabs (v*n1);
 
-	  val = 1 - cl*cl/(vl*vl);
+          val = 1 - cl*cl/(vl*vl);
 
-	  val += (points.Get(i).v - points.Get(j).v).Length();
+          val += (points.Get(i).v - points.Get(j).v).Length();
 
-	  if (val < bestval)
-	    {
-	      bestj = j;
-	      bestval = val;
-	    }
-	}
+          if (val < bestval)
+            {
+              bestj = j;
+              bestval = val;
+            }
+        }
 
       (*testout) << "Identify close surfaces special points: pi = " 
-		 << points.Get(i).p << ", vi = " << points.Get(i).v 
-		 << " pj = " << points.Get(bestj).p 
-		 << ", vj = " << points.Get(bestj).v 
-		 << " bestval = " << bestval << endl;
+                 << points.Get(i).p << ", vi = " << points.Get(i).v 
+                 << " pj = " << points.Get(bestj).p 
+                 << ", vj = " << points.Get(bestj).v 
+                 << " bestval = " << bestval << endl;
     }
 }
 */
 
 int CloseEdgesIdentification :: 
 Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
-	      const TABLE<int> & specpoint2solid,
-	      const TABLE<int> & specpoint2surface) const
+              const DynamicTable<int> & specpoint2solid,
+              const DynamicTable<int> & specpoint2surface) const
 {
   int i;
   double val;
@@ -1573,23 +1576,23 @@ Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
   for (i = 1; i <= 1; i++)
     {
       if (!s1->PointOnSurface (hsp1.p))
-	continue;
+        continue;
 
       Vec<3> n1;
       n1 = s1->GetNormalVector (hsp1.p);
       n1 /= n1.Length();
       if ( fabs(n1 * hsp1.v) > 1e-3)
-	continue;
+        continue;
 
 
       if (!s2->PointOnSurface(hsp2.p))
-	continue;
+        continue;
 
       Vec<3> n2;
       n2 = s2->GetNormalVector (hsp2.p);
       n2 /= n2.Length();
       if ( fabs(n2 * hsp2.v) > 1e-3)
-	continue;
+        continue;
 
 
       Vec<3> v = hsp2.p - hsp1.p;
@@ -1601,9 +1604,9 @@ Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
       val += (hsp1.v - hsp2.v).Length();
     
       if (val < 1e-3)
-	{
-	  return 1;
-	}
+        {
+          return 1;
+        }
     }
 
   return 0;
@@ -1614,47 +1617,46 @@ Identifiable (const SpecialPoint & sp1, const SpecialPoint & sp2,
 
 void CloseEdgesIdentification :: IdentifyPoints (Mesh & mesh)
 {
-  int np = mesh.GetNP();
-  for (int i1 = 1; i1 <= np; i1++)
-    for (int i2 = 1; i2 <= np; i2++)
+  for (PointIndex i1 : mesh.Points().Range())
+    for (PointIndex i2 : mesh.Points().Range())
       {
-	if (i2 == i1)
-	  continue;
-	
-	const Point<3> p1 = mesh.Point(i1);
-	const Point<3> p2 = mesh.Point(i2);
-	Point<3> pp1 = p1;
-	Point<3> pp2 = p2;
-	
-	s1->Project (pp1);
-	facet->Project (pp1);
-	s2->Project (pp2);
-	facet->Project (pp2);
+        if (i2 == i1)
+          continue;
+        
+        const Point<3> p1 = mesh[i1];
+        const Point<3> p2 = mesh[i2];
+        Point<3> pp1 = p1;
+        Point<3> pp2 = p2;
+        
+        s1->Project (pp1);
+        facet->Project (pp1);
+        s2->Project (pp2);
+        facet->Project (pp2);
 
-	if (Dist (p1, pp1) > 1e-6 || Dist (p2, pp2) > 1e-6)
-	  continue;
+        if (Dist (p1, pp1) > 1e-6 || Dist (p2, pp2) > 1e-6)
+          continue;
 
-	Vec<3> n1, nf, t;
-	Vec<3> n = p2 - p1;
-	n.Normalize();
+        Vec<3> n1, nf, t;
+        Vec<3> n = p2 - p1;
+        n.Normalize();
 
-	n1 = s1->GetNormalVector (p1);
-	nf = facet->GetNormalVector (p1);
-	t = Cross (n1, nf);
-	t /= t.Length();
+        n1 = s1->GetNormalVector (p1);
+        nf = facet->GetNormalVector (p1);
+        t = Cross (n1, nf);
+        t /= t.Length();
 
-	if (fabs (n * t) < 0.5)
-	  {
-	    (*testout) << "close edges identify points " << p1 << " - " << p2 << endl;
-	    mesh.GetIdentifications().Add (i1, i2, nr);
-	    mesh.GetIdentifications().SetType(nr,Identifications::CLOSEEDGES);
-	  }
+        if (fabs (n * t) < 0.5)
+          {
+            (*testout) << "close edges identify points " << p1 << " - " << p2 << endl;
+            mesh.GetIdentifications().Add (i1, i2, nr);
+            mesh.GetIdentifications().SetType(nr,Identifications::CLOSEEDGES);
+          }
       }
 }
 
 void CloseEdgesIdentification :: 
-BuildSurfaceElements (NgArray<Segment> & segs,
-		      Mesh & mesh, const Surface * surf)
+BuildSurfaceElements (Array<Segment> & segs,
+                      Mesh & mesh, const Surface * surf)
 {
   int found = 0;
 
@@ -1664,41 +1666,41 @@ BuildSurfaceElements (NgArray<Segment> & segs,
   for (int i1 = 1; i1 <= segs.Size(); i1++)
     for (int i2 = 1; i2 < i1; i2++)
       {
-	const Segment & s1 = segs.Get(i1);
-	const Segment & s2 = segs.Get(i2);
-	if (mesh.GetIdentifications().Used (s1[0], s2[1]) &&
-	    mesh.GetIdentifications().Used (s1[1], s2[0]))
-	  {
-	    Element2d el(QUAD);
-	    el.PNum(1) = s1[0];
-	    el.PNum(2) = s1[1];
-	    el.PNum(3) = s2[1];
-	    el.PNum(4) = s2[0];
+        const Segment & s1 = segs[i1-1];
+        const Segment & s2 = segs[i2-1];
+        if (mesh.GetIdentifications().Used (s1[0], s2[1]) &&
+            mesh.GetIdentifications().Used (s1[1], s2[0]))
+          {
+            Element2d el(QUAD);
+            el[0] = s1[0];
+            el[1] = s1[1];
+            el[2] = s2[1];
+            el[3] = s2[0];
 
-	    Vec<3> n = Cross (Point<3> (mesh.Point(el.PNum(2)))-
-			      Point<3> (mesh.Point(el.PNum(1))),
-			      Point<3> (mesh.Point(el.PNum(3)))-
-			      Point<3> (mesh.Point(el.PNum(1))));
-	    Vec<3> ns;
-	    ns = surf->GetNormalVector (mesh.Point(el.PNum(1)));
-	    //(*testout) << "n = " << n << " ns = " << ns << endl;
-	    if (n * ns < 0)
-	      {
-		//(*testout) << "Swap the quad" << endl;
-		Swap (el.PNum(1), el.PNum(2));
-		Swap (el.PNum(3), el.PNum(4));
-	      }
-			     
-	    
-	    Swap (el.PNum(3), el.PNum(4));
-	    mesh.AddSurfaceElement (el);
-//  	    (*testout) << "add rect element: "
-//  		       << mesh.Point (el.PNum(1)) << " - "
-//  		       << mesh.Point (el.PNum(2)) << " - "
-//  		       << mesh.Point (el.PNum(3)) << " - "
-//  		       << mesh.Point (el.PNum(4)) << endl;
-	    found = 1;
-	  }
+            Vec<3> n = Cross (Point<3> (mesh.Point(el[1]))-
+                              Point<3> (mesh.Point(el[0])),
+                              Point<3> (mesh.Point(el[2]))-
+                              Point<3> (mesh.Point(el[0])));
+            Vec<3> ns;
+            ns = surf->GetNormalVector (mesh.Point(el[0]));
+            //(*testout) << "n = " << n << " ns = " << ns << endl;
+            if (n * ns < 0)
+              {
+                //(*testout) << "Swap the quad" << endl;
+                Swap (el[0], el[1]);
+                Swap (el[2], el[3]);
+              }
+                             
+            
+            Swap (el[2], el[3]);
+            mesh.AddSurfaceElement (el);
+//          (*testout) << "add rect element: "
+//                     << mesh.Point (el[0]) << " - "
+//                     << mesh.Point (el[1]) << " - "
+//                     << mesh.Point (el[2]) << " - "
+//                     << mesh.Point (el[3]) << endl;
+            found = 1;
+          }
       }
 
   if (found)

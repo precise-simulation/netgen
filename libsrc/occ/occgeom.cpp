@@ -57,6 +57,7 @@
 #include <XCAFDoc_ColorTool.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
 #include <XCAFDoc_ShapeTool.hxx>
+#include <TDataStd_Name.hxx>
 #include <XCAFPrs.hxx>
 #include <XCAFPrs_IndexedDataMapOfShapeStyle.hxx>
 #include <XCAFPrs_Style.hxx>
@@ -349,12 +350,12 @@ namespace netgen
     for (TopExp_Explorer exp_solid(shape, TopAbs_SOLID); exp_solid.More(); exp_solid.Next())
       {
         cout << "cnt = " << cnt << endl;
-	if (cnt == 0)
-	  my_fuse = exp_solid.Current();
-	else
+        if (cnt == 0)
+          my_fuse = exp_solid.Current();
+        else
           // my_fuse = BRepAlgoAPI_Fuse (my_fuse, exp_solid.Current());
           my_fuse = QANewModTopOpe_Glue::QANewModTopOpe_Glue(my_fuse, exp_solid.Current());
-	cnt++;
+        cnt++;
       }
     cout << "remove" << endl;
     // for (int i = 1; i <= somap.Size(); i++)
@@ -805,10 +806,10 @@ namespace netgen
                   TopoDS_Solid newsolid = solid;
                   BRepLib::OrientClosedSolid (newsolid);
                   Handle(ShapeBuild_ReShape) rebuild = new ShapeBuild_ReShape;
-                  //		  rebuild->Apply(shape);
+                  //              rebuild->Apply(shape);
                   rebuild->Replace(solid, newsolid);
                   TopoDS_Shape newshape = rebuild->Apply(shape, TopAbs_COMPSOLID);//, 1);
-                  //		  TopoDS_Shape newshape = rebuild->Apply(shape);
+                  //              TopoDS_Shape newshape = rebuild->Apply(shape);
                   shape = newshape;
                }
 
@@ -1410,11 +1411,9 @@ namespace netgen
   }
 
 
-   void OCCGeometry :: BuildVisualizationMesh (double deflection)
+   void OCCGeometry :: BuildVisualizationMesh (double deflection, double angle)
    {
-      // cout << IM(5) << "Preparing visualization (deflection = " << deflection << ") ... " << flush;
-      BuildTriangulation(shape);
-      // cout << IM(5) << "done" << endl;
+      BuildTriangulation(shape, deflection, angle);
    }
 
 
@@ -1440,6 +1439,88 @@ namespace netgen
 //       cout << "done" << endl;
 //    }
 
+
+  namespace {
+
+    string XCAFLabelName(const TDF_Label & l)
+    {
+      Handle(TDataStd_Name) na;
+      if(!l.IsNull() && l.FindAttribute(TDataStd_Name::GetID(), na))
+        {
+          TCollection_AsciiString a(na->Get());
+          return string(a.ToCString());
+        }
+      return "";
+    }
+
+    shared_ptr<OCCAssemblyNode> BuildAssemblyNode(
+        const Handle(XCAFDoc_ShapeTool) & st, const TDF_Label & label,
+        const TopLoc_Location & loc, const string & name)
+    {
+      auto node = make_shared<OCCAssemblyNode>();
+      node->name = name;
+      if(st->IsAssembly(label))
+        {
+          node->is_assembly = true;
+          TDF_LabelSequence comps;
+          XCAFDoc_ShapeTool::GetComponents(label, comps, Standard_False); // immediate only
+          for(Standard_Integer ci = 1; ci <= comps.Length(); ci++)
+            {
+              TDF_Label comp = comps.Value(ci);
+              TopLoc_Location childLoc = loc * XCAFDoc_ShapeTool::GetLocation(comp);
+              string nm = XCAFLabelName(comp);
+              TDF_Label ref;
+              if(XCAFDoc_ShapeTool::GetReferredShape(comp, ref))
+                {
+                  string rn = XCAFLabelName(ref);
+                  if(nm.empty()) nm = rn;       // prefer the component name, fall back to the part's
+                  node->children.push_back(BuildAssemblyNode(st, ref, childLoc, nm));
+                }
+              else
+                {
+                  auto leaf = make_shared<OCCAssemblyNode>();
+                  leaf->name = nm;
+                  leaf->shape = st->GetShape(comp).Moved(loc);
+                  node->children.push_back(leaf);
+                }
+            }
+        }
+      else
+        {
+          node->shape = st->GetShape(label).Moved(loc);
+        }
+      return node;
+    }
+
+    shared_ptr<OCCAssemblyNode> BuildAssemblyTree(const Handle(XCAFDoc_ShapeTool) & st)
+    {
+      if(st.IsNull())
+        return nullptr;
+      TDF_LabelSequence roots;
+      st->GetFreeShapes(roots);
+      if(roots.Length() == 0)
+        return nullptr;
+      auto root = make_shared<OCCAssemblyNode>();
+      root->is_assembly = true;
+      for(Standard_Integer ri = 1; ri <= roots.Length(); ri++)
+        {
+          TDF_Label r = roots.Value(ri);
+          string nm = XCAFLabelName(r);
+          TDF_Label ref;
+          if(XCAFDoc_ShapeTool::GetReferredShape(r, ref))
+            {
+              string rn = XCAFLabelName(ref);
+              if(nm.empty()) nm = rn;
+              root->children.push_back(
+                  BuildAssemblyNode(st, ref, XCAFDoc_ShapeTool::GetLocation(r), nm));
+            }
+          else
+            root->children.push_back(BuildAssemblyNode(st, r, TopLoc_Location(), nm));
+        }
+      return root;
+    }
+
+  }
 
   void LoadOCCInto(OCCGeometry* occgeo, const filesystem::path & filename)
   {
@@ -1494,6 +1575,7 @@ namespace netgen
       step_utils::LoadProperties(main_shape, reader, step_doc);
 
       occgeo->shape = main_shape;
+      occgeo->assembly_tree = BuildAssemblyTree(step_shape_contents);
       occgeo->changed = 1;
       occgeo->BuildFMap();
       occgeo->CalcBoundingBox();
@@ -1607,6 +1689,7 @@ namespace netgen
         }
 
       occgeo->shape = shape;
+      occgeo->assembly_tree = BuildAssemblyTree(iges_shape_contents);
       occgeo->changed = 1;
       occgeo->BuildFMap();
 
@@ -1672,9 +1755,9 @@ namespace netgen
 
     if (ext == ".igs")
       {
-	IGESControl_Writer writer("millimeters", 1);
-	writer.AddShape (shape);
-	writer.Write (c_filename);
+        IGESControl_Writer writer("millimeters", 1);
+        writer.AddShape (shape);
+        writer.Write (c_filename);
       }
     else if (ext == ".stp")
       {
@@ -1682,18 +1765,18 @@ namespace netgen
       }
     else if (ext == ".stl")
       {
-	StlAPI_Writer writer;
-	writer.ASCIIMode() = Standard_True;
-	writer.Write (shape, c_filename);
+        StlAPI_Writer writer;
+        writer.ASCIIMode() = Standard_True;
+        writer.Write (shape, c_filename);
       }
     else if (ext == ".stlb")
       {
-	StlAPI_Writer writer;
-	writer.ASCIIMode() = Standard_False;
-	writer.Write (shape, c_filename);
+        StlAPI_Writer writer;
+        writer.ASCIIMode() = Standard_False;
+        writer.Write (shape, c_filename);
       }
 
-    throw NgException ("Unknown target format: " + filename);
+    throw NgException ("Unknown target format: " + filename.string());
   }
 
   void OCCGeometry :: SaveToMeshFile (ostream & ost) const
@@ -1708,9 +1791,56 @@ namespace netgen
     ost << ss->str();
   }
 
+  static void ArchiveAssemblyNode(Archive& ar, shared_ptr<OCCAssemblyNode>& node,
+                                  const TopTools_IndexedMapOfShape& shape_map,
+                                  const Array<TopoDS_Shape>& shape_list)
+  {
+    ar & node->name & node->is_assembly;
+
+    std::vector<int> solid_idx;
+    if(ar.Output())
+      for(TopExp_Explorer e(node->shape, TopAbs_SOLID); e.More(); e.Next())
+        {
+          int idx = shape_map.FindIndex(e.Current()) - 1;
+          if(idx >= 0)
+            solid_idx.push_back(idx);
+        }
+    int nsolid = solid_idx.size();
+    ar & nsolid;
+    solid_idx.resize(nsolid);
+    for(auto & si : solid_idx)
+      ar & si;
+
+    if(ar.Input())
+      {
+        if(nsolid == 1)
+          node->shape = shape_list[solid_idx[0]];
+        else if(nsolid > 1)
+          {
+            BRep_Builder builder;
+            TopoDS_Compound comp;
+            builder.MakeCompound(comp);
+            for(int si : solid_idx)
+              builder.Add(comp, shape_list[si]);
+            node->shape = comp;
+          }
+        // nsolid == 0 -> internal node / shapeless leaf, shape stays null
+      }
+
+    int nchild = ar.Output() ? int(node->children.size()) : 0;
+    ar & nchild;
+    node->children.resize(nchild);
+    for(auto & child : node->children)
+      {
+        if(ar.Input())
+          child = make_shared<OCCAssemblyNode>();
+        ArchiveAssemblyNode(ar, child, shape_map, shape_list);
+      }
+  }
+
   void OCCGeometry :: DoArchive(Archive& ar)
   {
-    constexpr int current_format_version = 0;
+    constexpr int current_format_version = 1;
 
     int format_version = current_format_version;
     auto netgen_version = GetLibraryVersion("netgen");
@@ -1814,6 +1944,22 @@ namespace netgen
           }
       }
 
+    // format_version >= 1: the product-structure assembly tree. Older archives
+    // don't have it -> assembly_tree simply stays null (as before).
+    if(format_version >= 1)
+      {
+        bool have_tree = (assembly_tree != nullptr);
+        ar & have_tree;
+        if(have_tree)
+          {
+            if(ar.Input())
+              assembly_tree = make_shared<OCCAssemblyNode>();
+            ArchiveAssemblyNode(ar, assembly_tree, shape_map, shape_list);
+          }
+        else if(ar.Input())
+          assembly_tree = nullptr;
+      }
+
     if(ar.Input())
       {
         changed = 1;
@@ -1863,21 +2009,21 @@ namespace netgen
          str << lname2.str() << " ";
 
          switch (e.Current().ShapeType())
-	   {
-	   case TopAbs_SOLID:
-	     count2 = somap.FindIndex(TopoDS::Solid(e.Current())); break;
-	   case TopAbs_SHELL:
-	     count2 = shmap.FindIndex(TopoDS::Shell(e.Current())); break;
-	   case TopAbs_FACE:
-	     count2 = fmap.FindIndex(TopoDS::Face(e.Current())); break;
-	   case TopAbs_WIRE:
-	     count2 = wmap.FindIndex(TopoDS::Wire(e.Current())); break;
-	   case TopAbs_EDGE:
-	     count2 = emap.FindIndex(TopoDS::Edge(e.Current())); break;
-	   case TopAbs_VERTEX:
-	     count2 = vmap.FindIndex(TopoDS::Vertex(e.Current())); break;
-	   default:
-	     cout << "RecursiveTopologyTree: Case " << e.Current().ShapeType() << " not handled" << endl;
+           {
+           case TopAbs_SOLID:
+             count2 = somap.FindIndex(TopoDS::Solid(e.Current())); break;
+           case TopAbs_SHELL:
+             count2 = shmap.FindIndex(TopoDS::Shell(e.Current())); break;
+           case TopAbs_FACE:
+             count2 = fmap.FindIndex(TopoDS::Face(e.Current())); break;
+           case TopAbs_WIRE:
+             count2 = wmap.FindIndex(TopoDS::Wire(e.Current())); break;
+           case TopAbs_EDGE:
+             count2 = emap.FindIndex(TopoDS::Edge(e.Current())); break;
+           case TopAbs_VERTEX:
+             count2 = vmap.FindIndex(TopoDS::Vertex(e.Current())); break;
+           default:
+             cout << "RecursiveTopologyTree: Case " << e.Current().ShapeType() << " not handled" << endl;
          }
 
          int nrsubshapes = 0;
@@ -2061,8 +2207,8 @@ namespace netgen
 
       // double dmax;
       // int cnt = 0;
-      NgArray <double> edgeLengths;
-      NgArray <int> order;
+      Array<double> edgeLengths;
+      Array<int> order;
       edgeLengths.SetSize (emap.Extent());
       order.SetSize (emap.Extent());
 
@@ -2074,13 +2220,14 @@ namespace netgen
          edgeLengths[i-1] = system.Mass();
       }
 
-      Sort (edgeLengths, order);
+      for (int i = 0; i < order.Size(); i++) order[i] = i;
+      std::stable_sort (order.begin(), order.end(), [&] (int a, int b) { return edgeLengths[a] < edgeLengths[b]; });
 
       str << "ShortestEdges {Shortest edges} ";
       for (i = 1; i <= min(20, emap.Extent()); i++)
       {
          str << "ShortestEdges/Edge" << i;
-         str << " {Edge " << order[i-1] << " (L=" << edgeLengths[order[i-1]-1] << ")} ";
+         str << " {Edge " << order[i-1]+1 << " (L=" << edgeLengths[order[i-1]] << ")} ";
       }
 
       str << flush;
@@ -2119,8 +2266,8 @@ namespace netgen
 
    bool OCCGeometry :: ErrorInSurfaceMeshing ()
    {
-      for (int i = 1; i <= fmap.Extent(); i++)
-         if (facemeshstatus[i-1] == -1)
+      for (int i = 0; i < fmap.Extent(); i++)
+         if (facemeshstatus[i] == -1)
             return true;
 
       return false;
@@ -2177,7 +2324,7 @@ namespace netgen
       return true;
   }
 
-  void Identify(const TopoDS_Shape & me, const TopoDS_Shape & you, string name, Identifications::ID_TYPE type, std::optional<std::variant<gp_Trsf, gp_GTrsf>> opt_trafo) 
+  size_t Identify(const TopoDS_Shape & me, const TopoDS_Shape & you, string name, Identifications::ID_TYPE type, std::optional<std::variant<gp_Trsf, gp_GTrsf>> opt_trafo) 
   {
     Transformation<3> trafo;
     if(opt_trafo)
@@ -2193,10 +2340,10 @@ namespace netgen
     ListOfShapes list_me, list_you;
     list_me.push_back(me);
     list_you.push_back(you);
-    Identify(list_me, list_you, name, type, trafo);
+    return Identify(list_me, list_you, name, type, trafo);
   }
 
-  void Identify(const ListOfShapes & me, const ListOfShapes & you, string name, Identifications::ID_TYPE type, Transformation<3> trafo) 
+  size_t Identify(const ListOfShapes & me, const ListOfShapes & you, string name, Identifications::ID_TYPE type, Transformation<3> trafo) 
   {
     ListOfShapes id_me;
     ListOfShapes id_you;
@@ -2217,22 +2364,26 @@ namespace netgen
         id_you = you.Vertices();
     }
 
+    size_t n_idents = 0;
+    
     for(auto shape_me : id_me)
         for(auto shape_you : id_you)
         {
             if(!IsMappedShape(trafo, shape_me, shape_you))
                 continue;
 
+            n_idents++;
             OCCGeometry::GetIdentifications(shape_me).push_back
                 (OCCIdentification { shape_me, shape_you, trafo, name, type });
         }
+    return n_idents;
   }
 
   void OCCParameters :: Print(ostream & ost) const
    {
       ost << "OCC Parameters:" << endl
-		 << "minimum edge length: " << resthminedgelenenable
-		 << ", min len = " << resthminedgelen << endl;
+                 << "minimum edge length: " << resthminedgelenenable
+                 << ", min len = " << resthminedgelen << endl;
    }
 
   DLL_HEADER extern OCCParameters occparam;

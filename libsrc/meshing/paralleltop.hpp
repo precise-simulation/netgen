@@ -6,7 +6,7 @@ namespace netgen
 
   struct RefinementTriangleCenter
   {
-    INDEX_3 parents;
+    SortedPointIndices<3> parents;
     int occurrence;
     SurfaceElementIndex surface_element;
     PointIndex center;
@@ -29,8 +29,8 @@ namespace netgen
     Array<int> glob_vert;
 
     // will get rid of them
-    NgArray<int> glob_edge, glob_face;
-    NgArray<int> glob_el, glob_surfel, glob_segm;
+    Array<int> glob_edge, glob_face;
+    Array<int> glob_el, glob_surfel, glob_segm;
 
     bool is_updated;
 
@@ -55,8 +55,8 @@ namespace netgen
     void AddDistantEdgeProc (int face, int proc) { loc2distedge.AddUnique (face, proc); }
     
     FlatArray<int> GetDistantProcs (PointIndex pi) const { return loc2distvert[pi-IndexBASE<PointIndex>()]; }
-    FlatArray<int> GetDistantFaceProcs (int locnum) const { return loc2distface[locnum]; }
-    FlatArray<int> GetDistantEdgeProcs (int locnum) const { return loc2distedge[locnum]; }
+    FlatArray<int> GetDistantFaceProcs (FaceIndex locnum) const { return loc2distface[locnum.Nr0()]; }
+    FlatArray<int> GetDistantEdgeProcs (EdgeIndex locnum) const { return loc2distedge[locnum.Nr0()]; }
 
 
     
@@ -124,18 +124,18 @@ namespace netgen
     void GetDistantPNums (int locpnum, int * distpnums ) const
     {
       for (int i = 0; i < loc2distvert[locpnum-1].Size(); i++ )
-	distpnums[i] = loc2distvert[locpnum-1][i];
+        distpnums[i] = loc2distvert[locpnum-1][i];
     } 
 
     // [[deprecated("Use GetDistantFaceNums(locnum) -> FlatArray instead!")]]                    
     void GetDistantFaceNums (int locfacenum, int * distfacenums ) const
     {
       for ( int i = 0; i < loc2distface[locfacenum-1].Size(); i++ )
-	distfacenums[i] = loc2distface[locfacenum-1][i];
+        distfacenums[i] = loc2distface[locfacenum-1][i];
     } 
 
     // [[deprecated("Use GetDistantFaceNums(locnum) -> FlatArray instead!")]]                        
-    void GetDistantFaceNums (int locfacenum, NgArray<int> & distfacenums ) const
+    void GetDistantFaceNums (int locfacenum, Array<int> & distfacenums ) const
     {
       // distfacenums = loc2distface[locfacenum-1];
       auto loc = loc2distface[locfacenum-1];
@@ -148,11 +148,11 @@ namespace netgen
     void GetDistantEdgeNums (int locedgenum, int * distedgenums ) const
     {
       for (int i = 0; i < loc2distedge[locedgenum-1].Size(); i++ )
-	distedgenums[i] = loc2distedge[locedgenum-1][i];
+        distedgenums[i] = loc2distedge[locedgenum-1][i];
     } 
 
     // [[deprecated("Use GetDistantEdgeNums(locnum) -> FlatArray instead!")]]                                
-    void GetDistantEdgeNums (int locedgenum, NgArray<int> & distedgenums ) const
+    void GetDistantEdgeNums (int locedgenum, Array<int> & distedgenums ) const
     {
       // distedgenums = loc2distedge[locedgenum-1];
       auto loc = loc2distedge[locedgenum-1];

@@ -43,10 +43,10 @@ void netrule :: SetFreeZoneTransformation (const Vector & devp, int tolclass)
 
       auto& fzi = freezone_i[tolclass-1];
       for (int i = 0; i < fzs; i++)
-	{
-	  transfreezone[i][0] = fzi[i][0] + devfree[2*i];
-	  transfreezone[i][1] = fzi[i][1] + devfree[2*i+1];
-	}
+        {
+          transfreezone[i][0] = fzi[i][0] + devfree[2*i];
+          transfreezone[i][1] = fzi[i][1] + devfree[2*i+1];
+        }
     }
   else
     {
@@ -58,10 +58,10 @@ void netrule :: SetFreeZoneTransformation (const Vector & devp, int tolclass)
       devfree.Set2 (lam1, devfree1, lam2, devfree2);
 
       for (int i = 0; i < fzs; i++)
-	{
-	  transfreezone[i][0] = lam1 * freezone[i][0] + lam2 * freezonelimit[i][0] + devfree[2*i];
-	  transfreezone[i][1] = lam1 * freezone[i][1] + lam2 * freezonelimit[i][1] + devfree[2*i+1];
-	}
+        {
+          transfreezone[i][0] = lam1 * freezone[i][0] + lam2 * freezonelimit[i][0] + devfree[2*i];
+          transfreezone[i][1] = lam1 * freezone[i][1] + lam2 * freezonelimit[i][1] + devfree[2*i+1];
+        }
     }
 
 
@@ -89,31 +89,31 @@ void netrule :: SetFreeZoneTransformation (const Vector & devp, int tolclass)
       double len2 = vn.Length2();
 
       if (len2 < 1e-10)
-	{
-	  freesetinequ(i, 0) = 0;
-	  freesetinequ(i, 1) = 0;
-	  freesetinequ(i, 2) = -1;
-	}
+        {
+          freesetinequ(i, 0) = 0;
+          freesetinequ(i, 1) = 0;
+          freesetinequ(i, 2) = -1;
+        }
       else
-	{
-	  vn /= sqrt (len2);    // scaling necessary ?
+        {
+          vn /= sqrt (len2);    // scaling necessary ?
 
-	  freesetinequ(i,0) = vn[0]; 
-	  freesetinequ(i,1) = vn[1]; 
-	  freesetinequ(i,2) = -(p1[0] * vn[0] + p1[1] * vn[1]);
-	}
+          freesetinequ(i,0) = vn[0]; 
+          freesetinequ(i,1) = vn[1]; 
+          freesetinequ(i,2) = -(p1[0] * vn[0] + p1[1] * vn[1]);
+        }
     }
 }
 
 
 /*
-int netrule :: IsInFreeZone2 (const Point2d & p) const
+int netrule :: IsInFreeZone2 (const Point<2> & p) const
 {
   for (int i = 0; i < transfreezone.Size(); i++)
     {
       if (freesetinequ(i, 0) * p.X() + 
-	  freesetinequ(i, 1) * p[1] +
-	  freesetinequ(i, 2) > 0) return 0;
+          freesetinequ(i, 1) * p[1] +
+          freesetinequ(i, 2) > 0) return 0;
     }
   return 1;
 }
@@ -129,10 +129,10 @@ int netrule :: IsLineInFreeZone2 (const Point<2> & p1, const Point<2> & p2) cons
   for (int i = 1; i <= transfreezone.Size(); i++)
     {
       if (freesetinequ.Get(i, 1) * p1[0] + freesetinequ.Get(i, 2) * p1[1] +
-	  freesetinequ.Get(i, 3) > -1e-8 &&    // -1e-6
-	  freesetinequ.Get(i, 1) * p2[0] + freesetinequ.Get(i, 2) * p2[1] +
-	  freesetinequ.Get(i, 3) > -1e-8       // -1e-6
-	  ) return 0;
+          freesetinequ.Get(i, 3) > -1e-8 &&    // -1e-6
+          freesetinequ.Get(i, 1) * p2[0] + freesetinequ.Get(i, 2) * p2[1] +
+          freesetinequ.Get(i, 3) > -1e-8       // -1e-6
+          ) return 0;
     }
 
   double nx =  (p2[1] - p1[1]);
@@ -147,13 +147,13 @@ int netrule :: IsLineInFreeZone2 (const Point<2> & p1, const Point<2> & p2) cons
       bool allleft = true;
       bool allright = true;
 
-      for (int i = 1; i <= transfreezone.Size(); i++)
-	{
-	  bool left  = transfreezone.Get(i)[0] * nx + transfreezone.Get(i)[1] * ny + c <  1e-7;
-          bool right = transfreezone.Get(i)[0] * nx + transfreezone.Get(i)[1] * ny + c > -1e-7;
-	  if (!left) allleft = false;
-	  if (!right) allright = false;
-	}
+      for (int i = 0; i < transfreezone.Size(); i++)
+        {
+          bool left  = transfreezone[i][0] * nx + transfreezone[i][1] * ny + c <  1e-7;
+          bool right = transfreezone[i][0] * nx + transfreezone[i][1] * ny + c > -1e-7;
+          if (!left) allleft = false;
+          if (!right) allright = false;
+        }
       if (allleft || allright) return false;
     }
 
@@ -165,21 +165,21 @@ int netrule :: ConvexFreeZone () const
   int n = transfreezone.Size();
   for (int i = 1; i <= n; i++)
     {
-      const bool counterclockwise = CCW (transfreezone.Get(i), 
-					 transfreezone.Get(i % n + 1),
-					 transfreezone.Get( (i+1) % n + 1 ),
-					 1e-7);
+      const bool counterclockwise = CCW (transfreezone[i-1], 
+                                         transfreezone[i % n],
+                                         transfreezone[(i+1) % n],
+                                         1e-7);
       //(*testout) << "ccw " << counterclockwise << endl << " p1 " << transfreezone.Get(i) << " p2 " << transfreezone.Get(i % n + 1)
-      //		 << " p3 " << transfreezone.Get( (i+1) % n + 1 ) << endl;
+      //                 << " p3 " << transfreezone.Get( (i+1) % n + 1 ) << endl;
       if (!counterclockwise )
-	return 0;
+        return 0;
     }
   return 1;
 }
 
 
 /*
-float netrule :: CalcPointDist (int pi, const Point2d & p) const
+float netrule :: CalcPointDist (int pi, const Point<2> & p) const
 {
   float dx = p.X() - points.Get(pi).X();
   float dy = p.Y() - points.Get(pi).Y();
@@ -191,10 +191,10 @@ float netrule :: CalcPointDist (int pi, const Point2d & p) const
 
 float netrule :: CalcLineError (int li, const Vec<2> & v) const
 {
-  float dx = v[0] - linevecs.Get(li)[0];
-  float dy = v[1] - linevecs.Get(li)[1];
+  float dx = v[0] - linevecs[li-1][0];
+  float dy = v[1] - linevecs[li-1][1];
 
-  const threefloat * ltf = &linetolerances.Get(li);
+  const threefloat * ltf = &linetolerances[li-1];
   return ltf->f1 * dx * dx + ltf->f2 * dx * dy + ltf->f3 * dy * dy;
 }
 } // namespace netgen

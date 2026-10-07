@@ -89,12 +89,8 @@ if(BUILD_OCC)
   set(OCC_DIR ${CMAKE_CURRENT_BINARY_DIR}/dependencies/occ)
 
   ExternalProject_Add(project_occ
-    # URL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_6_3.zip
-    # URL_MD5 2426e373903faabbd4f96a01a934b66d
-    # URL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_7_2.zip
-    # URL_MD5 533eb4f18af0f77ae321b158caeaee79
-    URL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_8_1.zip
-    URL_MD5 bf62952a03696dab9e4272aa8efacb1a
+    URL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V8_0_1.zip
+    URL_MD5 5b0b171d7028cf73bd9369997091347a
     DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external_dependencies
     ${SUBPROJECT_ARGS}
     CMAKE_ARGS
@@ -120,6 +116,26 @@ if(BUILD_OCC)
   list(APPEND NETGEN_DEPENDENCIES project_occ)
   set(OpenCascade_ROOT ${OCC_DIR})
 else(BUILD_OCC)
+    # When building pip wheels, OpenCASCADE is provided by the netgen-occt-devel
+    # package. Locate its CMake config automatically unless OpenCascade_DIR /
+    # OpenCascade_ROOT was given explicitly. For normal (non-pip) builds the
+    # package is usually not installed and we silently fall back to find_package.
+    if(NOT OpenCascade_DIR AND NOT OpenCascade_ROOT AND NOT DEFINED ENV{OpenCascade_ROOT})
+      find_package(Python3 COMPONENTS Interpreter QUIET)
+      if(Python3_Interpreter_FOUND)
+        execute_process(
+          COMMAND ${Python3_EXECUTABLE} -c "import importlib.metadata as m; print(next((str(f.locate().resolve().parent) for f in m.files('netgen-occt-devel') if f.name=='OpenCASCADEConfig.cmake'),''))"
+          OUTPUT_VARIABLE _occ_config_dir
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+          RESULT_VARIABLE _occ_query_result
+          ERROR_QUIET
+        )
+        if(_occ_query_result EQUAL 0 AND _occ_config_dir AND EXISTS "${_occ_config_dir}")
+          set(OpenCascade_DIR "${_occ_config_dir}")
+          message(STATUS "Using OpenCASCADE from netgen-occt-devel: ${OpenCascade_DIR}")
+        endif()
+      endif()
+    endif()
     find_package(OpenCascade NAMES OpenCasCade OpenCASCADE opencascade)
     if(NOT OpenCascade_FOUND)
       message(FATAL_ERROR "Opencascade not found, either\n\
@@ -136,8 +152,8 @@ if(BUILD_ZLIB)
   set(ZLIB_ROOT ${CMAKE_CURRENT_BINARY_DIR}/dependencies/zlib)
   ExternalProject_Add(project_zlib
     ${SUBPROJECT_ARGS}
-    URL https://github.com/madler/zlib/archive/refs/tags/v1.2.11.zip
-    URL_MD5 9d6a627693163bbbf3f26403a3a0b0b1
+    URL https://github.com/madler/zlib/archive/refs/tags/v1.3.1.zip
+    URL_MD5 127b8a71a3fb8bebe89df1080f15fdf6
     DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external_dependencies
     CMAKE_ARGS
          -DCMAKE_INSTALL_PREFIX=${ZLIB_ROOT}
@@ -230,6 +246,7 @@ set_vars( NETGEN_CMAKE_ARGS
   CMAKE_CXX_FLAGS_RELEASE
   CMAKE_STRIP
 
+  SKBUILD
   USE_GUI
   USE_PYTHON
   USE_MPI
@@ -253,6 +270,7 @@ set_vars( NETGEN_CMAKE_ARGS
   DEBUG_LOG
   CHECK_RANGE
   TRACE_MEMORY
+  POINTINDEX_BASE
   BUILD_STUB_FILES
   BUILD_FOR_CONDA
   NG_COMPILE_FLAGS

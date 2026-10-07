@@ -2,7 +2,6 @@
 #define NETGEN_BISECT_HPP
 
 #include <mydefs.hpp>
-#include <general/parthreads.hpp>
 #include "basegeom.hpp"
 #include "meshclass.hpp"
 
@@ -21,8 +20,6 @@ public:
   bool refine_hp = false;
   bool refine_p = false;
   bool onlyonce = false;
-  NgTaskManager task_manager = &DummyTaskManager;
-  NgTracer tracer = &DummyTracer;
   DLL_HEADER BisectionOptions ();
 };
 
@@ -36,10 +33,10 @@ public:
 
 
 DLL_HEADER extern void BisectTetsCopyMesh (Mesh &, const NetgenGeometry *,
-				BisectionOptions & opt);
+                                BisectionOptions & opt);
 
 DLL_HEADER extern void ZRefinement (Mesh &, const class NetgenGeometry *,
-			 ZRefinementOptions & opt);
+                         ZRefinementOptions & opt);
 
 
 
@@ -57,14 +54,14 @@ public:
   void Refine (Mesh & mesh);
   void Refine (Mesh & mesh, const bool tri2quad) const;
   void Refine (Mesh & mesh, const bool tri2quad);
-  void Bisect (Mesh & mesh, class BisectionOptions & opt, NgArray<double> * quality_loss = NULL) const;
+  void Bisect (Mesh & mesh, class BisectionOptions & opt, Array<double, ElementIndex> * quality_loss = NULL) const;
 
   void MakeSecondOrder (Mesh & mesh) const;
   void MakeSecondOrder (Mesh & mesh);
 
   void ValidateSecondOrder (Mesh & mesh);
   void ValidateRefinedMesh (Mesh & mesh, 
-			    NgArray<INDEX_2> & parents);
+                            Array<PointIndices<2>, PointIndex> & parents);
   
   virtual void LocalizeEdgePoints(Mesh & /* mesh */) const {;}
 };

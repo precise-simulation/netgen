@@ -1,13 +1,13 @@
 NGX_INLINE DLL_HEADER Ng_Point Ngx_Mesh :: GetPoint (int nr) const
 {
-  return Ng_Point (&mesh->Point(PointIndex(nr+PointIndex::BASE))(0));
+  return Ng_Point (&mesh->Point(PointIndex::FromNr0(nr))(0));
 }
 
 
 template <>
 NGX_INLINE DLL_HEADER int Ngx_Mesh :: GetElementIndex<0> (size_t nr) const
 {
-  return (*mesh).pointelements[nr].index;
+  return (*mesh).pointelements[nr].index.Nr1();
 }
 
 template <>
@@ -25,7 +25,7 @@ NGX_INLINE DLL_HEADER int Ngx_Mesh :: GetElementIndex<1> (size_t nr) const
   else
     return mesh->LineSegments()[nr].si;
   */
-  return mesh->LineSegments()[nr].GetIndex();
+  return (*mesh)[SegmentIndex::FromNr0(nr)].GetIndex().Nr1();
 }
   
 template <>
@@ -33,14 +33,14 @@ NGX_INLINE DLL_HEADER int Ngx_Mesh :: GetElementIndex<2> (size_t nr) const
 {
   // int ind = (*mesh)[SurfaceElementIndex(nr)].GetIndex(); 
   // return mesh->GetFaceDescriptor(ind).BCProperty();
-  const Element2d & el = (*mesh)[SurfaceElementIndex(nr)];
+  const Element2dRef & el = (*mesh)[SurfaceElementIndex::FromNr0(nr)];
   return mesh->GetFaceDescriptor(el).BCProperty();
 }
 
 template <>
 NGX_INLINE DLL_HEADER int Ngx_Mesh :: GetElementIndex<3> (size_t nr) const
 {
-  return (*mesh)[ElementIndex(nr)].GetIndex();
+  return (*mesh)[ElementIndex::FromNr0(nr)].GetIndex().Nr1();
 }
 
 
@@ -51,7 +51,7 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<0> (size_t nr) const
   
   Ng_Element ret;
   ret.type = NG_PNT;
-  ret.index = el.index;
+  ret.index = el.index.Nr1();
   ret.mat = el.name;
   
   ret.points.num = 1;
@@ -75,15 +75,7 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<0> (size_t nr) const
   ret.facets.base = POINTINDEX_BASE;
   ret.facets.ptr = (int*)&el.pnum;
 
-  /*
-  if (mesh->GetDimension() == 1)
-    ret.mat = *(mesh->GetBCNamePtr(el.index-1));
-  else if (mesh->GetDimension() == 2)
-    ret.mat = *(mesh->GetCD2NamePtr(el.index-1));
-  else
-    ret.mat = *(mesh->GetCD3NamePtr(el.index-1));
-  */
-  ret.mat = mesh->GetRegionName(0, el.index);
+  ret.mat = mesh->GetRegionName<0>(el.index.Nr1());
     
   ret.is_curved = false;
   return ret;
@@ -95,31 +87,12 @@ template <>
 NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<1> (size_t nr) const
 {
   // const Segment & el = mesh->LineSegment (SegmentIndex(nr));
-  const Segment & el = mesh->LineSegments()[nr];
+  const Segment & el = (*mesh)[SegmentIndex::FromNr0(nr)];
 
   Ng_Element ret;
   ret.type = NG_ELEMENT_TYPE(el.GetType());
-  /*
-  if(mesh->GetDimension()==3)
-    ret.index = el.edgenr;
-  else
-    ret.index = el.si;
-  */
-  ret.index = el.GetIndex();
-
-  
-  /*
-  if (mesh->GetDimension() == 2)
-    ret.mat = *(mesh->GetBCNamePtr(el.si-1));
-  else
-    {
-      if (mesh->GetDimension() == 3)
-        ret.mat = *(mesh->GetCD2NamePtr(el.edgenr-1));
-      else
-        ret.mat = *(mesh->GetMaterialPtr(el.si));
-    }
-  */
-  ret.mat = mesh->GetRegionName(1, ret.index);
+  ret.index = el.GetIndex().Nr1();
+  ret.mat = mesh->HasEdgeDescriptor(el) ? string_view(mesh->GetEdgeDescriptor(el).GetName()) : Mesh::defaultmat_sv;
 
   ret.points.num = el.GetNP();
   ret.points.ptr = (int*)&(el[0]);
@@ -127,11 +100,8 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<1> (size_t nr) const
   ret.vertices.num = 2;
   ret.vertices.ptr = (int*)&(el[0]);
 
-  /*
-  ret.edges.num = 1;
-  ret.edges.ptr = mesh->GetTopology().GetSegmentElementEdgesPtr (nr);
-  */
-  ret.edges.Assign ( FlatArray<T_EDGE2> (1, const_cast<T_EDGE2*>((const int*)  mesh->GetTopology().GetSegmentElementEdgesPtr (nr))));
+  auto hedges = mesh->GetTopology().GetEdges (SegmentIndex::FromNr0(nr));
+  ret.edges.Assign ( { hedges.Size(), (T_EDGE2*)hedges.Data() } );
 
   /*
   ret.faces.num = 0;
@@ -158,8 +128,8 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<1> (size_t nr) const
       ret.facets.ptr = (int*)&(el[0]);
     }
 
-  // ret.is_curved = mesh->GetCurvedElements().IsSegmentCurved(nr);
-  ret.is_curved = el.IsCurved();
+  // ret.is_curved = mesh->GetCurvedElements().IsCurved(SegmentIndex::FromNr0(nr));
+  ret.is_curved = mesh->HasEdgeDescriptor(el) && mesh->GetEdgeDescriptor(el).EdgeNr() > 0;
 
   return ret;
 }
@@ -167,16 +137,12 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<1> (size_t nr) const
 template <> 
 NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<2> (size_t nr) const
 {
-  const Element2d & el = mesh->SurfaceElements()[nr];
+  const Element2dRef & el = (*mesh)[SurfaceElementIndex::FromNr0(nr)];
   
   Ng_Element ret;
   ret.type = NG_ELEMENT_TYPE(el.GetType());
-  const FaceDescriptor & fd = mesh->GetFaceDescriptor(el); // .GetIndex());
-  ret.index = fd.BCProperty();
-  if (mesh->GetDimension() == 3)
-    ret.mat = fd.GetBCName();
-  else
-    ret.mat = *(mesh -> GetMaterialPtr(ret.index));
+  ret.index = el.GetIndex().Nr1();   // region = face descriptor
+  ret.mat = mesh->GetFaceDescriptor(el).GetBCName();
   ret.points.num = el.GetNP();
   ret.points.ptr  = (int*)&el[0];
 
@@ -189,16 +155,11 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<2> (size_t nr) const
   */
 
   // ret.edges.Assign (mesh->GetTopology().GetEdges (SurfaceElementIndex(nr)));
-  auto hedges = mesh->GetTopology().GetEdges (SurfaceElementIndex(nr));
+  auto hedges = mesh->GetTopology().GetEdges (SurfaceElementIndex::FromNr0(nr));
   ret.edges.Assign ( { hedges.Size(), (int*)hedges.Data() } );
   
-  /*
-  ret.faces.num = MeshTopology::GetNFaces (el.GetType());
-  ret.faces.ptr = mesh->GetTopology().GetSurfaceElementFacesPtr (nr);
-  */
-
-  // ret.faces.Assign ( { 1, const_cast<int*>(mesh->GetTopology().GetSurfaceElementFacesPtr (nr)) });
-  ret.faces.Assign ( { 1, (int*)(mesh->GetTopology().GetSurfaceElementFacesPtr (nr)) });
+  auto hfaces = mesh->GetTopology().GetFaces (SurfaceElementIndex::FromNr0(nr));
+  ret.faces.Assign ( { hfaces.Size(), (int*)hfaces.Data() } );
   
   if (mesh->GetDimension() == 3)
     {
@@ -220,11 +181,11 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<2> (size_t nr) const
 template <> 
 NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<3> (size_t nr) const
 {
-  const Element & el = mesh->VolumeElements()[nr];
+  auto el = (*mesh)[ElementIndex::FromNr0(nr)];
   
   Ng_Element ret;
   ret.type = NG_ELEMENT_TYPE(el.GetType());
-  ret.index = el.GetIndex();
+  ret.index = el.GetIndex().Nr1();
   ret.mat = *(mesh -> GetMaterialPtr(ret.index));
   ret.points.num = el.GetNP();
   ret.points.ptr = (int*)&el[0];
@@ -237,7 +198,7 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<3> (size_t nr) const
   ret.edges.ptr = mesh->GetTopology().GetElementEdgesPtr (nr);
   */
   // ret.edges.Assign (mesh->GetTopology().GetEdges (ElementIndex(nr)));
-  auto hedges = mesh->GetTopology().GetEdges (ElementIndex(nr));
+  auto hedges = mesh->GetTopology().GetEdges (ElementIndex::FromNr0(nr));
   ret.edges.Assign ( { hedges.Size(), (int*)hedges.Data() } );
   
 
@@ -246,7 +207,7 @@ NGX_INLINE DLL_HEADER Ng_Element Ngx_Mesh :: GetElement<3> (size_t nr) const
   ret.faces.ptr = mesh->GetTopology().GetElementFacesPtr (nr);
   */
   // ret.faces.Assign (mesh->GetTopology().GetFaces (ElementIndex(nr)));
-  auto hfaces = mesh->GetTopology().GetFaces (ElementIndex(nr));
+  auto hfaces = mesh->GetTopology().GetFaces (ElementIndex::FromNr0(nr));
   ret.faces.Assign ( { hfaces.Size(), (int*)hfaces.Data() } );
   
   ret.facets.num = ret.faces.Size();
@@ -269,13 +230,13 @@ string_view Ngx_Mesh :: GetMaterialCD<0> (int region_nr) const
 template <> NGX_INLINE DLL_HEADER
 string_view Ngx_Mesh :: GetMaterialCD<1> (int region_nr) const
 {
-  return mesh->GetBCName(region_nr);
+  return mesh->GetRegionName(mesh->GetDimension()-1, region_nr+1);
 }
 
 template <> NGX_INLINE DLL_HEADER
 string_view Ngx_Mesh :: GetMaterialCD<2> (int region_nr) const
 {
-  return mesh->GetCD2Name(region_nr);
+  return mesh->GetRegionName(mesh->GetDimension()-2, region_nr+1);
 }
 
 template <> NGX_INLINE DLL_HEADER
@@ -346,39 +307,41 @@ template <> NGX_INLINE DLL_HEADER const Ng_Node<0> Ngx_Mesh :: GetNode<0> (int v
 template <> NGX_INLINE DLL_HEADER const Ng_Node<1> Ngx_Mesh :: GetNode<1> (int nr) const
 {
   Ng_Node<1> node;
-  node.vertices.ptr = (const int*)mesh->GetTopology().GetEdgeVerticesPtr(nr);
+  node.vertices.ptr = (const int*)mesh->GetTopology().GetEdgeVerticesPtr(EdgeIndex::FromNr0(nr));
   return node;
 }
 
 template <> NGX_INLINE DLL_HEADER const Ng_Node<2> Ngx_Mesh :: GetNode<2> (int nr) const
 {
   Ng_Node<2> node;
-  node.vertices.ptr = (const int*)mesh->GetTopology().GetFaceVerticesPtr(nr);
+  node.vertices.ptr = (const int*)mesh->GetTopology().GetFaceVerticesPtr(FaceIndex::FromNr0(nr));
   node.vertices.nv = (node.vertices.ptr[3]+1 == PointIndex::BASE) ? 3 : 4;
-  node.surface_el = mesh->GetTopology().GetFace2SurfaceElement (nr);
+  node.surface_el = mesh->GetTopology().GetFace2SurfaceElement (FaceIndex::FromNr0(nr)).Nr0();
   return node;
 }
 
 
 NGX_INLINE DLL_HEADER Ng_Buffer<int[2]> Ngx_Mesh :: GetPeriodicVertices(int idnr) const
 {
-  NgArray<INDEX_2> apairs;
+  Array<PointIndices<2>> apairs;
   mesh->GetIdentifications().GetPairs (idnr+1, apairs);
-  for(auto& ind : apairs)
-    {
-      ind.I1() -= IndexBASE<PointIndex>();
-      ind.I2() -= IndexBASE<PointIndex>();
-    }
   typedef int ti2[2];
-  return { apairs.Size(), (ti2*)(void*)apairs.Release() };
+  ti2 * pairs = new ti2[apairs.Size()];
+  for (size_t i = 0; i < apairs.Size(); i++)
+    {
+      pairs[i][0] = apairs[i][0] - IndexBASE<PointIndex>();
+      pairs[i][1] = apairs[i][1] - IndexBASE<PointIndex>();
+    }
+  return { apairs.Size(), pairs };
 }
 
 
 NGX_INLINE void Ngx_Mesh :: GetParentNodes (int ni, int * parents) const
 {
-  if (ni < mesh->mlbetweennodes.Size())
+  auto pi = PointIndex::FromNr0(ni);
+  if (mesh->mlbetweennodes.Range().Contains(pi))
     for (int j = 0; j < 2; j++)
-      parents[j] = mesh->mlbetweennodes[IndexBASE<PointIndex>()+ni][j] - IndexBASE<PointIndex>();
+      parents[j] = mesh->mlbetweennodes[pi][j].Nr0();
   else
     parents[0] = parents[1] = -1;
 }
@@ -390,12 +353,14 @@ inline bool Ngx_Mesh :: HasParentEdges() const
 
 inline tuple<int, std::array<int,3>> Ngx_Mesh :: GetParentEdges (int enr) const
 {
-  return mesh->GetTopology().GetParentEdges(enr);
+  auto [info, nrs] = mesh->GetTopology().GetParentEdges(EdgeIndex::FromNr0(enr));
+  return { info, { nrs[0].Nr0(), nrs[1].Nr0(), nrs[2].Nr0() } };
 }
 
 inline tuple<int, std::array<int,4>> Ngx_Mesh :: GetParentFaces (int fnr) const
 {
-  return mesh->GetTopology().GetParentFaces(fnr);
+  auto [info, nrs] = mesh->GetTopology().GetParentFaces(FaceIndex::FromNr0(fnr));
+  return { info, { nrs[0].Nr0(), nrs[1].Nr0(), nrs[2].Nr0(), nrs[3].Nr0() } };
 }
 
 

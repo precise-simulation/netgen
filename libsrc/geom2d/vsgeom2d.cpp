@@ -52,35 +52,35 @@ namespace netgen
     glColor3f (0, 0, 1);
   
 
-    NgArray<Point<2> > points, otherpoints;
+    Array<Point<2> > points, otherpoints;
 
-    for (int i = 1; i <= geometry2d->GetSplines().Size(); i++)
+    for (int i = 0; i < geometry2d->GetSplines().Size(); i++)
       {
-	geometry2d->GetSplines().Get(i)->GetPoints (200, points);
+        geometry2d->GetSplines()[i]->GetPoints (200, points);
       
-	glBegin (GL_LINE_STRIP);
-	for (int j = 0; j < points.Size(); j++)
-	  glVertex3d (points[j](0), points[j](1), 0);
-	glEnd(); 
+        glBegin (GL_LINE_STRIP);
+        for (int j = 0; j < points.Size(); j++)
+          glVertex3d (points[j](0), points[j](1), 0);
+        glEnd(); 
       } 
 
     glColor3f (1, 0, 0);
 
-    for (int i = 1; i <= geometry2d->GetSplines().Size(); i++)
+    for (int i = 0; i < geometry2d->GetSplines().Size(); i++)
       {
-	int other = geometry2d->GetSpline(i-1).copyfrom;
-	if (other != -1)
-	  {
-	    geometry2d->GetSplines().Get(i)->GetPoints (6, points);
-	    geometry2d->GetSplines().Get(other)->GetPoints (6, otherpoints);
-	    glBegin (GL_LINES);
-	    for (int j = 1; j < 5; j++)
-	      {
-		glVertex3d (points[j](0), points[j](1), 0);
-		glVertex3d (otherpoints[j](0), otherpoints[j](1), 0);
-	      }
-	    glEnd ();
-	  }
+        int other = geometry2d->GetSpline(i).copyfrom;
+        if (other != -1)
+          {
+            geometry2d->GetSplines()[i]->GetPoints (6, points);
+            geometry2d->GetSplines()[other-1]->GetPoints (6, otherpoints);
+            glBegin (GL_LINES);
+            for (int j = 1; j < 5; j++)
+              {
+                glVertex3d (points[j](0), points[j](1), 0);
+                glVertex3d (otherpoints[j](0), otherpoints[j](1), 0);
+              }
+            glEnd ();
+          }
       }
 
 
@@ -102,7 +102,7 @@ namespace netgen
   
     Point<2> c = Center (bbox.PMin(), bbox.PMax());
 
-    center = Point3d (c(0), c(1), 0);
+    center = Point<3> (c(0), c(1), 0);
     rad = Dist (bbox.PMin(), bbox.PMax()) / 2;
 
     CalcTransformationMatrices();

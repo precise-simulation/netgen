@@ -13,7 +13,7 @@
 
 #include "array.hpp"
 #include "bitarray.hpp"
-#include "memtracer.hpp"
+#include "memtrace.hpp"
 #include "ngcore_api.hpp"
 #include "profiler.hpp"
 
@@ -145,7 +145,7 @@ namespace ngcore
     {
       for (size_t i : IntRange(size+1))
         index[i] = i*entrysize;
-      mt.Alloc(GetMemUsage());
+      TraceAlloc();
     }
 
     /// Construct table of variable entrysize
@@ -157,7 +157,7 @@ namespace ngcore
       index = TablePrefixSum (FlatArray<TI> (entrysize.Size(), entrysize.Data()));
       size_t cnt = index[size];
       data = new T[cnt];
-      mt.Alloc(GetMemUsage());
+      TraceAlloc();
     }
 
     explicit NETGEN_INLINE Table (const FlatTable<T,IndexType> & tab2)
@@ -174,7 +174,7 @@ namespace ngcore
       size_t cnt = index[size];
       data = new T[cnt];
       this->AsArray() = tab2.AsArray();
-      mt.Alloc(GetMemUsage());
+      TraceAlloc();
       /*
       for (size_t i = 0; i < cnt; i++)
         data[i] = tab2.data[i];
@@ -196,13 +196,12 @@ namespace ngcore
       for (size_t i = 0; i < cnt; i++)
         data[i] = tab2.data[i];
 
-      mt.Alloc(GetMemUsage());
+      TraceAlloc();
     }
 
     NETGEN_INLINE Table (Table && tab2)
       : FlatTable<T,IndexType>(0, nullptr, nullptr)
     {
-      mt = std::move(tab2.mt);
       Swap (size, tab2.size);
       Swap (index, tab2.index);
       Swap (data, tab2.data);
@@ -217,20 +216,19 @@ namespace ngcore
       if(ar.Input())
         {
           index = new IndexType[size+1];
-          mt.Alloc(sizeof(IndexType) * (size+1));
+          MemTraceAlloc(index, sizeof(IndexType) * (size+1));
         }
       ar.Do(index, size+1);
       if(ar.Input())
         {
           data = new T[index[size]];
-          mt.Alloc(sizeof(T) * index[size]);
+          MemTraceAlloc(data, sizeof(T) * index[size]);
         }
       ar.Do(data, index[size]);
     }
 
     NETGEN_INLINE Table & operator= (Table && tab2)
     {
-      mt = std::move(tab2.mt);
       Swap (size, tab2.size);
       Swap (index, tab2.index);
       Swap (data, tab2.data);
@@ -242,7 +240,7 @@ namespace ngcore
     /// Delete data
     NETGEN_INLINE ~Table ()
     {
-      mt.Free(GetMemUsage());
+      TraceFree();
       delete [] data;
       delete [] index;
     }
@@ -255,15 +253,18 @@ namespace ngcore
 
     using FlatTable<T,IndexType>::operator[];
 
-    NETGEN_INLINE void StartMemoryTracing (int /* mem_id */)
-    {
-      mt.Alloc(GetMemUsage());
-    }
-    const MemoryTracer& GetMemoryTracer() const { return mt; }
-
   private:
-    NETGEN_INLINE size_t GetMemUsage() const { return size == 0 ? 0 : sizeof(T)*index[size] + sizeof(IndexType) * size+1; }
-    MemoryTracer mt;
+    NETGEN_INLINE void TraceAlloc() const
+    {
+      MemTraceAlloc(index, sizeof(IndexType)*(size+1));
+      MemTraceAlloc(data, sizeof(T)*index[size]);
+    }
+    NETGEN_INLINE void TraceFree() const
+    {
+      if(!index) return;
+      MemTraceFree(index, sizeof(IndexType)*(size+1));
+      MemTraceFree(data, sizeof(T)*index[size]);
+    }
   };
 
 
@@ -312,18 +313,18 @@ namespace ngcore
     {
       mode = amode;
       if (mode == 2)
-	{
-	  // cnt.SetSize(nd);  // atomic has no copy
+        {
+          // cnt.SetSize(nd);  // atomic has no copy
           cnt = Array<std::atomic<int>,IndexType> (nd);
           for (auto & ci : cnt) ci.store (0, std::memory_order_relaxed);
-	}
+        }
       if (mode == 3)
-	{
+        {
           table = Table<T,IndexType> (cnt);
           // for (auto & ci : cnt) ci = 0;
           for (auto & ci : cnt) ci.store (0, std::memory_order_relaxed);
           // cnt = 0;
-	}
+        }
     }
 
     void SetSize (size_t _nd)
@@ -340,8 +341,8 @@ namespace ngcore
     void Add (IndexType blocknr, const T & data)
     {
       switch (mode)
-	{
-	case 1:
+        {
+        case 1:
           {
             size_t oldval = nd;
             while (blocknr-IndexBASE<IndexType>()+1>nd) {
@@ -350,22 +351,22 @@ namespace ngcore
             }
             break;
           }
-	case 2:
-	  cnt[blocknr]++;
-	  break;
-	case 3:
+        case 2:
+          cnt[blocknr]++;
+          break;
+        case 3:
           int ci = cnt[blocknr]++;
           table[blocknr][ci] = data;
-	  break;
-	}
+          break;
+        }
     }
 
 
     void Add (IndexType blocknr, IntRange range)
     {
       switch (mode)
-	{
-	case 1:
+        {
+        case 1:
           {
             size_t oldval = nd;
             while (blocknr+1>nd) {
@@ -374,22 +375,22 @@ namespace ngcore
             }
             break;
           }
-	case 2:
-	  cnt[blocknr] += range.Size();
-	  break;
-	case 3:
+        case 2:
+          cnt[blocknr] += range.Size();
+          break;
+        case 3:
           size_t ci = ( cnt[blocknr] += range.Size() ) - range.Size();
-	  for (size_t j = 0; j < range.Size(); j++)
+          for (size_t j = 0; j < range.Size(); j++)
             table[blocknr][ci+j] = range.First()+j;
-	  break;
-	}
+          break;
+        }
     }
 
     void Add (IndexType blocknr, const FlatArray<int> & dofs)
     {
       switch (mode)
-	{
-	case 1:
+        {
+        case 1:
           {
             size_t oldval = nd;
             while (blocknr+1>nd) {
@@ -398,15 +399,15 @@ namespace ngcore
             }
             break;
           }
-	case 2:
-	  cnt[blocknr] += dofs.Size();
-	  break;
-	case 3:
+        case 2:
+          cnt[blocknr] += dofs.Size();
+          break;
+        case 3:
           size_t ci = ( cnt[blocknr] += dofs.Size() ) - dofs.Size();
-	  for (size_t j = 0; j < dofs.Size(); j++)
+          for (size_t j = 0; j < dofs.Size(); j++)
             table[blocknr][ci+j] = dofs[j];
-	  break;
-	}
+          break;
+        }
     }
   };
 
@@ -754,6 +755,10 @@ namespace ngcore
     size_t n = colors.Size();
 
     Array<unsigned int> mask(ndofs);
+    // dofs may be strong index types, mask is 0-based
+    auto ind0 = [] (auto dof)
+      { return size_t(detail::GetRawInteger(dof)
+                      - detail::GetRawInteger(IndexBASE<decltype(dof)>())); };
 
     size_t colored_blocks = 0;
 
@@ -776,7 +781,7 @@ namespace ngcore
 
             // Check if adjacent dofs are already marked by current color
             for (auto dof : dofs)
-                check|=mask[dof];
+                check|=mask[ind0(dof)];
 
             // Did we find a free color?
             if(check != 0xFFFFFFFF)
@@ -794,7 +799,7 @@ namespace ngcore
                 colored_blocks++;
                 // mask all adjacent dofs with the found color
                 for (auto dof : dofs)
-                    mask[dof] |= checkbit;
+                    mask[ind0(dof)] |= checkbit;
             }
         }
         current_color+=32;

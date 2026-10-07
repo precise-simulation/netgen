@@ -87,7 +87,7 @@ namespace netgen
   {
     shared_ptr<Mesh> mesh = GetMesh();
 
-    NgLock meshlock1 (mesh->MajorMutex(), 1);
+    std::lock_guard<std::mutex> meshlock1 (mesh->MajorMutex());
     int funcnr = -1;
     for (int i = 0; i < soldata.Size(); i++)
       {
@@ -228,9 +228,9 @@ namespace netgen
         ofstream surf_ost(surf_fn.c_str());
 
         surf_ost << "# vtk DataFile Version 1.0\n"
-		 << "NGSolve surface mesh\n"
-		 << "ASCII\n"
-		 << "DATASET UNSTRUCTURED_GRID\n\n";
+                 << "NGSolve surface mesh\n"
+                 << "ASCII\n"
+                 << "DATASET UNSTRUCTURED_GRID\n\n";
 
         surf_ost << "POINTS " << mesh->GetNP() << " float\n";
         for (PointIndex pi = IndexBASE<PointIndex>(); pi < mesh->GetNP()+IndexBASE<PointIndex>(); pi++)
@@ -240,22 +240,22 @@ namespace netgen
           }
 
         int cntverts = 0;
-        for (SurfaceElementIndex sei = 0; sei < mesh->GetNSE(); sei++)
-          cntverts += 1 + (*mesh)[sei].GetNP();
+        for (auto el : mesh->SurfaceElements())
+          cntverts += 1 + el.GetNP();
 
         surf_ost << "\nCELLS " << mesh->GetNSE() << " " << cntverts << "\n";
-        for (SurfaceElementIndex sei = 0; sei < mesh->GetNSE(); sei++)
+        for (auto sel : mesh->SurfaceElements())
           {
-            const Element2d & el = (*mesh)[sei];
+            const Element2dRef & el = sel;
             surf_ost << el.GetNP();
             for (int j = 0; j < el.GetNP(); j++)
               surf_ost << " " << el[j] - IndexBASE<PointIndex>();
             surf_ost << "\n";
           }
         surf_ost << "\nCELL_TYPES " << mesh->GetNSE() << "\n";
-        for (SurfaceElementIndex sei = 0; sei < mesh->GetNSE(); sei++)
+        for (auto sel : mesh->SurfaceElements())
           {
-            const Element2d & el = (*mesh)[sei];
+            const Element2dRef & el = sel;
             switch (el.GetType())
               {
               case QUAD: surf_ost << 9; break;
@@ -283,22 +283,20 @@ namespace netgen
           }
 
         cntverts = 0;
-        for (ElementIndex ei = 0; ei < mesh->GetNE(); ei++)
+        for (ElementIndex ei : mesh->VolumeElements().Range())
           cntverts += 1 + (*mesh)[ei].GetNP();
 
         ost << "\nCELLS " << mesh->GetNE() << " " << cntverts << "\n";
-        for (ElementIndex ei = 0; ei < mesh->GetNE(); ei++)
+        for (auto el : mesh->VolumeElements())
           {
-            const Element & el = (*mesh)[ei];
             ost << el.GetNP();
             for (int j = 0; j < el.GetNP(); j++)
               ost << " " << el[j] - IndexBASE<PointIndex>();
             ost << "\n";
           }
         ost << "\nCELL_TYPES " << mesh->GetNE() << "\n";
-        for (ElementIndex ei = 0; ei < mesh->GetNE(); ei++)
+        for (auto el : mesh->VolumeElements())
           {
-            const Element & el = (*mesh)[ei];
             switch (el.GetType())
               {
               case TET: ost << 10; break;
@@ -324,30 +322,30 @@ namespace netgen
           }
 
         /*
-	  ost << "POINT_DATA " << mesh->GetNP() << "\n";
-	  for (int i = 0; i < soldata.Size(); i++)
+          ost << "POINT_DATA " << mesh->GetNP() << "\n";
+          for (int i = 0; i < soldata.Size(); i++)
           {
-	  ost << "VECTORS bfield float\n";
-	  SolutionData & sol = *(soldata[i] -> solclass);
+          ost << "VECTORS bfield float\n";
+          SolutionData & sol = *(soldata[i] -> solclass);
             
-	  for (PointIndex pi = PointIndex::BASE; 
-	  pi < mesh->GetNP()+PointIndex::BASE; pi++)
-	  {
-	  double values[3], sumvalues[3] = { 0, 0, 0 };
+          for (PointIndex pi = PointIndex::BASE; 
+          pi < mesh->GetNP()+PointIndex::BASE; pi++)
+          {
+          double values[3], sumvalues[3] = { 0, 0, 0 };
 
-	  NgFlatArray<int> els = mesh->GetTopology().GetVertexElements(pi);
+          FlatArray<int> els = mesh->GetTopology().GetVertexElements(pi);
 
-	  for (int j = 0; j < els.Size(); j++)
-	  {
-	  sol.GetValue (els[j]-1, 0.25, 0.25, 0.25, values);
-	  for (int k = 0; k < 3; k++)
-	  sumvalues[k] += values[k];
-	  }
-	  for (int k = 0; k < 3; k++)
-	  sumvalues[k] /= els.Size();
+          for (int j = 0; j < els.Size(); j++)
+          {
+          sol.GetValue (els[j]-1, 0.25, 0.25, 0.25, values);
+          for (int k = 0; k < 3; k++)
+          sumvalues[k] += values[k];
+          }
+          for (int k = 0; k < 3; k++)
+          sumvalues[k] /= els.Size();
                 
-	  ost << sumvalues[0] << " "  << sumvalues[1] << " "  << sumvalues[2] << "\n";
-	  }
+          ost << sumvalues[0] << " "  << sumvalues[1] << " "  << sumvalues[2] << "\n";
+          }
           }
         */
       } 
@@ -372,8 +370,8 @@ namespace netgen
     // static NgLock mem_lock(mem_mutex);
     // mem_lock.Lock();
 
-    NgLock meshlock1 (mesh->MajorMutex(), true);
-    NgLock meshlock (mesh->Mutex(), true);
+    std::lock_guard<std::mutex> meshlock1 (mesh->MajorMutex());
+    std::lock_guard<std::mutex> meshlock (mesh->Mutex());
 
     BuildScene();
 
@@ -436,12 +434,12 @@ namespace netgen
 
     if (vispar.drawfilledtrigs || vispar.drawtetsdomain > 0 || vispar.drawdomainsurf > 0)
       {
-	// Change for Martin:
+        // Change for Martin:
 
-	// orig:
-	SetClippingPlane ();  
+        // orig:
+        SetClippingPlane ();  
 
-	glCallList (surfellist);
+        glCallList (surfellist);
         
 #ifdef USE_BUFFERS
         // static int timer = NgProfiler::CreateTimer ("Solution::drawing - DrawSurfaceElements VBO");
@@ -456,26 +454,26 @@ namespace netgen
         // NgProfiler::StopTimer(timer);
 #endif
         
-	/*
-	// transparent test ...
-	glColor4f (1, 0, 0, 0.1);
-	glEnable (GL_COLOR_MATERIAL);
+        /*
+        // transparent test ...
+        glColor4f (1, 0, 0, 0.1);
+        glEnable (GL_COLOR_MATERIAL);
 
-	glDepthFunc(GL_GREATER); 
-	glDepthMask(GL_FALSE); 
-	// glBlendFunc(GL_ONE_MINUS_DST_ALPHA,GL_DST_ALPHA); 
-	glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA); 
+        glDepthFunc(GL_GREATER); 
+        glDepthMask(GL_FALSE); 
+        // glBlendFunc(GL_ONE_MINUS_DST_ALPHA,GL_DST_ALPHA); 
+        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA); 
 
-	glCallList (surfellist);
+        glCallList (surfellist);
 
-	glDisable(GL_BLEND);
-	glDepthFunc(GL_LEQUAL); 
-	glDepthMask(GL_TRUE); 
+        glDisable(GL_BLEND);
+        glDepthFunc(GL_LEQUAL); 
+        glDepthMask(GL_TRUE); 
 
-	glCallList (surfellist);
-	// end test ...
-	*/
-	
+        glCallList (surfellist);
+        // end test ...
+        */
+        
 
         glCallList (surface_vector_list);
         glDisable(GL_CLIP_PLANE0);
@@ -484,69 +482,69 @@ namespace netgen
 
     if (showclipsolution)
       {
-	if (clipsolution == 1)
-	  {
-	    // Martin 
-	    // orig:
-	    glCallList (clipplanelist_scal);
+        if (clipsolution == 1)
+          {
+            // Martin 
+            // orig:
+            glCallList (clipplanelist_scal);
 
-	    // transparent experiments
-	    // see http://wiki.delphigl.com/index.php/Blenden
+            // transparent experiments
+            // see http://wiki.delphigl.com/index.php/Blenden
 
-	    /*
-	    glColor4f (1, 1, 1, 0.5);
-	    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);   
-	    glEnable(GL_BLEND); 
-	    glEnable(GL_COLOR);
-	    glDepthFunc(GL_GREATER); 
-	    glDepthMask(GL_FALSE); 
+            /*
+            glColor4f (1, 1, 1, 0.5);
+            glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);   
+            glEnable(GL_BLEND); 
+            glEnable(GL_COLOR);
+            glDepthFunc(GL_GREATER); 
+            glDepthMask(GL_FALSE); 
 
-	    glCallList (clipplanelist_scal); 
-	    glDepthFunc(GL_LEQUAL); 
-	    glDepthMask(GL_TRUE); 
+            glCallList (clipplanelist_scal); 
+            glDepthFunc(GL_LEQUAL); 
+            glDepthMask(GL_TRUE); 
 
-	    glCallList (clipplanelist_scal);
-	    glDisable(GL_BLEND); 
-	    */
-
-
-	    /*
-	      // latest transparent version ...
-	    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);   
-	    glEnable(GL_BLEND); 
-	    glEnable(GL_DEPTH_TEST);
-
-	    // CreateTexture (numtexturecols, lineartexture, 0.25, GL_MODULATE);
-	    // glCallList (clipplanelist_scal); 
-
-	    glEnable(GL_BLEND); 
-	    // glDisable(GL_DEPTH_TEST);
-	    
-	    // CreateTexture (numtexturecols, lineartexture, 0.25, GL_MODULATE);
-	    glCallList (clipplanelist_scal); 
+            glCallList (clipplanelist_scal);
+            glDisable(GL_BLEND); 
+            */
 
 
-	    // glDepthFunc(GL_LEQUAL); 
-	    // glDepthMask(GL_TRUE); 
-	    // glCallList (clipplanelist_scal);
-	    glEnable(GL_DEPTH_TEST);
-	    glDisable(GL_BLEND); 
-	    */
-	    // end test
-	  } 
-	if (clipsolution == 2)
-	  {
-	    // glDisable(GL_DEPTH_TEST);
-	    glCallList (clipplanelist_vec);
-	    // glEnable(GL_DEPTH_TEST);
-	  }
+            /*
+              // latest transparent version ...
+            glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);   
+            glEnable(GL_BLEND); 
+            glEnable(GL_DEPTH_TEST);
+
+            // CreateTexture (numtexturecols, lineartexture, 0.25, GL_MODULATE);
+            // glCallList (clipplanelist_scal); 
+
+            glEnable(GL_BLEND); 
+            // glDisable(GL_DEPTH_TEST);
+            
+            // CreateTexture (numtexturecols, lineartexture, 0.25, GL_MODULATE);
+            glCallList (clipplanelist_scal); 
+
+
+            // glDepthFunc(GL_LEQUAL); 
+            // glDepthMask(GL_TRUE); 
+            // glCallList (clipplanelist_scal);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND); 
+            */
+            // end test
+          } 
+        if (clipsolution == 2)
+          {
+            // glDisable(GL_DEPTH_TEST);
+            glCallList (clipplanelist_vec);
+            // glEnable(GL_DEPTH_TEST);
+          }
       }
 
 
 
     if (draw_fieldlines)
       {
-	SetClippingPlane();
+        SetClippingPlane();
         if (num_fieldlineslists <= 1)
           glCallList (fieldlineslist);
         else
@@ -601,10 +599,10 @@ namespace netgen
 
     if (vispar.drawoutline && !numisolines)
       {
-	SetClippingPlane ();
-	glDepthMask(GL_FALSE); 
+        SetClippingPlane ();
+        glDepthMask(GL_FALSE); 
         glCallList (linelist);
-	glDepthMask(GL_TRUE); 
+        glDepthMask(GL_TRUE); 
 
         glDisable(GL_CLIP_PLANE0);
       }
@@ -652,7 +650,7 @@ namespace netgen
 
   
   /*
-  void VisualSceneSolution :: RealVec3d (const double * values, Vec3d & v, 
+  void VisualSceneSolution :: RealVec3d (const double * values, Vec<3> & v, 
                                          bool iscomplex, bool imag)
   {
     if (!iscomplex)
@@ -679,44 +677,44 @@ namespace netgen
   }
   */
   Vec<3>  VisualSceneSolution :: RealVec3d (const double * values, 
-					    bool iscomplex, bool imag)
+                                            bool iscomplex, bool imag)
   {
     Vec<3> v;
     if (!iscomplex)
       {
-	for (int j = 0; j < 3; j++)
-	  v(j) = values[j];
+        for (int j = 0; j < 3; j++)
+          v(j) = values[j];
       }
     else
       {
         if (!imag)
           {
-	    for (int j = 0; j < 3; j++)
-	      v(j) = values[2*j];
+            for (int j = 0; j < 3; j++)
+              v(j) = values[2*j];
           }
         else
           {
-	    for (int j = 0; j < 3; j++)
-	      v(j) = values[2*j+1];
+            for (int j = 0; j < 3; j++)
+              v(j) = values[2*j+1];
           }
       }
     return v;
   }
   
 
-  void VisualSceneSolution :: RealVec3d (const double * values, Vec3d & v, 
+  void VisualSceneSolution :: RealVec3d (const double * values, Vec<3> & v, 
                                          bool iscomplex, double phaser, double phasei)
   {
     if (!iscomplex)
       {
-        v.X() = values[0];
-        v.Y() = values[1];
-        v.Z() = values[2];
+        v(0) = values[0];
+        v(1) = values[1];
+        v(2) = values[2];
       }
     else
       {
         for (int i = 0; i < 3; i++)
-          v.X(i+1) = phaser * values[2*i] + phasei * values[2*i+1];
+          v(i) = phaser * values[2*i] + phasei * values[2*i+1];
       }
   }
 
@@ -843,7 +841,7 @@ namespace netgen
 
       
         if (vispar.clipping.enable && clipsolution == 1 && sol)
-	  DrawClipPlaneTrigs (); 
+          DrawClipPlaneTrigs (); 
 
         if (clipplanelist_vec)
           glDeleteLists (clipplanelist_vec, 1);
@@ -858,19 +856,19 @@ namespace netgen
             if (autoscale)
               GetMinMax (vecfunction, 0, minval, maxval);
 
-            NgArray<ClipPlanePoint> cpp;
+            Array<ClipPlanePoint> cpp;
             GetClippingPlaneGrid (cpp);
 
             for (int i = 0; i < cpp.Size(); i++)
               {
                 const ClipPlanePoint & p = cpp[i];
                 double values[6];
-                Vec3d v;
+                Vec<3> v;
 
                 bool drawelem = 
                   GetValues (vsol, p.elnr, p.lami(0), p.lami(1), p.lami(2), values);
                 // RealVec3d (values, v, vsol->iscomplex, imag_part);
-		v = RealVec3d (values, vsol->iscomplex, imag_part);
+                v = RealVec3d (values, vsol->iscomplex, imag_part);
 
                 double val = v.Length();
 
@@ -910,39 +908,39 @@ namespace netgen
     if(mesh->GetTimeStamp() > pointcurve_timestamp ||
        solutiontimestamp > pointcurve_timestamp)
       {
-	if(pointcurvelist)
-	  glDeleteLists(pointcurvelist,1);
-	
-		
-	if(mesh->GetNumPointCurves() > 0)
-	  {
-	    pointcurvelist = glGenLists(1);
-	    glNewList(pointcurvelist,GL_COMPILE);
+        if(pointcurvelist)
+          glDeleteLists(pointcurvelist,1);
+        
+                
+        if(mesh->GetNumPointCurves() > 0)
+          {
+            pointcurvelist = glGenLists(1);
+            glNewList(pointcurvelist,GL_COMPILE);
             SetTextureMode(0); // disable all textures
-	    
-	    for(int i=0; i<mesh->GetNumPointCurves(); i++)
-	      {
-		Box3d box;
-		box.SetPoint(mesh->GetPointCurvePoint(i,0));
-		for(int j=1; j<mesh->GetNumPointsOfPointCurve(i); j++)
-		  box.AddPoint(mesh->GetPointCurvePoint(i,j));
-		double diam = box.CalcDiam();
-			     
-		double thick = min2(0.1*diam, 0.001*rad);
+            
+            for(int i=0; i<mesh->GetNumPointCurves(); i++)
+              {
+                Box3d box;
+                box.SetPoint(mesh->GetPointCurvePoint(i,0));
+                for(int j=1; j<mesh->GetNumPointsOfPointCurve(i); j++)
+                  box.AddPoint(mesh->GetPointCurvePoint(i,j));
+                double diam = box.CalcDiam();
+                             
+                double thick = min2(0.1*diam, 0.001*rad);
 
-		double red,green,blue;
-		mesh->GetPointCurveColor(i,red,green,blue);
-		glColor3f (red, green, blue);
-		for(int j=0; j<mesh->GetNumPointsOfPointCurve(i)-1; j++)
-		  {
-		    DrawCylinder(mesh->GetPointCurvePoint(i,j),
-				 mesh->GetPointCurvePoint(i,j+1),
-				 thick);
-		  }
-	      }
-	    glEndList();
-	  }
-	
+                double red,green,blue;
+                mesh->GetPointCurveColor(i,red,green,blue);
+                glColor3f (red, green, blue);
+                for(int j=0; j<mesh->GetNumPointsOfPointCurve(i)-1; j++)
+                  {
+                    DrawCylinder(mesh->GetPointCurvePoint(i,j),
+                                 mesh->GetPointCurvePoint(i,j+1),
+                                 thick);
+                  }
+              }
+            glEndList();
+          }
+        
       }
 
 
@@ -970,14 +968,14 @@ namespace netgen
           {
             glBegin (GL_LINES);
           
-            for (SurfaceElementIndex sei = 0; sei < nse; sei++)
+            for (SurfaceElementIndex sei : T_Range<SurfaceElementIndex>(nse))
               {
-                const Element2d & el = (*mesh)[sei];
+                const Element2dRef & el = (*mesh)[sei];
 
                 if(!SurfaceElementActive(sol_active, *mesh, el))
                   continue;
 
-                bool curved = curv.IsHighOrder(); //  && curv.IsSurfaceElementCurved(sei);
+                bool curved = curv.IsHighOrder(); //  && curv.IsCurved(sei);
               
                 if (el.GetType() == TRIG || el.GetType() == TRIG6)
                   {
@@ -991,9 +989,8 @@ namespace netgen
                   
                     int n = 1 << subdivisions;
                     int ii = 0;
-                    int ix, iy;
-                    for (iy = 0; iy <= n; iy++)
-                      for (ix = 0; ix <= n-iy; ix++)
+                    for (int iy = 0; iy <= n; iy++)
+                      for (int ix = 0; ix <= n-iy; ix++)
                         {
                           double x = double(ix) / n;
                           double y = double(iy) / n;
@@ -1016,8 +1013,8 @@ namespace netgen
                         }
                   
                     ii = 0;
-                    for (iy = 0; iy < n; iy++, ii++)
-                      for (ix = 0; ix < n-iy; ix++, ii++)
+                    for (int iy = 0; iy < n; iy++, ii++)
+                      for (int ix = 0; ix < n-iy; ix++, ii++)
                         {
                           int index[] = { ii, ii+1, ii+n-iy+1,
                                           ii+1, ii+n-iy+2, ii+n-iy+1 };
@@ -1089,8 +1086,8 @@ namespace netgen
             clipplane_isolinelist = glGenLists (1);
             glNewList (clipplane_isolinelist, GL_COMPILE);
 
-            NgArray<ClipPlaneTrig> cpt;
-            NgArray<ClipPlanePoint> pts;
+            Array<ClipPlaneTrig> cpt;
+            Array<ClipPlanePoint> pts;
             GetClippingPlaneTrigs (sol, cpt, pts);
             bool drawelem;
           
@@ -1139,8 +1136,8 @@ namespace netgen
     glNewList (element1dlist, GL_COMPILE);
 
     int npt = (1 << subdivisions) + 1;
-    NgArray<double> pref(npt), values(npt);
-    NgArray<Point<3> > points(npt);
+    Array<double> pref(npt), values(npt);
+    Array<Point<3> > points(npt);
 
     const SolData * sol = NULL;
     if (scalfunction != -1) sol = soldata[scalfunction];
@@ -1151,13 +1148,13 @@ namespace netgen
     int ncomp = 0;
     if (sol) ncomp = sol->components;
     if (vsol) ncomp = vsol->components;
-    NgArray<double> mvalues(ncomp);
+    Array<double> mvalues(ncomp);
 
 
     for (int i = 0; i < npt; i++)
       pref[i] = double(i) / (npt-1);
     int meshdim = mesh->GetDimension();
-    for (SegmentIndex i = 0; i < mesh -> GetNSeg(); i++)
+    for (SegmentIndex i : mesh->LineSegments().Range())
       {
         // mesh->GetCurvedElements().
         // CalcMultiPointSegmentTransformation (&pref, i, &points, NULL);
@@ -1169,7 +1166,7 @@ namespace netgen
           {
             for (int j = 0; j < npt; j++)
               {
-                vsol->solclass->GetSegmentValue (i, pref[j], &mvalues[0]);
+                vsol->solclass->GetSegmentValue (i.Nr0(), pref[j], &mvalues[0]);
                 // values[j] = ExtractValue (sol, scalcomp, &mvalues[0]);
                 for (int k = 0; k < min(ncomp, 3); k++)
                   points[j](k) += scaledeform * mvalues[k];
@@ -1181,7 +1178,7 @@ namespace netgen
           {
             for (int j = 0; j < npt; j++)
               {
-                sol->solclass->GetSegmentValue (i, pref[j], &mvalues[0]);
+                sol->solclass->GetSegmentValue (i.Nr0(), pref[j], &mvalues[0]);
                 values[j] = ExtractValue (sol, scalcomp, &mvalues[0]);
                 points[j](meshdim) += scaledeform * values[j];
               }
@@ -1200,7 +1197,7 @@ namespace netgen
   {
     shared_ptr<Mesh> mesh = GetMesh();
 
-    static int timer = NgProfiler::CreateTimer ("Solution::DrawSurfaceElements");
+    static Timer timer("Solution::DrawSurfaceElements");
     /*
     static int timerstart = NgProfiler::CreateTimer ("Solution::DrawSurfaceElements start");
     static int timerloops = NgProfiler::CreateTimer ("Solution::DrawSurfaceElements loops");
@@ -1214,34 +1211,34 @@ namespace netgen
     static int timer2a = NgProfiler::CreateTimer ("Solution::DrawSurfaceElements 2a");
     static int timer2b = NgProfiler::CreateTimer ("Solution::DrawSurfaceElements 2b");
     */
-    NgProfiler::RegionTimer reg (timer);
+    RegionTimer reg (timer);
   
     
 #ifdef PARALLELGL
 
     if (id == 0 && ntasks > 1)
       {
-	InitParallelGL();
+        InitParallelGL();
 
-	par_surfellists.SetSize (ntasks);
+        par_surfellists.SetSize (ntasks);
 
-	MyMPI_SendCmd ("redraw");
-	MyMPI_SendCmd ("solsurfellist");
+        MyMPI_SendCmd ("redraw");
+        MyMPI_SendCmd ("solsurfellist");
 
-	for ( int dest = 1; dest < ntasks; dest++ )
-	  MyMPI_Recv (par_surfellists[dest], dest, NG_MPI_TAG_VIS);
+        for ( int dest = 1; dest < ntasks; dest++ )
+          MyMPI_Recv (par_surfellists[dest], dest, NG_MPI_TAG_VIS);
 
-	if (surfellist)
-	  glDeleteLists (surfellist, 1);
+        if (surfellist)
+          glDeleteLists (surfellist, 1);
 
-	surfellist = glGenLists (1);
-	glNewList (surfellist, GL_COMPILE);
-	
-	for ( int dest = 1; dest < ntasks; dest++ )
-	  glCallList (par_surfellists[dest]);
-	
-	glEndList();
-	return;
+        surfellist = glGenLists (1);
+        glNewList (surfellist, GL_COMPILE);
+        
+        for ( int dest = 1; dest < ntasks; dest++ )
+          glCallList (par_surfellists[dest]);
+        
+        glEndList();
+        return;
       }
 #endif
 
@@ -1281,29 +1278,29 @@ namespace netgen
     int n = 1 << subdivisions;
     int npt = sqr(n+1);
 
-    NgArray<Point<2> > pref (npt);
-    NgArray<Point<3> > points (npt);
-    NgArray<Mat<3,2> > dxdxis (npt);
-    NgArray<Vec<3> > nvs(npt);
-    NgArray<double> values(npt);
+    Array<Point<2> > pref (npt);
+    Array<Point<3> > points (npt);
+    Array<Mat<3,2> > dxdxis (npt);
+    Array<Vec<3> > nvs(npt);
+    Array<double> values(npt);
 
-    NgArray<double> mvalues(npt);
+    Array<double> mvalues(npt);
     int sol_comp = (sol && sol->draw_surface) ? sol->components : 0;
-    NgArray<Point<2,SIMD<double>> > simd_pref ( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
-    NgArray<Point<3,SIMD<double>> > simd_points ( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
-    NgArray<Mat<3,2,SIMD<double>> > simd_dxdxis ( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
-    NgArray<Vec<3,SIMD<double>> > simd_nvs( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
-    NgArray<SIMD<double>> simd_values( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() * sol_comp);
+    Array<Point<2,SIMD<double>> > simd_pref ( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
+    Array<Point<3,SIMD<double>> > simd_points ( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
+    Array<Mat<3,2,SIMD<double>> > simd_dxdxis ( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
+    Array<Vec<3,SIMD<double>> > simd_nvs( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() );
+    Array<SIMD<double>> simd_values( (npt+SIMD<double>::Size()-1)/SIMD<double>::Size() * sol_comp);
 
     
     
-    // NgArray<Point<3,float>> glob_pnts;
-    // NgArray<Vec<3,float>> glob_nvs;
-    // NgArray<double> glob_values;
+    // Array<Point<3,float>> glob_pnts;
+    // Array<Vec<3,float>> glob_nvs;
+    // Array<double> glob_values;
     
     if (sol && sol->draw_surface) mvalues.SetSize (npt * sol->components);
       
-    NgArray<complex<double> > valuesc(npt);
+    Array<complex<double> > valuesc(npt);
     
 #ifdef USE_BUFFERS
     if (has_surfel_vbo)
@@ -1339,16 +1336,16 @@ namespace netgen
     // NgProfiler::StopTimer(timerstart);
     auto sol_active = GetScalOrVecFunction();
     
-    for (SurfaceElementIndex sei = 0; sei < nse; sei++)
+    for (SurfaceElementIndex sei : T_Range<SurfaceElementIndex>(nse))
       {
-        const Element2d & el = (*mesh)[sei];
+        const Element2dRef & el = (*mesh)[sei];
 
         if(!SurfaceElementActive(sol_active, *mesh, el))
           continue;
 
         if ( el.GetType() == QUAD || el.GetType() == QUAD6 || el.GetType() == QUAD8 )
           {
-            bool curved = curv.IsSurfaceElementCurved (sei);
+            bool curved = curv.IsCurved (sei);
 
 
             for (int iy = 0, ii = 0; iy <= n; iy++)
@@ -1370,15 +1367,15 @@ namespace netgen
               }
             else
               {
-		Point<3> lpi[4];
-		Vec<3> vx, vy, vtwist;
-		
-		for (int k = 0; k < 4; k++)
-		  GetPointDeformation (el[k]-1, lpi[k]);
-		
-		vx = lpi[1]-lpi[0];
-		vy = lpi[3]-lpi[0];
-		vtwist = (lpi[0]-lpi[1]) + (lpi[2]-lpi[3]);
+                Point<3> lpi[4];
+                Vec<3> vx, vy, vtwist;
+                
+                for (int k = 0; k < 4; k++)
+                  GetPointDeformation (el[k]-1, lpi[k]);
+                
+                vx = lpi[1]-lpi[0];
+                vy = lpi[3]-lpi[0];
+                vtwist = (lpi[0]-lpi[1]) + (lpi[2]-lpi[3]);
 
                 for (int ii = 0; ii < npt; ii++)
                   {
@@ -1400,7 +1397,7 @@ namespace netgen
 
 
             bool drawelem = false;
-	    /*
+            /*
             if (sol && sol->draw_surface) 
               {
                 if (usetexture == 2)
@@ -1410,20 +1407,20 @@ namespace netgen
                   for (int ii = 0; ii < npt; ii++)
                     drawelem = GetSurfValue (sol, sei, -1, pref[ii](0), pref[ii](1), scalcomp, values[ii]);
               }
-	    */
+            */
             if (sol && sol->draw_surface) 
               {
-		drawelem = GetMultiSurfValues (sol, sei, -1, npt, 
-					       &pref[0](0), &pref[1](0)-&pref[0](0),
-					       &points[0](0), &points[1](0)-&points[0](0),
-					       &dxdxis[0](0), &dxdxis[1](0)-&dxdxis[0](0),
-					       &mvalues[0], sol->components);
+                drawelem = GetMultiSurfValues (sol, sei, -1, npt, 
+                                               &pref[0](0), &pref[1](0)-&pref[0](0),
+                                               &points[0](0), &points[1](0)-&points[0](0),
+                                               &dxdxis[0](0), &dxdxis[1](0)-&dxdxis[0](0),
+                                               &mvalues[0], sol->components);
                 if (usetexture == 2)
-		  for (int ii = 0; ii < npt; ii++)
-		    valuesc[ii] = ExtractValueComplex(sol, scalcomp, &mvalues[ii*sol->components]);
+                  for (int ii = 0; ii < npt; ii++)
+                    valuesc[ii] = ExtractValueComplex(sol, scalcomp, &mvalues[ii*sol->components]);
                 else
-		  for (int ii = 0; ii < npt; ii++)
-		    values[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
+                  for (int ii = 0; ii < npt; ii++)
+                    values[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
               }
 
             
@@ -1495,7 +1492,7 @@ namespace netgen
         simd_pref[i](1) = [&] (size_t j) { size_t ii = i*simd_size+j; return (ii < npt) ? pref[ii](1) : 0; };
       }
 
-    NgArray<int> ind_reftrig;
+    Array<int> ind_reftrig;
     for (int iy = 0, ii = 0; iy < n; iy++,ii++)
       for (int ix = 0; ix < n-iy; ix++, ii++)
         {
@@ -1505,14 +1502,14 @@ namespace netgen
           for (int j = 0; j < nv; j++)
             ind_reftrig.Append (ind[j]);
         }
-    NgArray<int> glob_ind;
+    Array<int> glob_ind;
     glob_ind.SetSize(ind_reftrig.Size());    
 
     
-    for(SurfaceElementIndex sei = 0; sei < nse; sei++)
+    for (SurfaceElementIndex sei : T_Range<SurfaceElementIndex>(nse))
       {
-        const Element2d & el = (*mesh)[sei];
-	// if (el.GetIndex() <= 1) continue;
+        const Element2dRef & el = (*mesh)[sei];
+        // if (el.GetIndex() <= 1) continue;
 
         if(!SurfaceElementActive(sol_active, *mesh, el))
           continue;
@@ -1522,7 +1519,7 @@ namespace netgen
             // NgProfiler::StartTimer(timer1);
 #ifdef __AVX_try_it_out__
             // NgProfiler::StartTimer(timer1a);            
-	    bool curved = curv.IsSurfaceElementCurved(sei);
+            bool curved = curv.IsCurved(sei);
             
             if (curved)
               {
@@ -1537,9 +1534,9 @@ namespace netgen
               }
             else
               {
-		Point<3,SIMD<double>> p1 = mesh->Point (el[0]);
-		Point<3,SIMD<double>> p2 = mesh->Point (el[1]);
-		Point<3,SIMD<double>> p3 = mesh->Point (el[2]);
+                Point<3,SIMD<double>> p1 = mesh->Point (el[0]);
+                Point<3,SIMD<double>> p2 = mesh->Point (el[1]);
+                Point<3,SIMD<double>> p3 = mesh->Point (el[2]);
 
                 Vec<3,SIMD<double>> vx = p1-p3;
                 Vec<3,SIMD<double>> vy = p2-p3;
@@ -1564,7 +1561,7 @@ namespace netgen
               {
                 // NgProfiler::StopTimer(timer1a);
                 // NgProfiler::StartTimer(timer1b);            
-		drawelem = sol->solclass->GetMultiSurfValue (sei, -1, simd_npt, 
+                drawelem = sol->solclass->GetMultiSurfValue (sei, -1, simd_npt, 
                                                              &simd_pref[0](0).Data(),
                                                              &simd_points[0](0).Data(),
                                                              &simd_dxdxis[0](0).Data(),
@@ -1577,11 +1574,11 @@ namespace netgen
                     mvalues[i*sol->components+j] = ((double*)&simd_values[j*simd_npt])[i];
 
                 if (usetexture == 2)
-		  for (int ii = 0; ii < npt; ii++)
-		    valuesc[ii] = ExtractValueComplex(sol, scalcomp, &mvalues[ii*sol->components]);
+                  for (int ii = 0; ii < npt; ii++)
+                    valuesc[ii] = ExtractValueComplex(sol, scalcomp, &mvalues[ii*sol->components]);
                 else
-		  for (int ii = 0; ii < npt; ii++)
-		    values[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
+                  for (int ii = 0; ii < npt; ii++)
+                    values[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
               }
 
             for (size_t i = 0; i < npt; i++)
@@ -1603,7 +1600,7 @@ namespace netgen
             // NgProfiler::StopTimer(timer1c);
             
 #else
-	    bool curved = (*mesh)[sei].IsCurved();
+            bool curved = (*mesh)[sei].IsCurved();
 
             for (int iy = 0, ii = 0; iy <= n; iy++)
               for (int ix = 0; ix <= n-iy; ix++, ii++)
@@ -1619,9 +1616,9 @@ namespace netgen
               }
             else
               {
-		Point<3> p1 = mesh->Point (el[0]);
-		Point<3> p2 = mesh->Point (el[1]);
-		Point<3> p3 = mesh->Point (el[2]);
+                Point<3> p1 = mesh->Point (el[0]);
+                Point<3> p2 = mesh->Point (el[1]);
+                Point<3> p3 = mesh->Point (el[2]);
 
                 Vec<3> vx = p1-p3;
                 Vec<3> vy = p2-p3;
@@ -1643,17 +1640,17 @@ namespace netgen
             bool drawelem = false;
             if (sol && sol->draw_surface) 
               {
-		drawelem = GetMultiSurfValues (sol, sei, -1, npt, 
-					       &pref[0](0), &pref[1](0)-&pref[0](0),
-					       &points[0](0), &points[1](0)-&points[0](0),
-					       &dxdxis[0](0), &dxdxis[1](0)-&dxdxis[0](0),
-					       &mvalues[0], sol->components);
+                drawelem = GetMultiSurfValues (sol, sei, -1, npt, 
+                                               &pref[0](0), &pref[1](0)-&pref[0](0),
+                                               &points[0](0), &points[1](0)-&points[0](0),
+                                               &dxdxis[0](0), &dxdxis[1](0)-&dxdxis[0](0),
+                                               &mvalues[0], sol->components);
                 if (usetexture == 2)
-		  for (int ii = 0; ii < npt; ii++)
-		    valuesc[ii] = ExtractValueComplex(sol, scalcomp, &mvalues[ii*sol->components]);
+                  for (int ii = 0; ii < npt; ii++)
+                    valuesc[ii] = ExtractValueComplex(sol, scalcomp, &mvalues[ii*sol->components]);
                 else
-		  for (int ii = 0; ii < npt; ii++)
-		    values[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
+                  for (int ii = 0; ii < npt; ii++)
+                    values[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
               }
             
             if (deform)
@@ -1730,7 +1727,7 @@ namespace netgen
                 usetexture = save_usetexture;
                 SetTextureMode (usetexture);
               }
-	  }
+          }
       }
     // NgProfiler::StopTimer(timerloops);
 
@@ -1773,27 +1770,27 @@ namespace netgen
 #ifdef PARALLELGL
     if (id == 0 && ntasks > 1)
       {
-	InitParallelGL();
+        InitParallelGL();
 
-	par_surfellists.SetSize (ntasks);
+        par_surfellists.SetSize (ntasks);
 
-	MyMPI_SendCmd ("redraw");
-	MyMPI_SendCmd ("solsurfellinelist");
+        MyMPI_SendCmd ("redraw");
+        MyMPI_SendCmd ("solsurfellinelist");
 
-	for ( int dest = 1; dest < ntasks; dest++ )
-	  MyMPI_Recv (par_surfellists[dest], dest, NG_MPI_TAG_VIS);
+        for ( int dest = 1; dest < ntasks; dest++ )
+          MyMPI_Recv (par_surfellists[dest], dest, NG_MPI_TAG_VIS);
 
-	if (linelist)
-	  glDeleteLists (linelist, 1);
+        if (linelist)
+          glDeleteLists (linelist, 1);
 
-	linelist = glGenLists (1);
-	glNewList (linelist, GL_COMPILE);
-	
-	for ( int dest = 1; dest < ntasks; dest++ )
-	  glCallList (par_surfellists[dest]);
-	
-	glEndList();
-	return;
+        linelist = glGenLists (1);
+        glNewList (linelist, GL_COMPILE);
+        
+        for ( int dest = 1; dest < ntasks; dest++ )
+          glCallList (par_surfellists[dest]);
+        
+        glEndList();
+        return;
       }
 #endif
 
@@ -1809,8 +1806,8 @@ namespace netgen
     CurvedElements & curv = mesh->GetCurvedElements();
 
     int n = 1 << subdivisions;
-    NgArrayMem<Point<2>, 65> ptsloc(n+1);
-    NgArrayMem<Point<3>, 65> ptsglob(n+1);
+    ArrayMem<Point<2>, 65> ptsloc(n+1);
+    ArrayMem<Point<3>, 65> ptsglob(n+1);
 
     double trigpts[3][2]  = { { 0, 0 }, { 0, 1 }, { 1, 0} };
     double trigvecs[3][2] = { { 1, 0 }, { 0, -1 }, { -1, 1} };
@@ -1820,9 +1817,9 @@ namespace netgen
 
     auto sol_active = GetScalOrVecFunction();
 
-    for (SurfaceElementIndex sei = 0; sei < nse; sei++)
+    for (SurfaceElementIndex sei : T_Range<SurfaceElementIndex>(nse))
       {
-        Element2d & el = (*mesh)[sei];
+        Element2dRef el = (*mesh)[sei];
 
         if(!SurfaceElementActive(sol_active, *mesh, el))
             continue;
@@ -1833,30 +1830,30 @@ namespace netgen
             Point<2> p0;
             Vec<2> vtau;
             if (nv == 3)
-	      {
-		p0 = Point<2>(trigpts[k][0], trigpts[k][1]);
-		vtau = Vec<2>(trigvecs[k][0], trigvecs[k][1]);
-	      }
+              {
+                p0 = Point<2>(trigpts[k][0], trigpts[k][1]);
+                vtau = Vec<2>(trigvecs[k][0], trigvecs[k][1]);
+              }
             else
-	      {
-		p0 = Point<2>(quadpts[k][0], quadpts[k][1]);
-		vtau = Vec<2>(quadvecs[k][0], quadvecs[k][1]);
-	      }
+              {
+                p0 = Point<2>(quadpts[k][0], quadpts[k][1]);
+                vtau = Vec<2>(quadvecs[k][0], quadvecs[k][1]);
+              }
 
             glBegin (GL_LINE_STRIP);
 
-	    for (int ix = 0; ix <= n; ix++)
-	      ptsloc[ix] = p0 + (double(ix) / n) * vtau;
-	    
-	    curv.CalcMultiPointSurfaceTransformation (&ptsloc, sei, &ptsglob, 0);
-	    
-	    for (int ix = 0; ix <= n; ix++)
-	      {
-		if (deform)
-		  ptsglob[ix] += GetSurfDeformation (sei, k, ptsloc[ix](0), ptsloc[ix](1));
-		glVertex3dv (ptsglob[ix]);
-	      }
-	    
+            for (int ix = 0; ix <= n; ix++)
+              ptsloc[ix] = p0 + (double(ix) / n) * vtau;
+            
+            curv.CalcMultiPointSurfaceTransformation (&ptsloc, sei, &ptsglob, 0);
+            
+            for (int ix = 0; ix <= n; ix++)
+              {
+                if (deform)
+                  ptsglob[ix] += GetSurfDeformation (sei, k, ptsloc[ix](0), ptsloc[ix](1));
+                glVertex3dv (ptsglob[ix]);
+              }
+            
             glEnd ();
           }
       }
@@ -1912,22 +1909,22 @@ namespace netgen
     int n = 1 << subdivisions;
     int n3 = (n+1)*(n+1)*(n+1);
     
-    NgArray<Point<3> > grid(n3);
-    NgArray<Point<3> > locgrid(n3);
-    NgArray<Mat<3,3> > trans(n3);
-    NgArray<double> val1(n3*sol->components);
-    NgArray<Vec<3> > grads1(n3);
-    NgArray<int> compress(n3);
+    Array<Point<3> > grid(n3);
+    Array<Point<3> > locgrid(n3);
+    Array<Mat<3,3> > trans(n3);
+    Array<double> val1(n3*sol->components);
+    Array<Vec<3> > grads1(n3);
+    Array<int> compress(n3);
     
     MatrixFixWidth<3> pointmat(8);
     grads1 = Vec<3> (0.0);
 
-    for (ElementIndex ei = 0; ei < ne; ei++)
+    for (ElementIndex ei : mesh->VolumeElements().Range())
       {
         // if(vispar.clipdomain > 0 && vispar.clipdomain != (*mesh)[ei].GetIndex()) continue;
         // if(vispar.donotclipdomain > 0 && vispar.donotclipdomain == (*mesh)[ei].GetIndex()) continue;
 
-        const Element & el = (*mesh)[ei];
+        auto el = (*mesh)[ei];
         if(!VolumeElementActive(sol, *mesh, el))
           continue;
 
@@ -2155,14 +2152,13 @@ namespace netgen
 
 
 
-  void  VisualSceneSolution :: DrawTrigSurfaceVectors(const NgArray< Point<3> > & lp, 
+  void  VisualSceneSolution :: DrawTrigSurfaceVectors(const Array< Point<3> > & lp, 
                                                       const Point<3> & pmin, const Point<3> & pmax,
-                                                      const int sei, const SolData * vsol, bool swap_lam)
+                                                      SurfaceElementIndex sei, const SolData * vsol, bool swap_lam)
   {
     shared_ptr<Mesh> mesh = GetMesh();
 
     int dir,dir1,dir2;
-    double s,t;
 
     Vec<3> n = Cross (lp[1]-lp[0], lp[2]-lp[0]);
     Vec<3> na (fabs (n(0)), fabs(n(1)), fabs(n(2)));
@@ -2178,9 +2174,8 @@ namespace netgen
 
     Point<2> p2d[3];
 
-    int k;
 
-    for (k = 0; k < 3; k++)
+    for (int k = 0; k < 3; k++)
       {
         p2d[k] = Point<2> ((lp[k](dir1-1) - pmin(dir1-1)) / (2*rad),
                            (lp[k](dir2-1) - pmin(dir2-1)) / (2*rad));
@@ -2190,7 +2185,7 @@ namespace netgen
     double minx2d, maxx2d, miny2d, maxy2d;
     minx2d = maxx2d = p2d[0](0);
     miny2d = maxy2d = p2d[0](1);
-    for (k = 1; k < 3; k++)
+    for (int k = 1; k < 3; k++)
       {
         minx2d = min2 (minx2d, p2d[k](0));
         maxx2d = max2 (maxx2d, p2d[k](0));
@@ -2212,9 +2207,9 @@ namespace netgen
     //    cout << "drawsurfacevectors. xoffset = " << xoffset << ", yoffset = ";
     //    cout << yoffset << endl;
     
-    for (s = xoffset/gridsize; s <= 1+xoffset/gridsize; s += 1.0 / gridsize)
+    for (double s = xoffset/gridsize; s <= 1+xoffset/gridsize; s += 1.0 / gridsize)
       if (s >= minx2d && s <= maxx2d)
-        for (t = yoffset/gridsize; t <= 1+yoffset/gridsize; t += 1.0 / gridsize)
+        for (double t = yoffset/gridsize; t <= 1+yoffset/gridsize; t += 1.0 / gridsize)
           if (t >= miny2d && t <= maxy2d)
             {
               double lam1 = inv11 * (s - p2d[0](0)) + inv12 * (t-p2d[0](1));
@@ -2229,7 +2224,7 @@ namespace netgen
                     lam2 = 1.0-lam2;
                   }
                   Point<3> cp;
-                  for (k = 0; k < 3; k++)
+                  for (int k = 0; k < 3; k++)
                     cp(k) = lp[0](k) + 
                       lam1 * (lp[1](k)-lp[0](k)) + 
                       lam2 * (lp[2](k)-lp[0](k));
@@ -2244,15 +2239,15 @@ namespace netgen
                     GetSurfValues (vsol, sei, -1, lam1, lam2, values);
                   
                   if (!vsol->iscomplex)
-                    for (k = 0; k < 3; k++)
+                    for (int k = 0; k < 3; k++)
                       v(k) = values[k];
                   else
                     {
                       if (!imag_part)
-                        for (k = 0; k < 3; k++)
+                        for (int k = 0; k < 3; k++)
                           v(k) = values[2*k];
                       else
-                        for (k = 0; k < 3; k++)
+                        for (int k = 0; k < 3; k++)
                           v(k) = values[2*k+1];
                     }
                   
@@ -2271,7 +2266,7 @@ namespace netgen
                     drawelem = 0;
 
                   if ( drawelem ) 
-                    DrawCone (cp, cp+4*v, 0.8*rad / gridsize);
+                    DrawCone (cp, cp+4.0*v, 0.8*rad / gridsize);
                 }
             }
     
@@ -2283,7 +2278,6 @@ namespace netgen
   {
     shared_ptr<Mesh> mesh = GetMesh();
 
-    SurfaceElementIndex sei;
 
     const SolData * vsol = NULL;
     // bool drawelem;
@@ -2297,8 +2291,8 @@ namespace netgen
     if (!vsol) return;
 
 
-    Point<3> pmin = center - Vec3d (rad, rad, rad);
-    Point<3> pmax = center - Vec3d (rad, rad, rad);
+    Point<3> pmin = center - Vec<3> (rad, rad, rad);
+    Point<3> pmax = center - Vec<3> (rad, rad, rad);
 
 
     // glColor3d (1.0, 1.0, 1.0);
@@ -2307,16 +2301,16 @@ namespace netgen
     if (vsol->draw_surface && showsurfacesolution)
       {
         int nse = mesh->GetNSE();
-        for (sei = 0; sei < nse; sei++)
+        for (SurfaceElementIndex sei : T_Range<SurfaceElementIndex>(nse))
           {
-            const Element2d & el = (*mesh)[sei];
+            const Element2dRef & el = (*mesh)[sei];
             if(!SurfaceElementActive(vsol, *mesh, el))
               continue;
           
             if (el.GetType() == TRIG || el.GetType() == TRIG6)
               {
           
-                NgArray< Point<3> > lp(3);
+                Array< Point<3> > lp(3);
 
                 lp[0] = mesh->Point(el[2]);
                 lp[1] = mesh->Point(el[0]);
@@ -2422,19 +2416,19 @@ namespace netgen
               }
             else if (el.GetType() == QUAD)
               {
-		  NgArray < Point<3> > lp(3);
+                  Array < Point<3> > lp(3);
 
-		  lp[0] = mesh->Point(el[0]);
-		  lp[1] = mesh->Point(el[1]);
-		  lp[2] = mesh->Point(el[3]);
+                  lp[0] = mesh->Point(el[0]);
+                  lp[1] = mesh->Point(el[1]);
+                  lp[2] = mesh->Point(el[3]);
 
-		  DrawTrigSurfaceVectors(lp,pmin,pmax,sei,vsol);
+                  DrawTrigSurfaceVectors(lp,pmin,pmax,sei,vsol);
 
-		  lp[0] = mesh->Point(el[2]);
-		  lp[1] = mesh->Point(el[1]);
-		  lp[2] = mesh->Point(el[3]);
+                  lp[0] = mesh->Point(el[2]);
+                  lp[1] = mesh->Point(el[1]);
+                  lp[2] = mesh->Point(el[3]);
 
-		  DrawTrigSurfaceVectors(lp,pmin,pmax,sei,vsol, true);
+                  DrawTrigSurfaceVectors(lp,pmin,pmax,sei,vsol, true);
                 
                 /*
                 Point<3> lp[4];
@@ -2480,7 +2474,7 @@ namespace netgen
                       if (t >= miny2d && t <= maxy2d)
                         {
                           double lami[3];
-                          Point3d p3d(2*rad*s+pmin(0), 2*rad*t+pmin(1),0);
+                          Point<3> p3d(2*rad*s+pmin(0), 2*rad*t+pmin(1),0);
                           
                           if (mesh->PointContainedIn2DElement (p3d, lami, sei+1))
                             {
@@ -2529,7 +2523,7 @@ namespace netgen
                               
                               if ( drawelem )
                                 {
-                                  DrawCone (cp, cp+4*v, 0.8*rad / gridsize);
+                                  DrawCone (cp, cp+4.0*v, 0.8*rad / gridsize);
                                   (*testout) << "cp " << cp << " rad " << rad << " gridsize " << gridsize << endl;
                                 }
                               
@@ -2662,16 +2656,16 @@ namespace netgen
               mutex min_mutex;
               mutex max_mutex;
 
-              ParallelFor(0, ne, [&] (int first, int next)
+              ParallelForRange(IntRange(ne), [&] (IntRange r)
                 {
                   double minv_local = numeric_limits<double>::max();
                   double maxv_local = -numeric_limits<double>::max();
-                  for (int i=first; i<next; i++)
+                  for (int i : r)
                     {
                       double val;
-                      if(!VolumeElementActive(sol, *mesh, (*mesh)[ElementIndex(i)]))
+                      if(!VolumeElementActive(sol, *mesh, (*mesh)[ElementIndex::FromNr0(i)]))
                         continue;
-                      bool considerElem = GetValue (sol, i, 0.333, 0.333, 0.333, comp, val);
+                      bool considerElem = GetValue (sol, ElementIndex::FromNr0(i), 0.333, 0.333, 0.333, comp, val);
                       if (considerElem)
                         {
                           if (val > maxv_local) maxv_local = val;
@@ -2726,8 +2720,8 @@ namespace netgen
 #ifdef PARALLEL
     if ((ntasks > 1) && (id == 0))
       {
-	minv = 1e99;
-	maxv = -1e99;
+        minv = 1e99;
+        maxv = -1e99;
       }
     if (ntasks > 1)
       {
@@ -2754,7 +2748,7 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-          ok = data->solclass->GetValue (elnr, lam1, lam2, lam3, values);
+          ok = data->solclass->GetValue (elnr.Nr0(), lam1, lam2, lam3, values);
           break;
         }
       default:
@@ -2776,7 +2770,7 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-          ok = data->solclass->GetValue (elnr, xref, x, dxdxref, values);
+          ok = data->solclass->GetValue (elnr.Nr0(), xref, x, dxdxref, values);
           break;
         }
       default:
@@ -2806,11 +2800,11 @@ namespace netgen
 
     if (comp == 0)
       {
-        NgArrayMem<double,20> values(data->components);
+        ArrayMem<double,20> values(data->components);
         ok = GetValues (data, elnr, xref, x, dxdxref, &values[0]);
 
-	val = ExtractValue (data, 0, &values[0]);
-	return ok;
+        val = ExtractValue (data, 0, &values[0]);
+        return ok;
       }
 
 
@@ -2819,14 +2813,14 @@ namespace netgen
       case SOL_VIRTUALFUNCTION:
         {
           double values[20];
-          ok = data->solclass->GetValue (elnr, xref, x, dxdxref, values);
+          ok = data->solclass->GetValue (elnr.Nr0(), xref, x, dxdxref, values);
 
           val = values[comp-1];
           return ok;
         }
       case SOL_NODAL:
         {
-          const Element & el = (*mesh)[elnr];
+          auto el = (*mesh)[elnr];
 
           double lami[8] = { 0.0 };
           int np = 0;
@@ -2861,14 +2855,14 @@ namespace netgen
             }
 
           for (int i = 0; i < np; i++)
-            val += lami[i] * data->data[(el[i]-1) * data->dist + comp-1];
+            val += lami[i] * data->data[(el[i]-IndexBASE<PointIndex>()) * data->dist + comp-1];
 
           return 1;
         }
 
       case SOL_ELEMENT:
         {
-          val = data->data[elnr * data->dist + comp-1];
+          val = data->data[elnr.Nr0() * data->dist + comp-1];
           return 1;
         }
 
@@ -2877,7 +2871,7 @@ namespace netgen
 
       case SOL_NONCONTINUOUS:
         {
-          const Element & el = (*mesh)[elnr];
+          auto el = (*mesh)[elnr];
 
           double lami[8] = { 0.0 };
           int np = 0;
@@ -2934,9 +2928,9 @@ namespace netgen
 
           int base;
           if (data->order == 1)
-            base = 6 * elnr;
+            base = 6 * elnr.Nr0();
           else
-            base = 10 * elnr;
+            base = 10 * elnr.Nr0();
 
 
           for (int i = 0; i < np; i++)
@@ -2953,7 +2947,7 @@ namespace netgen
       
       case SOL_ELEMENT_ORDER:
         {
-          val = (*mesh)[elnr].GetOrder();
+          val = mesh->GetOrder(elnr);
           return 1;
         }
 
@@ -2977,10 +2971,10 @@ namespace netgen
 
     if (comp == 0)
       {
-        NgArrayMem<double,20> values(data->components);
+        ArrayMem<double,20> values(data->components);
         ok = GetValues (data, elnr, lam1, lam2, lam3, &values[0]);
-	val = ExtractValue (data, 0, &values[0]);
-	return ok;
+        val = ExtractValue (data, 0, &values[0]);
+        return ok;
       }
 
 
@@ -2988,16 +2982,16 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-	  val = 0.0;
+          val = 0.0;
           double values[20];
-	  ok = data->solclass->GetValue (elnr, lam1, lam2, lam3, values);
+          ok = data->solclass->GetValue (elnr.Nr0(), lam1, lam2, lam3, values);
 
           val = values[comp-1];
           return ok;
         }
       case SOL_NODAL:
         {
-          const Element & el = (*mesh)[elnr];
+          auto el = (*mesh)[elnr];
 
           double lami[8] = { 0.0 };
           int np = 0;
@@ -3031,14 +3025,14 @@ namespace netgen
             }
 
           for (int i = 0; i < np; i++)
-            val += lami[i] * data->data[(el[i]-1) * data->dist + comp-1];
+            val += lami[i] * data->data[(el[i]-IndexBASE<PointIndex>()) * data->dist + comp-1];
 
           return 1;
         }
 
       case SOL_ELEMENT:
         {
-          val = data->data[elnr * data->dist + comp-1];
+          val = data->data[elnr.Nr0() * data->dist + comp-1];
           return 1;
         }
 
@@ -3047,7 +3041,7 @@ namespace netgen
 
       case SOL_NONCONTINUOUS:
         {
-          const Element & el = (*mesh)[elnr];
+          auto el = (*mesh)[elnr];
 
           double lami[8] = { 0.0 };
           int np = 0;
@@ -3102,9 +3096,9 @@ namespace netgen
 
           int base;
           if (data->order == 1)
-            base = 6 * elnr;
+            base = 6 * elnr.Nr0();
           else
-            base = 10 * elnr;
+            base = 10 * elnr.Nr0();
 
 
           for (int i = 0; i < np; i++)
@@ -3121,7 +3115,7 @@ namespace netgen
       
       case SOL_ELEMENT_ORDER:
         {
-          val = (*mesh)[elnr].GetOrder();
+          val = mesh->GetOrder(elnr);
           return 1;
         }
       default:
@@ -3152,7 +3146,7 @@ namespace netgen
       case SOL_VIRTUALFUNCTION:
         {
           double values[20];
-          ok = data->solclass->GetValue (elnr, lam1, lam2, lam3, values);
+          ok = data->solclass->GetValue (elnr.Nr0(), lam1, lam2, lam3, values);
           val = complex<double> (values[comp-1], values[comp]);
           return ok;
         }
@@ -3165,14 +3159,14 @@ namespace netgen
 
   bool VisualSceneSolution :: 
   GetMultiValues (const SolData * data, ElementIndex elnr, int facetnr, int npt,
-		  const double * xref, int sxref,
-		  const double * x, int sx,
-		  const double * dxdxref, int sdxdxref,
-		  double * val, int sval) const
+                  const double * xref, int sxref,
+                  const double * x, int sx,
+                  const double * dxdxref, int sdxdxref,
+                  double * val, int sval) const
   {
     bool drawelem = false;
     if (data->soltype == SOL_VIRTUALFUNCTION)
-      drawelem = data->solclass->GetMultiValue(elnr, facetnr, npt, xref, sxref, x, sx, dxdxref, sdxdxref, val, sval);
+      drawelem = data->solclass->GetMultiValue(elnr.Nr0(), facetnr, npt, xref, sxref, x, sx, dxdxref, sdxdxref, val, sval);
     else
       for (int i = 0; i < npt; i++)
         drawelem = GetValues (data, elnr, xref+i*sxref, x+i*sx, dxdxref+i*sdxdxref, val+i*sval);
@@ -3194,7 +3188,7 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-          ok = data->solclass->GetSurfValue (selnr, facetnr, lam1, lam2, values);
+          ok = data->solclass->GetSurfValue (selnr.Nr0(), facetnr, lam1, lam2, values);
           // ok = 1;
           // values[0] = 1.0;
           break;
@@ -3219,7 +3213,7 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-          ok = data->solclass->GetSurfValue (selnr, facetnr, xref, x, dxdxref, values);
+          ok = data->solclass->GetSurfValue (selnr.Nr0(), facetnr, xref, x, dxdxref, values);
           break;
         }
       default:
@@ -3240,7 +3234,7 @@ namespace netgen
   {
     bool drawelem = false;
     if (data->soltype == SOL_VIRTUALFUNCTION)
-      drawelem = data->solclass->GetMultiSurfValue(elnr, facetnr, npt, xref, sxref, x, sx, dxdxref, sdxdxref, val, sval);
+      drawelem = data->solclass->GetMultiSurfValue(elnr.Nr0(), facetnr, npt, xref, sxref, x, sx, dxdxref, sdxdxref, val, sval);
     else
       for (int i = 0; i < npt; i++)
         drawelem = GetSurfValues (data, elnr, facetnr, xref+i*sxref, x+i*sx, dxdxref+i*sdxdxref, val+i*sval);
@@ -3287,13 +3281,12 @@ namespace netgen
                 case 3: d = 2; break;
                 case 6: d = 3; break;
                 }
-              int ci;
               double trace = 0.;
-              for (ci = 0; ci < d; ci++)
+              for (int ci = 0; ci < d; ci++)
                 trace += 1./3.*(values[ci]);
-              for (ci = 0; ci < d; ci++)
+              for (int ci = 0; ci < d; ci++)
                 val += sqr (values[ci]-trace);
-              for (ci = d; ci < data->components; ci++)
+              for (int ci = d; ci < data->components; ci++)
                 val += 2.*sqr (values[ci]);
               val = sqrt (val);
               break;
@@ -3309,8 +3302,7 @@ namespace netgen
                 }
               Mat<3,3> m ;
               Vec<3> ev;
-              int ci;
-              for (ci = 0; ci < d; ci++)
+              for (int ci = 0; ci < d; ci++)
                 m(ci,ci) = (values[ci]);
               m(0,1) = m(1,0) = values[3];
               m(0,2) = m(2,0) = values[4];
@@ -3360,10 +3352,10 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-          NgArrayMem<double,20> values(data->components);
+          ArrayMem<double,20> values(data->components);
           bool ok;
           
-          ok = data->solclass->GetSurfValue (selnr, facetnr, lam1, lam2, &values[0]);
+          ok = data->solclass->GetSurfValue (selnr.Nr0(), facetnr, lam1, lam2, &values[0]);
           
           if (ok)
             {
@@ -3390,10 +3382,10 @@ namespace netgen
     if (comp == 0)
       {
         val = 0;
-        NgArrayMem<double,20> values(data->components);
+        ArrayMem<double,20> values(data->components);
         ok = GetSurfValues (data, selnr, facetnr, lam1, lam2, &values[0]);
-	val = ExtractValue (data, 0, &values[0]);
-	return ok;
+        val = ExtractValue (data, 0, &values[0]);
+        return ok;
       }
 
 
@@ -3402,10 +3394,10 @@ namespace netgen
       case SOL_VIRTUALFUNCTION:
         {
   
-          NgArrayMem<double,20> values(data->components);
+          ArrayMem<double,20> values(data->components);
           bool ok;
 
-          ok = data->solclass->GetSurfValue (selnr, facetnr, lam1, lam2, &values[0]);
+          ok = data->solclass->GetSurfValue (selnr.Nr0(), facetnr, lam1, lam2, &values[0]);
 
           if (ok)
             {
@@ -3434,10 +3426,10 @@ namespace netgen
       case SOL_NODAL:
         {
           shared_ptr<Mesh> mesh = GetMesh();
-          const Element2d & el = (*mesh)[selnr];
+          const Element2dRef & el = (*mesh)[selnr];
 
           double lami[8];
-          int np, i;
+          int np;
           val = 0;
           double lam3 = 1-lam1-lam2;
 
@@ -3485,8 +3477,8 @@ namespace netgen
               np = 0;
             }
 
-          for (i = 0; i < np; i++)
-            val += lami[i] * data->data[(el[i]-1) * data->dist + comp-1];
+          for (int i = 0; i < np; i++)
+            val += lami[i] * data->data[(el[i]-IndexBASE<PointIndex>()) * data->dist + comp-1];
 
           return 1;
         }
@@ -3494,11 +3486,10 @@ namespace netgen
       case SOL_ELEMENT:
         {
           shared_ptr<Mesh> mesh = GetMesh();          
-          int el1, el2;
-          mesh->GetTopology().GetSurface2VolumeElement (selnr+1, el1, el2);
-          el1--;
+          ElementIndex el1, el2;
+          mesh->GetTopology().GetSurface2VolumeElement (selnr, el1, el2);
 
-          val = data->data[el1 * data->dist+comp-1];
+          val = data->data[el1.Nr0() * data->dist+comp-1];
           return 1;
         }
 
@@ -3511,14 +3502,14 @@ namespace netgen
 
       case SOL_SURFACE_ELEMENT:
         {
-          val = data->data[selnr * data->dist + comp-1];
+          val = data->data[selnr.Nr0() * data->dist + comp-1];
           return 1;
         }
 
       case SOL_SURFACE_NONCONTINUOUS:
         {
           shared_ptr<Mesh> mesh = GetMesh();          
-          const Element2d & el = (*mesh)[selnr];
+          const Element2dRef & el = (*mesh)[selnr];
 
           double lami[8];
           int np = 0;
@@ -3528,7 +3519,7 @@ namespace netgen
           switch (order)
             {
             case 0:
-              return data->data[selnr * data->dist + comp-1];
+              return data->data[selnr.Nr0() * data->dist + comp-1];
             case 1:
               {
                 switch (el.GetType())
@@ -3580,9 +3571,9 @@ namespace netgen
         
           int base;
           if (order == 1)
-            base = 4 * selnr;
+            base = 4 * selnr.Nr0();
           else 
-            base = 9 * selnr;
+            base = 9 * selnr.Nr0();
 
           for (int i = 0; i < np; i++)
             val += lami[i] * data->data[(base+i) * data->dist + comp-1];
@@ -3600,7 +3591,7 @@ namespace netgen
       case SOL_ELEMENT_ORDER:
         {
           shared_ptr<Mesh> mesh = GetMesh();          
-          val = (*mesh)[selnr].GetOrder();
+          val = mesh->GetOrder(selnr);
           return 1;
         }
 
@@ -3632,10 +3623,10 @@ namespace netgen
     if (comp == 0)
       {
         val = 0;
-        NgArrayMem<double,20> values(data->components);
+        ArrayMem<double,20> values(data->components);
         ok = GetSurfValues (data, selnr, facetnr, xref, x, dxdxref, &values[0]);
-	val = ExtractValue (data, 0, &values[0]);
-	return ok;
+        val = ExtractValue (data, 0, &values[0]);
+        return ok;
       }
 
 
@@ -3643,12 +3634,12 @@ namespace netgen
       {
       case SOL_VIRTUALFUNCTION:
         {
-          NgArrayMem<double,20> values(data->components);
+          ArrayMem<double,20> values(data->components);
           bool ok;
 
           // ok = data->solclass->GetSurfValue (selnr, lam1, lam2, &values[0]);
           // cout << "data->solclass = " << flush << data->solclass << endl;
-          ok = data->solclass->GetSurfValue (selnr, facetnr, xref, x, dxdxref, &values[0]);
+          ok = data->solclass->GetSurfValue (selnr.Nr0(), facetnr, xref, x, dxdxref, &values[0]);
           // ok = 1;
           // values[0] = 1.0;
 
@@ -3676,10 +3667,10 @@ namespace netgen
 
       case SOL_NODAL:
         {
-          const Element2d & el = (*mesh)[selnr];
+          const Element2dRef & el = (*mesh)[selnr];
 
           double lami[8];
-          int np, i;
+          int np;
           val = 0;
           double lam3 = 1-lam1-lam2;
 
@@ -3727,19 +3718,18 @@ namespace netgen
               np = 0;
             }
 
-          for (i = 0; i < np; i++)
-            val += lami[i] * data->data[(el[i]-1) * data->dist + comp-1];
+          for (int i = 0; i < np; i++)
+            val += lami[i] * data->data[(el[i]-IndexBASE<PointIndex>()) * data->dist + comp-1];
 
           return 1;
         }
 
       case SOL_ELEMENT:
         {
-          int el1, el2;
-          mesh->GetTopology().GetSurface2VolumeElement (selnr+1, el1, el2);
-          el1--;
+          ElementIndex el1, el2;
+          mesh->GetTopology().GetSurface2VolumeElement (selnr, el1, el2);
 
-          val = data->data[el1 * data->dist+comp-1];
+          val = data->data[el1.Nr0() * data->dist+comp-1];
           return 1;
         }
 
@@ -3752,13 +3742,13 @@ namespace netgen
 
       case SOL_SURFACE_ELEMENT:
         {
-          val = data->data[selnr * data->dist + comp-1];
+          val = data->data[selnr.Nr0() * data->dist + comp-1];
           return 1;
         }
 
       case SOL_SURFACE_NONCONTINUOUS:
         {
-          const Element2d & el = (*mesh)[selnr];
+          const Element2dRef & el = (*mesh)[selnr];
 
           double lami[8] = { 0.0 };
           int np = 0;
@@ -3768,7 +3758,7 @@ namespace netgen
           switch (order)
             {
             case 0:
-              return data->data[selnr * data->dist + comp-1];
+              return data->data[selnr.Nr0() * data->dist + comp-1];
             case 1:
               {
                 switch (el.GetType())
@@ -3820,9 +3810,9 @@ namespace netgen
         
           int base;
           if (order == 1)
-            base = 4 * selnr;
+            base = 4 * selnr.Nr0();
           else 
-            base = 9 * selnr;
+            base = 9 * selnr.Nr0();
 
           for (int i = 0; i < np; i++)
             val += lami[i] * data->data[(base+i) * data->dist + comp-1];
@@ -3838,7 +3828,7 @@ namespace netgen
       
       case SOL_ELEMENT_ORDER:
         {       
-          val = (*mesh)[selnr].GetOrder();
+          val = mesh->GetOrder(selnr);
           return 1;
         }
 
@@ -3880,9 +3870,9 @@ namespace netgen
     if (deform && vecfunction != -1)
       {
         // GetSurfValues (soldata[vecfunction], elnr, facetnr, lam1, lam2,  &def(0));
-	double values[6];
-	GetSurfValues (soldata[vecfunction], elnr, facetnr, lam1, lam2,  values);
-	def = RealVec3d (values, soldata[vecfunction]->iscomplex, imag_part);
+        double values[6];
+        GetSurfValues (soldata[vecfunction], elnr, facetnr, lam1, lam2,  values);
+        def = RealVec3d (values, soldata[vecfunction]->iscomplex, imag_part);
         def *= scaledeform;
 
         if (soldata[vecfunction]->components == 2) def(2) = 0;
@@ -3912,18 +3902,18 @@ namespace netgen
         Vec<3> v(0,0,0);
         if (vsol->soltype == SOL_NODAL)
           {
-            v = Vec3d(vsol->data[pnum_ * vsol->dist],
+            v = Vec<3>(vsol->data[pnum_ * vsol->dist],
                       vsol->data[pnum_ * vsol->dist+1],
                       vsol->data[pnum_ * vsol->dist+2]);
           }
         else if (vsol->soltype == SOL_SURFACE_NONCONTINUOUS)
           {
-            const Element2d & el = (*mesh)[elnr];
+            const Element2dRef & el = (*mesh)[elnr];
             for (int j = 0; j < el.GetNP(); j++)
               if (el[j] == pnum)
                 {
-                  int base = (4*elnr+j-1) * vsol->dist;
-                  v = Vec3d(vsol->data[base],
+                  int base = (4*elnr.Nr0()+j-1) * vsol->dist;
+                  v = Vec<3>(vsol->data[base],
                             vsol->data[base+1],
                             vsol->data[base+2]);
                 }
@@ -3940,13 +3930,13 @@ namespace netgen
 
 
   void VisualSceneSolution :: GetClippingPlaneTrigs (SolData * sol,
-                                                     NgArray<ClipPlaneTrig> & trigs,
-                                                     NgArray<ClipPlanePoint> & pts)
+                                                     Array<ClipPlaneTrig> & trigs,
+                                                     Array<ClipPlanePoint> & pts)
   {
     shared_ptr<Mesh> mesh = GetMesh();
 
     // static int timer_vals = NgProfiler::CreateTimer ("ClipPlaneTrigs - vertex values");
-    static int timer1 = NgProfiler::CreateTimer ("ClipPlaneTrigs1");
+    static Timer timer1("ClipPlaneTrigs1");
     // static int timer1a = NgProfiler::CreateTimer ("ClipPlaneTrigs1a");
     // static int timer2 = NgProfiler::CreateTimer ("ClipPlaneTrigs2");
     // static int timer3 = NgProfiler::CreateTimer ("ClipPlaneTrigs3");
@@ -3954,7 +3944,7 @@ namespace netgen
     // static int timer4b = NgProfiler::CreateTimer ("ClipPlaneTrigs4b");
 
 
-    NgProfiler::RegionTimer reg1 (timer1);
+    RegionTimer reg1 (timer1);
 
     
     int ne = mesh->GetNE();
@@ -3970,23 +3960,23 @@ namespace netgen
     int cntce;
     int cpe1 = 0, cpe2 = 0, cpe3 = 0;
 
-    // NgArray<Element> loctets;
-    // NgArray<Element> loctetsloc;
-    // NgArray<Point<3> > pointsloc;
+    // Array<Element> loctets;
+    // Array<Element> loctetsloc;
+    // Array<Point<3> > pointsloc;
 
     int n = 1 << subdivisions;
     int n3 = (n+1)*(n+1)*(n+1);
 
-    NgArray<Point<3> > grid(n3);
-    NgArray<Point<3> > locgrid(n3);
-    NgArray<Mat<3,3> > trans(n3);
-    NgArray<double> val(n3);
-    NgArray<bool> locposval(n3);
-    NgArray<int> compress(n3);
+    Array<Point<3> > grid(n3);
+    Array<Point<3> > locgrid(n3);
+    Array<Mat<3,3> > trans(n3);
+    Array<double> val(n3);
+    Array<bool> locposval(n3);
+    Array<int> compress(n3);
 
     // NgProfiler::StartTimer (timer_vals);
-    NgArray<double,PointIndex::BASE> vertval(mesh->GetNP());
-    NgArray<bool,PointIndex::BASE> posval(mesh->GetNP());
+    Array<double, PointIndex> vertval(mesh->GetNP());
+    Array<bool, PointIndex> posval(mesh->GetNP());
     // for (PointIndex pi = vertval.Begin(); pi < vertval.End(); pi++)
     for (PointIndex pi : vertval.Range())
       {
@@ -4000,22 +3990,22 @@ namespace netgen
       }
     // NgProfiler::StopTimer (timer_vals);
 
-    INDEX_2_CLOSED_HASHTABLE<int> edges(8*n3);  // point nr of edge
+    ClosedHashTable<IVec<2>, int> edges(8*n3);  // point nr of edge
     
 
-    for (ElementIndex ei = 0; ei < ne; ei++)
+    for (ElementIndex ei : mesh->VolumeElements().Range())
       {
         // NgProfiler::RegionTimer reg1a (timer1a);
 
-        const Element & el = (*mesh)[ei];
+        auto el = (*mesh)[ei];
         if(!VolumeElementActive(sol, *mesh, el))
           continue;
 
         int first_point_of_element = pts.Size();
 
-	locgrid.SetSize(n3);
-        if(vispar.clipdomain > 0 && vispar.clipdomain != (*mesh)[ei].GetIndex()) continue;
-        if(vispar.donotclipdomain > 0 && vispar.donotclipdomain == (*mesh)[ei].GetIndex()) continue;
+        locgrid.SetSize(n3);
+        if(vispar.clipdomain > 0 && vispar.clipdomain != (*mesh)[ei].GetIndex().Nr1()) continue;
+        if(vispar.donotclipdomain > 0 && vispar.donotclipdomain == (*mesh)[ei].GetIndex().Nr1()) continue;
 
         ELEMENT_TYPE type = (*mesh)[ei].GetType();
         if (type == HEX || type == PRISM || type == TET || type == TET10 || type == PYRAMID || type == PYRAMID13 || type == PRISM15 || type == HEX20 || type == HEX7)
@@ -4119,7 +4109,7 @@ namespace netgen
 
             if (type != TET && type != TET10 && type != PRISM && type != PRISM12 && type != PRISM15) cnt_valid = n3;
 
-	    locgrid.SetSize(cnt_valid);
+            locgrid.SetSize(cnt_valid);
 
             // NgProfiler::StopTimer (timer2);
             // NgProfiler::RegionTimer reg4(timer4);
@@ -4176,7 +4166,7 @@ namespace netgen
             // if (!has_pos || !has_neg) continue;
             if (!has_pos || all_pos) continue;
             
-            edges.DeleteData();
+            edges.SetSize(8*n3);
             
             for (int ix = 0; ix < n; ix++)
               for (int iy = 0; iy < n; iy++)
@@ -4260,8 +4250,7 @@ namespace netgen
                                         int pi2 = edgei[ednr][1];
                                         int pnr = -1;
                                         
-                                        INDEX_2 pair (teti[pi1], teti[pi2]);
-                                        pair.Sort();
+                                        IVec<2> pair = IVec<2>(teti[pi1], teti[pi2]).Sort();
                                         if (edges.Used(pair))
                                           pnr = edges.Get(pair);
                                         else
@@ -4304,32 +4293,31 @@ namespace netgen
       }
   }
 
-  void VisualSceneSolution :: GetClippingPlaneGrid (NgArray<ClipPlanePoint> & pts)
+  void VisualSceneSolution :: GetClippingPlaneGrid (Array<ClipPlanePoint> & pts)
   {
     shared_ptr<Mesh> mesh = GetMesh();
 
-    Vec3d n(clipplane[0], clipplane[1], clipplane[2]);
+    Vec<3> n(clipplane[0], clipplane[1], clipplane[2]);
 
     double mu = -clipplane[3] / n.Length2();
-    Point3d p(mu*n.X(), mu * n.Y(), mu * n.Z());
+    Point<3> p(mu*n(0), mu * n(1), mu * n(2));
 
     // n /= n.Length();
     n.Normalize();
-    Vec3d t1, t2;
-    n.GetNormal (t1);
+    Vec<3> t1, t2;
+    GetNormal (n, t1);
     t2 = Cross (n, t1);
 
-    double xi1, xi2;
 
     double xi1mid = (center - p) * t1;
     double xi2mid = (center - p) * t2;
 
     pts.SetSize(0);
 
-    for (xi1 = xi1mid-rad+xoffset/gridsize; xi1 <= xi1mid+rad+xoffset/gridsize; xi1 += rad / gridsize)
-      for (xi2 = xi2mid-rad+yoffset/gridsize; xi2 <= xi2mid+rad+yoffset/gridsize; xi2 += rad / gridsize)
+    for (double xi1 = xi1mid-rad+xoffset/gridsize; xi1 <= xi1mid+rad+xoffset/gridsize; xi1 += rad / gridsize)
+      for (double xi2 = xi2mid-rad+yoffset/gridsize; xi2 <= xi2mid+rad+yoffset/gridsize; xi2 += rad / gridsize)
         {
-          Point3d hp = p + xi1 * t1 + xi2 * t2;
+          Point<3> hp = p + xi1 * t1 + xi2 * t2;
         
           int cindex(-1);
           bool allowindex(true);
@@ -4344,9 +4332,9 @@ namespace netgen
             }
 
           double lami[3];
-          int elnr = mesh->GetElementOfPoint (hp, lami,0,cindex,allowindex);
+          ElementIndex elnr = mesh->GetElementOfPoint (hp, lami,0,cindex,allowindex);
 
-          if (elnr != -1)
+          if (elnr.IsValid())
             {
               ClipPlanePoint cpp;
               cpp.p = hp;
@@ -4370,27 +4358,27 @@ namespace netgen
 
     if (id == 0 && ntasks > 1)
       {
-	InitParallelGL();
+        InitParallelGL();
 
-	NgArray<int> parlists (ntasks);
+        Array<int> parlists (ntasks);
 
-	MyMPI_SendCmd ("redraw");
-	MyMPI_SendCmd ("clipplanetrigs");
+        MyMPI_SendCmd ("redraw");
+        MyMPI_SendCmd ("clipplanetrigs");
 
-	for ( int dest = 1; dest < ntasks; dest++ )
-	  MyMPI_Recv (parlists[dest], dest, NG_MPI_TAG_VIS);
+        for ( int dest = 1; dest < ntasks; dest++ )
+          MyMPI_Recv (parlists[dest], dest, NG_MPI_TAG_VIS);
 
-	if (clipplanelist_scal)
-	  glDeleteLists (clipplanelist_scal, 1);
+        if (clipplanelist_scal)
+          glDeleteLists (clipplanelist_scal, 1);
 
-	clipplanelist_scal = glGenLists (1);
-	glNewList (clipplanelist_scal, GL_COMPILE);
-	
-	for ( int dest = 1; dest < ntasks; dest++ )
-	  glCallList (parlists[dest]);
-	
-	glEndList();
-	return;
+        clipplanelist_scal = glGenLists (1);
+        glNewList (clipplanelist_scal, GL_COMPILE);
+        
+        for ( int dest = 1; dest < ntasks; dest++ )
+          glCallList (parlists[dest]);
+        
+        glEndList();
+        return;
       }
 #endif
 
@@ -4405,9 +4393,9 @@ namespace netgen
     glNewList (clipplanelist_scal, GL_COMPILE);
 
 
-    NgArray<ClipPlaneTrig> trigs;
-    NgArray<ClipPlanePoint> points;
-	    
+    Array<ClipPlaneTrig> trigs;
+    Array<ClipPlanePoint> points;
+            
     glNormal3d (-clipplane[0], -clipplane[1], -clipplane[2]);
     glColor3d (1.0, 1.0, 1.0);
     
@@ -4421,98 +4409,98 @@ namespace netgen
     GetClippingPlaneTrigs (sol, trigs, points);
     if (sol -> draw_volume)
       {
-	glBegin (GL_TRIANGLES);
+        glBegin (GL_TRIANGLES);
 
     int maxlpnr = 0;
     for (int i = 0; i < trigs.Size(); i++)
       for (int j = 0; j < 3; j++)
         maxlpnr = max2 (maxlpnr, trigs[i].points[j].locpnr);
 
-    NgArray<double> vals(maxlpnr+1);
-    NgArray<complex<double> > valsc(maxlpnr+1);
-    NgArray<int> elnrs(maxlpnr+1);
-    NgArray<bool> trigok(maxlpnr+1);
-    NgArray<Point<3> > locpoints(maxlpnr+1);
-    NgArray<Point<3> > globpoints(maxlpnr+1);
-    NgArray<Mat<3> > jacobi(maxlpnr+1);
-    NgArray<double> mvalues( (maxlpnr+1) * sol->components);
+    Array<double> vals(maxlpnr+1);
+    Array<complex<double> > valsc(maxlpnr+1);
+    Array<int> elnrs(maxlpnr+1);
+    Array<bool> trigok(maxlpnr+1);
+    Array<Point<3> > locpoints(maxlpnr+1);
+    Array<Point<3> > globpoints(maxlpnr+1);
+    Array<Mat<3> > jacobi(maxlpnr+1);
+    Array<double> mvalues( (maxlpnr+1) * sol->components);
     trigok = false;
     elnrs = -1;
 
     Point<3> p[3];
     // double val[3];
     // complex<double> valc[3];
-    int lastelnr = -1;
+    ElementIndex lastelnr = ElementIndex::INVALID;
     int nlp = -1;
     bool ok = false;
 
     for (int i = 0; i < trigs.Size(); i++)
       {
         const ClipPlaneTrig & trig = trigs[i];
-	if (trig.elnr != ElementIndex(lastelnr))
-	  {
-	    lastelnr = trig.elnr;
-	    nlp = -1;
+        if (trig.elnr != lastelnr)
+          {
+            lastelnr = trig.elnr;
+            nlp = -1;
 
-	    for (int ii = i; ii < trigs.Size(); ii++)
-	      {
-		if (trigs[ii].elnr != trig.elnr) break;
-		for (int j = 0; j < 3; j++)
-		  nlp = max (nlp, trigs[ii].points[j].locpnr);
-	      }
-	    nlp++;
-	    locpoints.SetSize (nlp);
+            for (int ii = i; ii < trigs.Size(); ii++)
+              {
+                if (trigs[ii].elnr != trig.elnr) break;
+                for (int j = 0; j < 3; j++)
+                  nlp = max (nlp, trigs[ii].points[j].locpnr);
+              }
+            nlp++;
+            locpoints.SetSize (nlp);
 
-	    for (int ii = i; ii < trigs.Size(); ii++)
-	      {
-		if (trigs[ii].elnr != trig.elnr) break;
-		for (int j = 0; j < 3; j++)
-		  locpoints[trigs[ii].points[j].locpnr] = points[trigs[ii].points[j].pnr].lami;
-	      }
+            for (int ii = i; ii < trigs.Size(); ii++)
+              {
+                if (trigs[ii].elnr != trig.elnr) break;
+                for (int j = 0; j < 3; j++)
+                  locpoints[trigs[ii].points[j].locpnr] = points[trigs[ii].points[j].pnr].lami;
+              }
 
-	    mesh->GetCurvedElements().
-	      CalcMultiPointElementTransformation (&locpoints, trig.elnr, 
-						   &globpoints, &jacobi);
+            mesh->GetCurvedElements().
+              CalcMultiPointElementTransformation (&locpoints, trig.elnr, 
+                                                   &globpoints, &jacobi);
 
-	    bool
-	      drawelem = GetMultiValues (sol, trig.elnr, -1, nlp, 
-					 &locpoints[0](0), &locpoints[1](0)-&locpoints[0](0),
-					 &globpoints[0](0), &globpoints[1](0)-&globpoints[0](0),
-					 &jacobi[0](0), &jacobi[1](0)-&jacobi[0](0),
-					 &mvalues[0], sol->components);
-	    
-	    // cout << "have multivalues, comps = " << sol->components << endl;
+            bool
+              drawelem = GetMultiValues (sol, trig.elnr, -1, nlp, 
+                                         &locpoints[0](0), &locpoints[1](0)-&locpoints[0](0),
+                                         &globpoints[0](0), &globpoints[1](0)-&globpoints[0](0),
+                                         &jacobi[0](0), &jacobi[1](0)-&jacobi[0](0),
+                                         &mvalues[0], sol->components);
+            
+            // cout << "have multivalues, comps = " << sol->components << endl;
 
-	    // if (!drawelem) ok = false;
-	    ok = drawelem;
-	    if (usetexture != 2 || !sol->iscomplex)
-	      for (int ii = 0; ii < nlp; ii++)
-		vals[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
-	    else
-	      for (int ii = 0; ii < nlp; ii++)
-		valsc[ii] = complex<double> (mvalues[ii*sol->components + scalcomp-1],
-					     mvalues[ii*sol->components + scalcomp]);
-	  }
-	
-	if(ok)
-	  for(int j=0; j<3; j++)
-	    {
-	      if (usetexture != 2 || !sol->iscomplex)
-		SetOpenGlColor (vals[trig.points[j].locpnr]);
-	      else
-		glTexCoord2f ( valsc[trig.points[j].locpnr].real(), 
-			       valsc[trig.points[j].locpnr].imag() );
+            // if (!drawelem) ok = false;
+            ok = drawelem;
+            if (usetexture != 2 || !sol->iscomplex)
+              for (int ii = 0; ii < nlp; ii++)
+                vals[ii] = ExtractValue(sol, scalcomp, &mvalues[ii*sol->components]);
+            else
+              for (int ii = 0; ii < nlp; ii++)
+                valsc[ii] = complex<double> (mvalues[ii*sol->components + scalcomp-1],
+                                             mvalues[ii*sol->components + scalcomp]);
+          }
+        
+        if(ok)
+          for(int j=0; j<3; j++)
+            {
+              if (usetexture != 2 || !sol->iscomplex)
+                SetOpenGlColor (vals[trig.points[j].locpnr]);
+              else
+                glTexCoord2f ( valsc[trig.points[j].locpnr].real(), 
+                               valsc[trig.points[j].locpnr].imag() );
 
-	      p[j] = points[trig.points[j].pnr].p;
+              p[j] = points[trig.points[j].pnr].p;
 
-	      if (deform)
-		{
-		  Point<3> ploc = points[trig.points[j].pnr].lami;
-		  p[j] += GetDeformation (trig.elnr, ploc);
-		}
+              if (deform)
+                {
+                  Point<3> ploc = points[trig.points[j].pnr].lami;
+                  p[j] += GetDeformation (trig.elnr, ploc);
+                }
 
-	      glVertex3dv (p[j]);
-	    }
+              glVertex3dv (p[j]);
+            }
 
       }
     glEnd();
@@ -4625,7 +4613,7 @@ namespace netgen
     p1p2.Normalize();
     Vec<3> p2p1 = -p1p2;
 
-    Vec<3> t1 = p1p2.GetNormal();
+    Vec<3> t1 = GetNormal (p1p2);
     Vec<3> t2 = Cross (p1p2, t1);
 
     Point<3> oldp = p1 + r * t1;
@@ -4685,7 +4673,7 @@ namespace netgen
     p1p2.Normalize();
     // Vec<3> p2p1 = -p1p2;
 
-    Vec<3> t1 = p1p2.GetNormal();
+    Vec<3> t1 = GetNormal (p1p2);
     Vec<3> t2 = Cross (p1p2, t1);
 
     Point<3> oldhp1 = p1 + r * t1;
@@ -4730,7 +4718,7 @@ namespace netgen
 
 
   bool VisualSceneSolution ::
-  SurfaceElementActive(const SolData *data, const Mesh & mesh, const Element2d & el) const
+  SurfaceElementActive(const SolData *data, const Mesh & mesh, const Element2dRef & el) const
   {
     if(data == nullptr) return true;
     bool is_active = true;
@@ -4744,24 +4732,24 @@ namespace netgen
           }
         else
           {
-            if (el.GetIndex() != vispar.drawdomainsurf)
+            if (el.GetIndex().Nr1() != vispar.drawdomainsurf)
               is_active = false;
           }
       }
 
     if(data->draw_surfaces) {
-      is_active = is_active && (*data->draw_surfaces)[el.GetIndex()-1];
+      is_active = is_active && (*data->draw_surfaces)[el.GetIndex().Nr0()];
     }
 
     return is_active;
   }
 
   bool VisualSceneSolution ::
-  VolumeElementActive(const SolData *data, const Mesh & mesh, const Element & el) const
+  VolumeElementActive(const SolData *data, const Mesh & mesh, const ElementRef & el) const
   {
     bool is_active = true;
     if(data->draw_volumes)
-      is_active = is_active && (*data->draw_volumes)[el.GetIndex()-1];
+      is_active = is_active && (*data->draw_volumes)[el.GetIndex().Nr0()];
     return is_active;
   }
 
@@ -4793,8 +4781,8 @@ namespace netgen
         if(!SurfaceElementActive(sol, *mesh, (*mesh)[sei]))
           return false;
         GLushort r,g,b;
-        r = (sei+1) % (1<<16);
-        g = (sei+1) >> 16;
+        r = sei.Nr1() % (1<<16);
+        g = sei.Nr1() >> 16;
         b = 0;
         glColor3us(r,g,b);
         return true;
@@ -4896,7 +4884,7 @@ namespace netgen
       if(n*view > 1e-8)
       {
         double lami[3];
-        if(auto el3d = mesh->GetElementOfPoint( p, lami ))
+        if(auto el3d = mesh->GetElementOfPoint( p, lami ); el3d.IsValid())
         {
           cout << endl << "Selected point " << p << " on clipping plane" << endl;
           // marker = p;
@@ -4936,10 +4924,10 @@ namespace netgen
     double lami[3] = {0.0, 0.0, 0.0};
     // Check if unprojected Point is close to surface element (eps of 1e-3 due to z-Buffer accuracy)
     bool found_2del = false;
-    if(selelement>0 && mesh->PointContainedIn2DElement(p, lami, selelement-1, false && fabs(lami[2])<1e-3))
+    if(selelement>0 && mesh->PointContainedIn2DElement(p, lami, SurfaceElementIndex::FromNr1(selelement), false && fabs(lami[2])<1e-3))
       {
         // Found it, use coordinates of point projected to surface element
-        mesh->GetCurvedElements().CalcSurfaceTransformation({1.0-lami[0]-lami[1], lami[0]}, selelement-1, p);
+        mesh->GetCurvedElements().CalcSurfaceTransformation({1.0-lami[0]-lami[1], lami[0]}, SurfaceElementIndex::FromNr1(selelement), p);
         found_2del = true;
       }
     cout << endl << "Selected point " << p << " on surface" << endl;
@@ -4960,17 +4948,17 @@ namespace netgen
         if(sol.iscomplex && rcomponent != 0)
           {
             rcomponent = 2 * ((rcomponent-1)/2) + 1;
-            GetSurfValue(&sol, selelement-1, -1,  1.0-lami[0]-lami[1], lami[0], rcomponent+1, imag);
+            GetSurfValue(&sol, SurfaceElementIndex::FromNr1(selelement), -1,  1.0-lami[0]-lami[1], lami[0], rcomponent+1, imag);
             comp = (scalcomp-1)/2 + 1;
           }
-        GetSurfValue(&sol, selelement-1, -1,  1.0-lami[0]-lami[1], lami[0], rcomponent, val);
+        GetSurfValue(&sol, SurfaceElementIndex::FromNr1(selelement), -1,  1.0-lami[0]-lami[1], lami[0], rcomponent, val);
         printScalValue(sol, comp, val, imag, sol.iscomplex && comp > 0);
       }
     if(have_vec_func)
       {
         auto & sol = *soldata[vecfunction];
         ArrayMem<double, 10> values(sol.components);
-        GetSurfValues(&sol, selelement-1, -1,  1.0-lami[0]-lami[1], lami[0], &values[0]);
+        GetSurfValues(&sol, SurfaceElementIndex::FromNr1(selelement), -1,  1.0-lami[0]-lami[1], lami[0], &values[0]);
         printVecValue(sol, values);
       }
   }
@@ -4984,33 +4972,33 @@ namespace netgen
     NG_MPI_Datatype type;
     int blocklen[] = 
       { 
-	1, 1, 1, 1,
-	1, 1, 1, 1, 
-	1, 1, 1, 1, 
-	1, 4, 1, 1, 
-	1
+        1, 1, 1, 1,
+        1, 1, 1, 1, 
+        1, 1, 1, 1, 
+        1, 4, 1, 1, 
+        1
       };
     NG_MPI_Aint displ[] = { (char*)&usetexture - (char*)this,
-			 (char*)&clipsolution - (char*)this,
-			 (char*)&scalfunction - (char*)this,
-			 (char*)&scalcomp - (char*)this,
+                         (char*)&clipsolution - (char*)this,
+                         (char*)&scalfunction - (char*)this,
+                         (char*)&scalcomp - (char*)this,
 
-			 (char*)&vecfunction - (char*)this,
-			 (char*)&gridsize - (char*)this,
-			 (char*)&autoscale - (char*)this,
-			 (char*)&logscale - (char*)this,
+                         (char*)&vecfunction - (char*)this,
+                         (char*)&gridsize - (char*)this,
+                         (char*)&autoscale - (char*)this,
+                         (char*)&logscale - (char*)this,
 
-			 (char*)&minval - (char*)this,
-			 (char*)&maxval - (char*)this,
-			 (char*)&numisolines - (char*)this,
-			 (char*)&subdivisions - (char*)this,
+                         (char*)&minval - (char*)this,
+                         (char*)&maxval - (char*)this,
+                         (char*)&numisolines - (char*)this,
+                         (char*)&subdivisions - (char*)this,
 
-			 (char*)&evalfunc - (char*)this,
-			 (char*)&clipplane[0] - (char*)this,
-			 (char*)&multidimcomponent - (char*)this, 
-			 (char*)&deform - (char*)this,
+                         (char*)&evalfunc - (char*)this,
+                         (char*)&clipplane[0] - (char*)this,
+                         (char*)&multidimcomponent - (char*)this, 
+                         (char*)&deform - (char*)this,
 
-			 (char*)&scaledeform - (char*)this 
+                         (char*)&scaledeform - (char*)this 
     };
 
 

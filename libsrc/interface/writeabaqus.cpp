@@ -40,7 +40,7 @@ static inline const AbaqusElementType & GetAbaqusType(int dim, int num_nodes)
     // 2D
     AbaqusElementTypes{
       {3, AbaqusElementType{"CPS3", vector{0,1,2}}},
-      {6, AbaqusElementType{"CPS6", vector{0,1,2,5,6,4}}},      
+      {6, AbaqusElementType{"CPS6", vector{0,1,2,5,3,4}}},
     },
     // 3D
     AbaqusElementTypes{
@@ -89,9 +89,11 @@ static void WriteElements ( ostream & out, const Mesh & mesh, int dim, const Ele
       const auto & el = mesh[ei];
       int index = 0;
       if constexpr(std::is_same_v<ElIndex,SegmentIndex>)
-        index = el.edgenr;
-      else
-        index = el.GetIndex();
+        index = mesh.HasEdgeDescriptor(el) ? mesh.GetEdgeDescriptor(el).EdgeNr() : -1;
+      else if constexpr(std::is_same_v<ElIndex,SurfaceElementIndex>)
+        index = el.GetIndex().Nr1();
+        else
+        index = el.GetIndex().Nr1();
       elset_map[{index, el.GetNP()}].Append(ei);
     }
 
@@ -109,7 +111,7 @@ static void WriteElements ( ostream & out, const Mesh & mesh, int dim, const Ele
 }
 
 void WriteAbaqusFormat (const Mesh & mesh,
-			const filesystem::path & filename)
+                        const filesystem::path & filename)
 
 {
   PrintMessage (1, "Write Abaqus Mesh");
@@ -134,106 +136,103 @@ void WriteAbaqusFormat (const Mesh & mesh,
       const auto np = mesh.GetNP();
       // periodic identification, implementation for
       // Helmut J. Boehm, TU Vienna
-	  
+          
       auto mpcfilename = filename;
       if (filename.extension() == ".inp")
         mpcfilename.replace_extension(".mpc");
       else
         mpcfilename.concat(".mpc");
-	  
+          
       ofstream mpc (mpcfilename);
 
-      int masternode(0);
+      PointIndex masternode = PointIndex::INVALID;
 
-      NgArray<INDEX_2> pairs;
-      NgBitArray master(np), help(np);
+      Array<PointIndices<2>> pairs;
+      TBitArray<PointIndex> master(np), help(np);
       master.Set();
       for (int i = 1; i <= 3; i++)
-	{
-	  mesh.GetIdentifications().GetPairs (i, pairs);
-	  help.Clear();
-	  for (int j = 1; j <= pairs.Size(); j++)
-	    {
-	      help.Set (pairs.Get(j).I1());
-	    }
-	  master.And (help);
-	}
-      for (int i = 1; i <= np; i++)
-	if (master.Test(i))
-	  masternode = i;
+        {
+          mesh.GetIdentifications().GetPairs (i, pairs);
+          help.Clear();
+          for (auto [master_pi, minion_pi] : pairs)
+            help.SetBit (master_pi);
+          master.And (help);
+        }
+      for (PointIndex pi : mesh.Points().Range())
+        if (master.Test(pi))
+          masternode = pi;
 
       cout << "masternode = " << masternode << " = "
-	   << mesh.Point(masternode) << endl;
-      NgArray<int> minions(3);
+           << mesh[masternode] << endl;
+      Array<PointIndex> minions(3);
+      minions = PointIndex(PointIndex::INVALID);
       for (int i = 1; i <= 3; i++)
-	{
-	  mesh.GetIdentifications().GetPairs (i, pairs);
-	  for (int j = 1; j <= pairs.Size(); j++)
-	    {
-	      if (pairs.Get(j).I1() == masternode)
-		minions.Elem(i) = pairs.Get(j).I2();
-	    }
-	  cout << "minion(" << i << ") = " << minions.Get(i)
-	       << " = " << mesh.Point(minions.Get(i)) << endl;
-	}
-	  
-	  
+        {
+          mesh.GetIdentifications().GetPairs (i, pairs);
+          for (auto [master_pi, minion_pi] : pairs)
+            if (master_pi == masternode)
+              minions[i-1] = minion_pi;
+          cout << "minion(" << i << ") = " << minions[i-1]
+               << " = " << mesh[minions[i-1]] << endl;
+        }
+          
+          
       outfile << "**\n"
-	      << "*NSET,NSET=CTENODS\n"
-	      << minions.Get(1) << ", " 
-	      << minions.Get(2) << ", " 
-	      << minions.Get(3) << endl;
+              << "*NSET,NSET=CTENODS\n"
+              << minions[0] << ", " 
+              << minions[1] << ", " 
+              << minions[2] << endl;
 
-	  
+          
       outfile << "**\n"
-	      << "**POINT_fixed\n"
-	      << "**\n"
-	      << "*BOUNDARY, OP=NEW\n";
+              << "**POINT_fixed\n"
+              << "**\n"
+              << "*BOUNDARY, OP=NEW\n";
       for (int j = 1; j <= 3; j++)
-	outfile << masternode << ", " << j << ",,    0.\n";
+        outfile << masternode << ", " << j << ",,    0.\n";
 
       outfile << "**\n"
-	      << "*BOUNDARY, OP=NEW\n";
-      for (int j = 1; j <= 3; j++)
-	{
-	  Vec3d v(mesh.Point(masternode), mesh.Point(minions.Get(j)));
-	  double vlen = v.Length();
-	  int dir = 0;
-	  if (fabs (v.X()) > 0.9 * vlen) dir = 2;
-	  if (fabs (v.Y()) > 0.9 * vlen) dir = 3;
-	  if (fabs (v.Z()) > 0.9 * vlen) dir = 1;
-	  if (!dir)
-	    cout << "ERROR: Problem with rigid body constraints" << endl;
-	  outfile << minions.Get(j) << ", " << dir << ",,    0.\n";
-	}
+              << "*BOUNDARY, OP=NEW\n";
+      for (int j = 0; j < 3; j++)
+        {
+          Vec<3> v(mesh[masternode], mesh[minions[j]]);
+          double vlen = v.Length();
+          int dir = 0;
+          if (fabs (v(0)) > 0.9 * vlen) dir = 2;
+          if (fabs (v(1)) > 0.9 * vlen) dir = 3;
+          if (fabs (v(2)) > 0.9 * vlen) dir = 1;
+          if (!dir)
+            cout << "ERROR: Problem with rigid body constraints" << endl;
+          outfile << minions[j] << ", " << dir << ",,    0.\n";
+        }
 
       outfile << "**\n"
-	      << "*EQUATION, INPUT=" << mpcfilename << endl;
-	  
+              << "*EQUATION, INPUT=" << mpcfilename << endl;
+          
 
-      NgBitArray eliminated(np);
+      TBitArray<PointIndex> eliminated(np);
       eliminated.Clear();
       for (int i = 1; i <= mesh.GetIdentifications().GetMaxNr(); i++)
-	{
-	  mesh.GetIdentifications().GetPairs (i, pairs);
-	  if (!pairs.Size())
-	    continue;
-	      
-	  for (int j = 1; j <= pairs.Size(); j++)
-	    if (pairs.Get(j).I1() != masternode && 
-		!eliminated.Test(pairs.Get(j).I2()))
-	      {
-		eliminated.Set (pairs.Get(j).I2());
-		for (int k = 1; k <= 3; k++)
-		  {
-		    mpc << "4" << "\n";
-		    mpc << pairs.Get(j).I2() << "," << k << ", -1.0, ";
-		    mpc << pairs.Get(j).I1() << "," << k << ", 1.0, ";
-		    mpc << minions.Get(i) << "," << k << ", 1.0, ";
-		    mpc << masternode << "," << k << ", -1.0 \n";
-		  }
-	      }
-	}
+        {
+          mesh.GetIdentifications().GetPairs (i, pairs);
+          if (!pairs.Size())
+            continue;
+              
+          for (auto [master_pi, minion_pi] : pairs)
+            if (master_pi != masternode && 
+                !eliminated.Test(minion_pi))
+              {
+                eliminated.SetBit (minion_pi);
+                for (int k = 1; k <= 3; k++)
+                  {
+                    mpc << "4" << "\n";
+                    mpc << minion_pi << "," << k << ", -1.0, ";
+                    mpc << master_pi << "," << k << ", 1.0, ";
+                    mpc << minions[i-1] << "," << k << ", 1.0, ";
+                    mpc << masternode << "," << k << ", -1.0 \n";
+                  }
+              }
+        }
     }
 
 

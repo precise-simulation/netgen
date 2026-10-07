@@ -22,8 +22,8 @@ Parallelogram3d ::~Parallelogram3d ()
 }
 
 void Parallelogram3d :: SetPoints (Point<3> ap1, 
-				   Point<3> ap2, 
-				   Point<3> ap3)
+                                   Point<3> ap2, 
+                                   Point<3> ap3)
 {
   p1 = ap1;
   p2 = ap2;
@@ -66,7 +66,7 @@ double Parallelogram3d :: CalcFunctionValue (const Point<3> & point) const
 }
 
 void Parallelogram3d :: CalcGradient (const Point<3> & /* point */, 
-				      Vec<3> & grad) const
+                                      Vec<3> & grad) const
 {
   grad = n;
 }
@@ -94,8 +94,8 @@ void Parallelogram3d :: Print (ostream & str) const
   
 void Parallelogram3d :: 
 GetTriangleApproximation (TriangleApproximation & tas, 
-			  const Box<3> & /* bbox */, 
-			  double /* facets */) const
+                          const Box<3> & /* bbox */, 
+                          double /* facets */) const
 {
   tas.AddPoint (p1);
   tas.AddPoint (p2);
@@ -115,7 +115,7 @@ GetTriangleApproximation (TriangleApproximation & tas,
 
 
 Brick :: Brick (Point<3> ap1, Point<3> ap2, 
-		Point<3> ap3, Point<3> ap4)
+                Point<3> ap3, Point<3> ap4)
 {
   faces.SetSize (6);
   surfaceids.SetSize (6);
@@ -142,9 +142,9 @@ Brick :: ~Brick ()
 Primitive * Brick :: CreateDefault ()
 {
   return new Brick (Point<3> (0,0,0),
-		    Point<3> (1,0,0),
-		    Point<3> (0,1,0),
-		    Point<3> (0,0,1));
+                    Point<3> (1,0,0),
+                    Point<3> (0,1,0),
+                    Point<3> (0,0,1));
 }
 
 
@@ -181,7 +181,7 @@ INSOLID_TYPE Brick :: BoxInSolid (const BoxSphere<3> & box) const
     {
       double val = faces.Get(i)->CalcFunctionValue (box.Center());
       if (i == 1 || val > maxval)
-	maxval = val;
+        maxval = val;
     }
   
   if (maxval > box.Diam()) return IS_OUTSIDE;
@@ -200,13 +200,13 @@ INSOLID_TYPE Brick :: BoxInSolid (const BoxSphere<3> & box) const
     {
       bool outsidei = 1;
       for (int j = 0; j < 8; j++)
-	{
-	  // Point<3> p = box.GetPointNr (j);
-	  double val = faces[i]->Plane::CalcFunctionValue (p[j]);
+        {
+          // Point<3> p = box.GetPointNr (j);
+          double val = faces[i]->Plane::CalcFunctionValue (p[j]);
 
-	  if (val > 0)  inside = 0;
-	  if (val < 0)  outsidei = 0;
-	}
+          if (val > 0)  inside = 0;
+          if (val < 0)  outsidei = 0;
+        }
       if (outsidei) outside = 1;
     }
 
@@ -216,7 +216,7 @@ INSOLID_TYPE Brick :: BoxInSolid (const BoxSphere<3> & box) const
 }
 
 INSOLID_TYPE Brick :: PointInSolid (const Point<3> & p,
-			   double eps) const
+                           double eps) const
 {
   double maxval = faces[0] -> Plane::CalcFunctionValue (p);
   for (int i = 1; i < 6; i++)
@@ -232,8 +232,8 @@ INSOLID_TYPE Brick :: PointInSolid (const Point<3> & p,
 
 
 INSOLID_TYPE Brick :: VecInSolid (const Point<3> & p,
-				  const Vec<3> & v,
-				  double eps) const
+                                  const Vec<3> & v,
+                                  double eps) const
 {
   INSOLID_TYPE result = IS_INSIDE;
   for (int i = 0; i < faces.Size(); i++)
@@ -253,15 +253,15 @@ INSOLID_TYPE Brick :: VecInSolid (const Point<3> & p,
   for (int i = 0; i < faces.Size(); i++)
     {
       if (faces[i] -> PointOnSurface (p, eps))
-	{
-	  GetSurface(i).CalcGradient (p, grad);
-	  scal = v * grad;
-	  
-	  if (scal >= eps) 
-	    is = IS_OUTSIDE;
-	  if (scal >= -eps && is == IS_INSIDE)
-	    is = DOES_INTERSECT;
-	}
+        {
+          GetSurface(i).CalcGradient (p, grad);
+          scal = v * grad;
+          
+          if (scal >= eps) 
+            is = IS_OUTSIDE;
+          if (scal >= -eps && is == IS_INSIDE)
+            is = DOES_INTERSECT;
+        }
     }
   return is;
   */
@@ -277,9 +277,9 @@ INSOLID_TYPE Brick :: VecInSolid (const Point<3> & p,
 
 
 INSOLID_TYPE Brick :: VecInSolid2 (const Point<3> & p,
-				    const Vec<3> & v1,
-				    const Vec<3> & v2,
-				    double eps) const
+                                    const Vec<3> & v1,
+                                    const Vec<3> & v2,
+                                    double eps) const
 {
   INSOLID_TYPE result = IS_INSIDE;
   for (int i = 0; i < faces.Size(); i++)
@@ -293,9 +293,9 @@ INSOLID_TYPE Brick :: VecInSolid2 (const Point<3> & p,
 }
 
 INSOLID_TYPE Brick :: VecInSolid3 (const Point<3> & p,
-				    const Vec<3> & v1,
-				    const Vec<3> & v2,
-				    double eps) const
+                                    const Vec<3> & v1,
+                                    const Vec<3> & v2,
+                                    double eps) const
 {
   INSOLID_TYPE result = IS_INSIDE;
   for (int i = 0; i < faces.Size(); i++)
@@ -309,10 +309,10 @@ INSOLID_TYPE Brick :: VecInSolid3 (const Point<3> & p,
 }
 
 INSOLID_TYPE Brick :: VecInSolid4 (const Point<3> & p,
-				    const Vec<3> & v,
-				    const Vec<3> & v2,
-				    const Vec<3> & m,
-				    double eps) const
+                                    const Vec<3> & v,
+                                    const Vec<3> & v2,
+                                    const Vec<3> & m,
+                                    double eps) const
 {
   INSOLID_TYPE result = IS_INSIDE;
   for (int i = 0; i < faces.Size(); i++)
@@ -344,44 +344,44 @@ INSOLID_TYPE Brick :: VecInSolid4 (const Point<3> & p,
 
 
 void Brick :: 
-GetPrimitiveData (const char *& classname, NgArray<double> & coeffs) const
+GetPrimitiveData (const char *& classname, Array<double> & coeffs) const
 {
   classname = "brick";
   coeffs.SetSize(12);
-  coeffs.Elem(1) = p1(0);
-  coeffs.Elem(2) = p1(1);
-  coeffs.Elem(3) = p1(2);
+  coeffs[0] = p1(0);
+  coeffs[1] = p1(1);
+  coeffs[2] = p1(2);
 
-  coeffs.Elem(4) = p2(0);
-  coeffs.Elem(5) = p2(1);
-  coeffs.Elem(6) = p2(2);
+  coeffs[3] = p2(0);
+  coeffs[4] = p2(1);
+  coeffs[5] = p2(2);
 
-  coeffs.Elem(7) = p3(0);
-  coeffs.Elem(8) = p3(1);
-  coeffs.Elem(9) = p3(2);
+  coeffs[6] = p3(0);
+  coeffs[7] = p3(1);
+  coeffs[8] = p3(2);
 
-  coeffs.Elem(10) = p4(0);
-  coeffs.Elem(11) = p4(1);
-  coeffs.Elem(12) = p4(2);
+  coeffs[9] = p4(0);
+  coeffs[10] = p4(1);
+  coeffs[11] = p4(2);
 }
 
-void Brick :: SetPrimitiveData (NgArray<double> & coeffs)
+void Brick :: SetPrimitiveData (Array<double> & coeffs)
 {
-  p1(0) = coeffs.Elem(1);
-  p1(1) = coeffs.Elem(2);
-  p1(2) = coeffs.Elem(3);
+  p1(0) = coeffs[0];
+  p1(1) = coeffs[1];
+  p1(2) = coeffs[2];
 
-  p2(0) = coeffs.Elem(4);
-  p2(1) = coeffs.Elem(5);
-  p2(2) = coeffs.Elem(6);
+  p2(0) = coeffs[3];
+  p2(1) = coeffs[4];
+  p2(2) = coeffs[5];
 
-  p3(0) = coeffs.Elem(7);
-  p3(1) = coeffs.Elem(8);
-  p3(2) = coeffs.Elem(9);
+  p3(0) = coeffs[6];
+  p3(1) = coeffs[7];
+  p3(2) = coeffs[8];
 
-  p4(0) = coeffs.Elem(10);
-  p4(1) = coeffs.Elem(11);
-  p4(2) = coeffs.Elem(12);
+  p4(0) = coeffs[9];
+  p4(1) = coeffs[10];
+  p4(2) = coeffs[11];
 
   CalcData();
 }
@@ -402,10 +402,10 @@ void Brick :: CalcData()
   for (i3 = 0; i3 <= 1; i3++)
     for (i2 = 0; i2 <= 1; i2++)
       for (i1 = 0; i1 <= 1; i1++)
-	{
-	  pi[i] = p1 + i1 * v12 + i2 * v13 + i3 * v14;
-	  i++;
-	}
+        {
+          pi[i] = p1 + double(i1) * v12 + double(i2) * v13 + double(i3) * v14;
+          i++;
+        }
 
   static int lface[6][4] =
   { { 1, 3, 2, 4 },
@@ -415,7 +415,7 @@ void Brick :: CalcData()
     { 1, 5, 3, 7 },
     { 2, 4, 6, 8 } };
   
-  NgArray<double> data(6);
+  Array<double> data(6);
   for (i = 0; i < 6; i++)
     {
       const Point<3> lp1 = pi[lface[i][0]-1];
@@ -426,18 +426,18 @@ void Brick :: CalcData()
       n.Normalize();
       
       for (j = 0; j < 3; j++)
-	{
-	  data[j] = lp1(j);
-	  data[j+3] = n(j);
-	}
+        {
+          data[j] = lp1(j);
+          data[j+3] = n(j);
+        }
       faces[i] -> SetPrimitiveData (data);
       /* 
-	 {
-	 faces.Elem(i+1) -> SetPoints
-	 (pi[lface[i][0]-1],
-	 pi[lface[i][1]-1],
-	 pi[lface[i][2]-1]);
-	 }
+         {
+         faces.Elem(i+1) -> SetPoints
+         (pi[lface[i][0]-1],
+         pi[lface[i][1]-1],
+         pi[lface[i][2]-1]);
+         }
       */
     }
 }
@@ -456,13 +456,13 @@ void Brick :: Reduce (const BoxSphere<3> & box)
       bool hasout = 0;
       bool hasin = 0;
       for (int j = 0; j < 8; j++)
-	{
-	  // p = box.GetPointNr (j);
-	  val = faces[i]->Plane::CalcFunctionValue (p[j]);
-	  if (val > 0)  hasout = 1;
-	  else if (val < 0)  hasin = 1;
-	  if (hasout && hasin) break;
-	}
+        {
+          // p = box.GetPointNr (j);
+          val = faces[i]->Plane::CalcFunctionValue (p[j]);
+          if (val > 0)  hasout = 1;
+          else if (val < 0)  hasin = 1;
+          if (hasout && hasin) break;
+        }
       surfaceactive[i] =  hasout && hasin;
     }
 }
@@ -477,14 +477,14 @@ void Brick :: UnReduce ()
 
 OrthoBrick :: OrthoBrick (const Point<3> & ap1, const Point<3> & ap2)
   : Brick (ap1, 
-	   Point<3> (ap2(0), ap1(1), ap1(2)),
-	   Point<3> (ap1(0), ap2(1), ap1(2)),
-	   Point<3> (ap1(0), ap1(1), ap2(2)))
+           Point<3> (ap2(0), ap1(1), ap1(2)),
+           Point<3> (ap1(0), ap2(1), ap1(2)),
+           Point<3> (ap1(0), ap1(1), ap2(2)))
 {
   pmin = ap1;
   pmax = ap2;
 }
-	 
+         
 INSOLID_TYPE OrthoBrick :: BoxInSolid (const BoxSphere<3> & box) const
 {
   if (pmin(0) > box.PMax()(0) ||
@@ -509,19 +509,19 @@ INSOLID_TYPE OrthoBrick :: BoxInSolid (const BoxSphere<3> & box) const
 
 void OrthoBrick :: Reduce (const BoxSphere<3> & box)
 {
-  surfaceactive.Elem(1) =
+  surfaceactive[0] =
     (box.PMin()(2) < pmin(2)) && (pmin(2) < box.PMax()(2));
-  surfaceactive.Elem(2) =
+  surfaceactive[1] =
     (box.PMin()(2) < pmax(2)) && (pmax(2) < box.PMax()(2));
 
-  surfaceactive.Elem(3) =
+  surfaceactive[2] =
     (box.PMin()(1) < pmin(1)) && (pmin(1) < box.PMax()(1));
-  surfaceactive.Elem(4) =
+  surfaceactive[3] =
     (box.PMin()(1) < pmax(1)) && (pmax(1) < box.PMax()(1));
 
-  surfaceactive.Elem(5) =
+  surfaceactive[4] =
     (box.PMin()(0) < pmin(0)) && (pmin(0) < box.PMax()(0));
-  surfaceactive.Elem(6) =
+  surfaceactive[5] =
     (box.PMin()(0) < pmax(0)) && (pmax(0) < box.PMax()(0));
 }
 

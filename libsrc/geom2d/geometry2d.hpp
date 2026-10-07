@@ -82,9 +82,9 @@ namespace netgen
     }
 
     virtual void GetDerivatives (const double t,  
-				 Point<2> & point,
-				 Vec<2> & first,
-				 Vec<2> & second) const
+                                 Point<2> & point,
+                                 Vec<2> & first,
+                                 Vec<2> & second) const
     {
       seg->GetDerivatives (t, point, first, second);
     }
@@ -94,7 +94,7 @@ namespace netgen
       seg->GetCoeff (coeffs);
     }
 
-    virtual void GetPoints (int n, NgArray<Point<2> > & points) const
+    virtual void GetPoints (int n, Array<Point<2> > & points) const
     {
       seg->GetPoints (n, points);
     }
@@ -114,7 +114,7 @@ namespace netgen
       Point<2> point;
       Vec<2> first, second;
       GetDerivatives (t, point, first, second);
-      double curv = fabs(first(0)*second(1)-first(1)*second(0)) / pow(first.Length(), 3);
+      double curv = fabs(first(0)*second(1)-first(1)*second(0)) / (first.Length() * first.Length() * first.Length());
       return curv;
     }
 
@@ -131,12 +131,12 @@ namespace netgen
   class DLL_HEADER SplineGeometry2d : public SplineGeometry<2>, public NetgenGeometry
   {
   protected:
-    NgArray<char*> materials;
-    NgArray<double> maxh;
-    NgArray<bool> quadmeshing;
+    Array<char*> materials;
+    Array<double> maxh;
+    Array<bool> quadmeshing;
     Array<bool> tensormeshing;
-    NgArray<int> layer;
-    NgArray<string*> bcnames;
+    Array<int> layer;
+    Array<string*> bcnames;
     double elto0 = 1.0;
 
 
@@ -163,7 +163,7 @@ namespace netgen
       return true;
     }
 
-    void ProjectPointEdge (int surfind, int surfind2, Point<3> & p, EdgePointGeomInfo* gi = nullptr) const override;
+    void ProjectPointEdge (int surfind, int surfind2, Point<3> & p, EdgePointGeomInfo* gi = nullptr, int edgenr = -1) const override;
 
 
     void PointBetween(const Point<3> & p1, const Point<3> & p2, double secpoint,
@@ -180,11 +180,13 @@ namespace netgen
                           int surfi1, int surfi2,
                           const EdgePointGeomInfo & ap1,
                           const EdgePointGeomInfo & ap2,
-                          Point<3> & newp, EdgePointGeomInfo & newgi) const override;
+                          Point<3> & newp, EdgePointGeomInfo & newgi,
+                          int edgenr) const override;
 
 
     Vec<3> GetTangent (const Point<3> & p, int surfi1, int surfi2,
-                       const EdgePointGeomInfo & ap1) const override;
+                       const EdgePointGeomInfo & ap1,
+                       int edgenr = -1) const override;
     Vec<3> GetNormal(int surfi1, const Point<3> & p,
                      const PointGeomInfo* gi) const override;
 
@@ -203,7 +205,7 @@ namespace netgen
     
     void PartitionBoundary (MeshingParameters & mp, double h, Mesh & mesh2d);
 
-    void CopyEdgeMesh (int from, int to, Mesh & mesh2d, Point3dTree & searchtree);
+    void CopyEdgeMesh (int from, int to, Mesh & mesh2d, Point3dTree<PointIndex> & searchtree);
 
 
     size_t GetNDomains() const { return materials.Size(); }

@@ -34,6 +34,15 @@ namespace netgen
 
 
 
+  /// componentwise minimum / maximum, for bounding boxes
+  template <int D>
+  inline void SetToMin (Point<D> & p, const Point<D> & q)
+  { for (int i = 0; i < D; i++) if (q(i) < p(i)) p(i) = q(i); }
+
+  template <int D>
+  inline void SetToMax (Point<D> & p, const Point<D> & q)
+  { for (int i = 0; i < D; i++) if (q(i) > p(i)) p(i) = q(i); }
+
   template <int D>
   inline double Dist (const Point<D> & a, const Point<D> & b)
   {
@@ -89,14 +98,18 @@ namespace netgen
   {
     return Vec<3,T> 
       ( v1(1) * v2(2) - v1(2) * v2(1),
-	v1(2) * v2(0) - v1(0) * v2(2),
-	v1(0) * v2(1) - v1(1) * v2(0) );
+        v1(2) * v2(0) - v1(0) * v2(2),
+        v1(0) * v2(1) - v1(1) * v2(0) );
   }
+
+  inline void Cross (const Vec<3> & v1, const Vec<3> & v2, Vec<3> & prod)
+  { prod = Cross (v1, v2); }
+
 
 
   inline double Determinant (const Vec<3> & col1,
-			     const Vec<3> & col2,
-			     const Vec<3> & col3)
+                             const Vec<3> & col2,
+                             const Vec<3> & col3)
   {
     return
       col1(0) * ( col2(1) * col3(2) - col2(2) * col3(1)) +
@@ -129,8 +142,8 @@ namespace netgen
     double det = m(0,0) * m(1,1) - m(0,1) * m(1,0);
     if (det == 0) 
       {
-	inv = 0;
-	return;
+        inv = 0;
+        return;
       }
 
     double idet = 1.0 / det;
@@ -140,7 +153,7 @@ namespace netgen
     inv(1,1) =  idet * m(0,0);
   }
 
-  void CalcInverse (const Mat<3,3> & m, Mat<3,3> & inv);
+  DLL_HEADER void CalcInverse (const Mat<3,3> & m, Mat<3,3> & inv);
 
   inline void CalcInverse (const Mat<2,3> & m, Mat<3,2> & inv)
   {

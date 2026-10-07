@@ -66,8 +66,6 @@ namespace nglib
    // initialize, deconstruct Netgen library:
    NGLIB_API void Ng_Init ()
    {
-      mycout = &cout;
-      myerr = &cerr;
       // netgen::testout->SetOutStream (new ofstream ("test.out"));
       // testout = new ofstream ("test.out");
    }
@@ -88,7 +86,7 @@ namespace nglib
    NGLIB_API Ng_Mesh * Ng_NewMesh ()
    {
       Mesh * mesh = new Mesh;  
-      mesh->AddFaceDescriptor (FaceDescriptor (1, 1, 0, 1));
+      mesh->AddFaceDescriptor (FaceRegion (1, 1, 0, 1));
       return (Ng_Mesh*)(void*)mesh;
    }
 
@@ -188,7 +186,7 @@ namespace nglib
    NGLIB_API void Ng_AddPoint (Ng_Mesh * mesh, double * x)
    {
       Mesh * m = (Mesh*)mesh;
-      m->AddPoint (Point3d (x[0], x[1], x[2]));
+      m->AddPoint (Point<3> (x[0], x[1], x[2]));
    }
 
 
@@ -200,10 +198,10 @@ namespace nglib
    {
       Mesh * m = (Mesh*)mesh;
       Element2d el (3);
-      el.SetIndex (1);
-      el.PNum(1) = pi[0];
-      el.PNum(2) = pi[1];
-      el.PNum(3) = pi[2];
+      el.SetIndex (FaceRegionIndex::FromNr1(1));
+      el[0] = PointIndex::FromNr1(pi[0]);
+      el[1] = PointIndex::FromNr1(pi[1]);
+      el[2] = PointIndex::FromNr1(pi[2]);
       m->AddSurfaceElement (el);
    }
 
@@ -216,11 +214,11 @@ namespace nglib
    {
       Mesh * m = (Mesh*)mesh;
       Element el (4);
-      el.SetIndex (1);
-      el.PNum(1) = pi[0];
-      el.PNum(2) = pi[1];
-      el.PNum(3) = pi[2];
-      el.PNum(4) = pi[3];
+      el.SetIndex (VolumeRegionIndex::FromNr1(1));
+      el[0] = PointIndex::FromNr1(pi[0]);
+      el[1] = PointIndex::FromNr1(pi[1]);
+      el[2] = PointIndex::FromNr1(pi[2]);
+      el[3] = PointIndex::FromNr1(pi[3]);
       m->AddVolumeElement (el);
    }
 
@@ -257,10 +255,10 @@ namespace nglib
    //  Return point coordinates of a given point index in the mesh
    NGLIB_API void Ng_GetPoint (Ng_Mesh * mesh, int num, double * x)
    {
-      const Point3d & p = ((Mesh*)mesh)->Point(num);
-      x[0] = p.X();
-      x[1] = p.Y();
-      x[2] = p.Z();
+      const Point<3> & p = ((Mesh*)mesh)->Point(PointIndex::FromNr1(num));
+      x[0] = p(0);
+      x[1] = p(1);
+      x[2] = p(2);
    }
 
 
@@ -270,9 +268,9 @@ namespace nglib
    NGLIB_API Ng_Surface_Element_Type 
       Ng_GetSurfaceElement (Ng_Mesh * mesh, int num, int * pi)
    {
-     const Element2d & el = ((Mesh*)mesh)->SurfaceElement(SurfaceElementIndex(num-1));
+     const Element2dRef & el = ((Mesh*)mesh)->SurfaceElement(SurfaceElementIndex::FromNr1(num));
       for (int i = 1; i <= el.GetNP(); i++)
-         pi[i-1] = el.PNum(i);
+         pi[i-1] = el.PNum(i).Nr1();
       Ng_Surface_Element_Type et;
       switch (el.GetNP())
       {
@@ -301,9 +299,9 @@ namespace nglib
    NGLIB_API Ng_Volume_Element_Type
       Ng_GetVolumeElement (Ng_Mesh * mesh, int num, int * pi)
    {
-     const Element & el = ((Mesh*)mesh)->VolumeElement(ElementIndex(num-1));
+     auto el = ((Mesh*)mesh)->VolumeElement(ElementIndex::FromNr1(num));
       for (int i = 1; i <= el.GetNP(); i++)
-         pi[i-1] = el.PNum(i);
+         pi[i-1] = el.PNum(i).Nr1();
       Ng_Volume_Element_Type et;
       switch (el.GetNP())
       {
@@ -332,7 +330,7 @@ namespace nglib
    // Set a local limit on the maximum mesh size allowed around the given point
    NGLIB_API void Ng_RestrictMeshSizePoint (Ng_Mesh * mesh, double * p, double h)
    {
-      ((Mesh*)mesh) -> RestrictLocalH (Point3d (p[0], p[1], p[2]), h);
+      ((Mesh*)mesh) -> RestrictLocalH (Point<3> (p[0], p[1], p[2]), h);
    }
 
 
@@ -344,7 +342,7 @@ namespace nglib
       for (double x = pmin[0]; x < pmax[0]; x += h)
          for (double y = pmin[1]; y < pmax[1]; y += h)
             for (double z = pmin[2]; z < pmax[2]; z += h)
-               ((Mesh*)mesh) -> RestrictLocalH (Point3d (x, y, z), h);
+               ((Mesh*)mesh) -> RestrictLocalH (Point<3> (x, y, z), h);
    }
 
 
@@ -378,7 +376,7 @@ namespace nglib
    {
       Mesh * m = (Mesh*)mesh;
 
-      m->AddPoint (Point3d (x[0], x[1], 0));
+      m->AddPoint (Point<3> (x[0], x[1], 0));
    }
 
 
@@ -389,8 +387,8 @@ namespace nglib
       Mesh * m = (Mesh*)mesh;
 
       Segment seg;
-      seg[0] = pi1;
-      seg[1] = pi2;
+      seg[0] = PointIndex::FromNr1(pi1);
+      seg[1] = PointIndex::FromNr1(pi2);
       m->AddSegment (seg);
    }
 
@@ -428,7 +426,7 @@ namespace nglib
    {
       Mesh * m = (Mesh*)mesh;
 
-      Point<3> & p = m->Point(num);
+      Point<3> & p = m->Point(PointIndex::FromNr1(num));
       x[0] = p(0);
       x[1] = p(1);
    }
@@ -439,9 +437,9 @@ namespace nglib
    NGLIB_API Ng_Surface_Element_Type
       Ng_GetElement_2D (Ng_Mesh * mesh, int num, int * pi, int * matnum)
    {
-     const Element2d & el = ((Mesh*)mesh)->SurfaceElement(SurfaceElementIndex(num-1));
+     const Element2dRef & el = ((Mesh*)mesh)->SurfaceElement(SurfaceElementIndex::FromNr1(num));
       for (int i = 1; i <= el.GetNP(); i++)
-         pi[i-1] = el.PNum(i);
+         pi[i-1] = el.PNum(i).Nr1();
 
       Ng_Surface_Element_Type et;
       switch (el.GetNP())
@@ -463,7 +461,7 @@ namespace nglib
       }
 
       if (matnum)
-         *matnum = el.GetIndex();
+         *matnum = el.GetIndex().Nr1();
 
       return et;
    }
@@ -473,12 +471,12 @@ namespace nglib
 
    NGLIB_API void Ng_GetSegment_2D (Ng_Mesh * mesh, int num, int * pi, int * matnum)
    {
-      const Segment & seg = ((Mesh*)mesh)->LineSegment(num);
-      pi[0] = seg[0];
-      pi[1] = seg[1];
+      const Segment & seg = (*(Mesh*)mesh)[SegmentIndex::FromNr1(num)];
+      pi[0] = seg[0].Nr1();
+      pi[1] = seg[1].Nr1();
 
       if (matnum)
-         *matnum = seg.edgenr;
+         *matnum = ((Mesh*)mesh)->GetEdgeDescriptor(seg.GetIndex()).EdgeNr();
    }
 
 
@@ -535,8 +533,8 @@ namespace nglib
 
 
 
-   NgArray<STLReadTriangle> readtrias; //only before initstlgeometry
-   NgArray<Point<3> > readedges; //only before init stlgeometry
+   Array<STLReadTriangle> readtrias; //only before initstlgeometry
+   Array<Point<3> > readedges; //only before init stlgeometry
 
    // loads geometry from STL file
    NGLIB_API Ng_STL_Geometry * Ng_STL_LoadGeometry (const char * filename, int binary)
@@ -558,8 +556,8 @@ namespace nglib
       readtrias.SetSize(0);
       readedges.SetSize(0);
 
-      Point3d p;
-      Vec3d normal;
+      Point<3> p;
+      Vec<3> normal;
       double p1[3];
       double p2[3];
       double p3[3];
@@ -570,14 +568,14 @@ namespace nglib
       for (i = 1; i <= geo->GetNT(); i++)
       {
          const STLTriangle& t = geo->GetTriangle(i);
-         p = geo->GetPoint(t.PNum(1));
-         p1[0] = p.X(); p1[1] = p.Y(); p1[2] = p.Z(); 
-         p = geo->GetPoint(t.PNum(2));
-         p2[0] = p.X(); p2[1] = p.Y(); p2[2] = p.Z(); 
-         p = geo->GetPoint(t.PNum(3));
-         p3[0] = p.X(); p3[1] = p.Y(); p3[2] = p.Z();
+         p = geo->GetPoint(t[0]);
+         p1[0] = p(0); p1[1] = p(1); p1[2] = p(2); 
+         p = geo->GetPoint(t[1]);
+         p2[0] = p(0); p2[1] = p(1); p2[2] = p(2); 
+         p = geo->GetPoint(t[2]);
+         p3[0] = p(0); p3[1] = p(1); p3[2] = p(2);
          normal = t.Normal();
-         n[0] = normal.X(); n[1] = normal.Y(); n[2] = normal.Z();
+         n[0] = normal(0); n[1] = normal(1); n[2] = normal(2);
 
          Ng_STL_AddTriangle(geo2, p1, p2, p3, n);
       }
@@ -638,8 +636,8 @@ namespace nglib
       mp->Transfer_Parameters();
 
       me -> SetGlobalH (mparam.maxh);
-      me -> SetLocalH (stlgeometry->GetBoundingBox().PMin() - Vec3d(10, 10, 10),
-                       stlgeometry->GetBoundingBox().PMax() + Vec3d(10, 10, 10),
+      me -> SetLocalH (stlgeometry->GetBoundingBox().PMin() - Vec<3>(10, 10, 10),
+                       stlgeometry->GetBoundingBox().PMax() + Vec<3>(10, 10, 10),
                        0.3);
 
       // cout << "meshsize = " << mp->meshsize_filename << endl;
@@ -686,8 +684,8 @@ namespace nglib
 
       /*
       me -> SetGlobalH (mparam.maxh);
-      me -> SetLocalH (stlgeometry->GetBoundingBox().PMin() - Vec3d(10, 10, 10),
-      stlgeometry->GetBoundingBox().PMax() + Vec3d(10, 10, 10),
+      me -> SetLocalH (stlgeometry->GetBoundingBox().PMin() - Vec<3>(10, 10, 10),
+      stlgeometry->GetBoundingBox().PMax() + Vec<3>(10, 10, 10),
       0.3);
       */
       /*
@@ -701,22 +699,22 @@ namespace nglib
       int retval = STLSurfaceMeshing (*stlgeometry, *me, mparam, stlparam);
       if (retval == MESHING3_OK)
       {
-         (*mycout) << "Success !!!!" << endl;
+         cout << "Success !!!!" << endl;
          stlgeometry->surfacemeshed = 1;
          stlgeometry->surfaceoptimized = 0;
          stlgeometry->volumemeshed = 0;
       } 
       else if (retval == MESHING3_OUTERSTEPSEXCEEDED)
       {
-         (*mycout) << "ERROR: Give up because of too many trials. Meshing aborted!" << endl;
+         cout << "ERROR: Give up because of too many trials. Meshing aborted!" << endl;
       }
       else if (retval == MESHING3_TERMINATE)
       {
-         (*mycout) << "Meshing Stopped!" << endl;
+         cout << "Meshing Stopped!" << endl;
       }
       else
       {
-         (*mycout) << "ERROR: Surface meshing not successful. Meshing aborted!" << endl;
+         cout << "ERROR: Surface meshing not successful. Meshing aborted!" << endl;
       }
 
 
@@ -753,8 +751,8 @@ namespace nglib
    NGLIB_API void Ng_STL_AddEdge (Ng_STL_Geometry * geom, 
       double * p1, double * p2)
    {
-      readedges.Append(Point3d(p1[0],p1[1],p1[2]));
-      readedges.Append(Point3d(p2[0],p2[1],p2[2]));
+      readedges.Append(Point<3>(p1[0],p1[1],p1[2]));
+      readedges.Append(Point<3>(p2[0],p2[1],p2[2]));
    }
 
 
@@ -782,8 +780,8 @@ namespace nglib
       closeedgeenable = 0;
       closeedgefact = 2.0;
 
-	  minedgelenenable = 0;
-	  minedgelen = 1e-4;
+          minedgelenenable = 0;
+          minedgelen = 1e-4;
 
       second_order = 0;
       quad_dominated = 0;
@@ -823,8 +821,8 @@ namespace nglib
       closeedgeenable = 0;
       closeedgefact = 2.0;
 
-  	  minedgelenenable = 0;
-	  minedgelen = 1e-4;
+          minedgelenenable = 0;
+          minedgelen = 1e-4;
 
       second_order = 0;
       quad_dominated = 0;
@@ -891,7 +889,7 @@ namespace nglib
 
 
    NGLIB_API void Ng_2D_Generate_SecondOrder(Ng_Geometry_2D * geom,
-					  Ng_Mesh * mesh)
+                                          Ng_Mesh * mesh)
    {
       ( (SplineGeometry2d*)geom ) -> GetRefinement().MakeSecondOrder( * (Mesh*) mesh );
    }
@@ -900,7 +898,7 @@ namespace nglib
 
 
    NGLIB_API void Ng_STL_Generate_SecondOrder(Ng_STL_Geometry * geom,
-					   Ng_Mesh * mesh)
+                                           Ng_Mesh * mesh)
    {
       ((STLGeometry*)geom)->GetRefinement().MakeSecondOrder(*(Mesh*) mesh);
    }
@@ -909,7 +907,7 @@ namespace nglib
 
 
    NGLIB_API void Ng_CSG_Generate_SecondOrder (Ng_CSG_Geometry * geom,
-					   Ng_Mesh * mesh)
+                                           Ng_Mesh * mesh)
    {
       ((CSGeometry*)geom)->GetRefinement().MakeSecondOrder(*(Mesh*) mesh);
    }
@@ -970,10 +968,6 @@ namespace netgen
 {
    char geomfilename[255];
 
-   NGLIB_API void MyError2 (const char * ch)
-   {
-      cerr << ch;
-   }
 
 
 
@@ -986,7 +980,7 @@ namespace netgen
      NG_MPI_Comm_rank(NG_MPI_COMM_WORLD, &id);
      if (id != 0) return;
 #endif
-     (*mycout) << s << flush;
+     cout << s << flush;
    }
 
 
@@ -1007,10 +1001,6 @@ namespace netgen
   */
 
 
-   void MyBeep (int i)
-   {
-      ;
-   }
 
 
 

@@ -24,6 +24,8 @@ public:
   STLEdge (int v1, int v2) {pts[0] = v1; pts[1] = v2;}
   STLEdge () {pts[0]=0;pts[1]=0;}
   int PNum(int i) const {return pts[(i-1)];}
+  int operator[] (int i) const {return pts[i];}
+  int & operator[] (int i) {return pts[i];}
 
   int LeftTrig() const {return trigs[0];}
   int RightTrig() const {return trigs[1];}
@@ -80,18 +82,18 @@ p1 = p1i; p2 = p2i;
 class STLEdgeDataList
 {
 private:
-  INDEX_2_HASHTABLE<int> hashtab;
-  NgArray<STLEdgeData> edgedata;
+  ClosedHashTable<IVec<2>, int> hashtab;
+  Array<STLEdgeData> edgedata;
   TABLE<int> edgesperpoint;
   
 public:
 
-  STLEdgeDataList():edgedata(),hashtab(1),edgesperpoint() {};
+  STLEdgeDataList():edgedata(),hashtab(8),edgesperpoint() {};
   const STLEdgeDataList& operator=(const STLEdgeDataList& edl); 
   void SetSize(int size) 
     {
       edgedata.SetSize(size);
-      hashtab.SetSize(size);
+      hashtab.SetSize(2*size+8);
       edgesperpoint.SetSize(size);
     }
   void Clear() {SetSize(0);}
@@ -120,7 +122,7 @@ public:
   void Write(ofstream& of) const;
   void Read(ifstream& ifs);
 
-  void BuildLineWithEdge(int ep1, int ep2, NgArray<twoint>& line);
+  void BuildLineWithEdge(int ep1, int ep2, Array<IVec<2>>& line);
 
   int GetNEPPStat(int p, int status) const;
   int GetNConfCandEPP(int p) const;
@@ -147,30 +149,31 @@ class STLLine
 {
 private:
   const STLGeometry * geometry;
-  NgArray<int> pts;
-  NgArray<int> lefttrigs;
-  NgArray<int> righttrigs;
-  NgArray<double> dists;
+  Array<int> pts;
+  Array<int> lefttrigs;
+  Array<int> righttrigs;
+  Array<double> dists;
   int split;
 
 public:
   STLLine(const STLGeometry * ageometry);
   void AddPoint(int i) {pts.Append(i);}
-  int PNum(int i) const {return pts.Get(i);}
+  int PNum(int i) const {return pts[i-1];}
+  int operator[] (int i) const {return pts[i];}
   int NP() const {return pts.Size();}
   int GetNS() const;
   void GetSeg(int nr, int& p1, int& p2) const;
   double GetSegLen(const Array<Point<3>,STLPointId>& ap, int nr) const;
   int GetLeftTrig(int nr) const;
   int GetRightTrig(int nr) const;
-  double GetDist(int nr) const { return dists.Get(nr);};
+  double GetDist(int nr) const { return dists[nr-1];};
   void GetBoundingBox (const Array<Point<3>,STLPointId> & ap, Box<3> & box) const;
 
   void AddLeftTrig(int nr) {lefttrigs.Append(nr);}
   void AddRightTrig(int nr) {righttrigs.Append(nr);}
   void AddDist (double dist) {dists.Append(dist); }
-  int StartP() const {return pts.Get(1);}
-  int EndP() const {return pts.Get(pts.Size());}
+  int StartP() const {return pts[0];}
+  int EndP() const {return pts[pts.Size()-1];}
     
   double GetLength(const Array<Point<3>,STLPointId>& ap) const;
 
@@ -180,8 +183,8 @@ public:
 
   //return a meshed polyline
   STLLine* Mesh(const Array<Point<3>,STLPointId>& ap, 
-		NgArray<Point3d>& mp, double ghi,
-		class Mesh& mesh) const;
+                Array<Point<3>>& mp, double ghi,
+                class Mesh& mesh) const;
 
   void DoSplit() {split = 1;}
   int ShouldSplit() const {return split;}

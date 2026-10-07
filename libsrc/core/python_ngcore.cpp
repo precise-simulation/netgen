@@ -10,20 +10,49 @@ namespace ngcore
   bool ngcore_have_numpy = false;
   bool parallel_pickling = true;
 
-  Archive& Archive::Shallow(std::any& val)
+  namespace detail
   {
-    if(shallow_to_python)
+    // keyed by the mangled name: type_info objects are not unique across
+    // shared libraries (hidden visibility, dlls)
+    static std::map<std::string, PyArchiveCasters>& PyArchiveCasterRegistry()
+    {
+      static std::map<std::string, PyArchiveCasters> reg;
+      return reg;
+    }
+    void SetPyArchiveCasters(const std::type_info& ti, const PyArchiveCasters& casters)
+    { PyArchiveCasterRegistry()[ti.name()] = casters; }
+    const PyArchiveCasters* FindPyArchiveCasters(const std::type_info& ti)
+    {
+      auto& reg = PyArchiveCasterRegistry();
+      auto it = reg.find(ti.name());
+      return it == reg.end() ? nullptr : &it->second;
+    }
+    const PyArchiveCasters& GetPyArchiveCasters(const std::type_info& ti)
+    {
+      if (auto c = FindPyArchiveCasters(ti))
+        return *c;
+      throw Exception("Type " + Demangle(ti.name()) +
+                      " is not registered for python archiving, call RegisterPyArchiveCaster<T>()");
+    }
+  } // namespace detail
+
+  py::object CastAnyToPy(const std::any& a)
+  {
+    return detail::GetPyArchiveCasters(a.type()).any_to_py(a);
+  }
+
+  // registered type of the object, or of its nearest registered base class
+  std::any CastPyToAny(py::object& obj)
+  {
+    for (auto cls : py::type::of(obj).attr("__mro__"))
       {
-        if(is_output)
-          ShallowOutPython(CastAnyToPy(val));
-        else
-          {
-            pybind11::object obj;
-            ShallowInPython(obj);
-            val = CastPyToAny(obj);
-          }
+        auto tinfo = py::detail::get_type_info((PyTypeObject*)cls.ptr());
+        if (!tinfo) continue;
+        if (auto c = detail::FindPyArchiveCasters(*tinfo->cpptype))
+          return c->py_to_any(obj);
       }
-    return *this;
+    throw Exception("Class " + std::string(py::str(py::type::of(obj))) +
+                    " is not registered for std::any conversion, call RegisterPyArchiveCaster<T>()");
   }
   
   void SetFlag(Flags &flags, string s, py::object value) 
@@ -52,15 +81,38 @@ namespace ngcore
           {
             if(py::isinstance<py::float_>(vdl[0]) || py::isinstance<py::int_>(vdl[0]))
               flags.SetFlag(s, makeCArray<double>(vdl));
-            if(py::isinstance<py::str>(vdl[0]))
+            else if(py::isinstance<py::str>(vdl[0]))
               flags.SetFlag(s, makeCArray<string>(vdl));
+            else
+              {
+                /*
+                Array<std::any> sta;
+                for (auto el : vdl)
+                  // sta.Append(CastPyToAny(dynamic_cast<py::object&>(el)));
+                  {
+                    auto obj = py::reinterpret_borrow<py::object>(el);
+                    sta.Append(CastPyToAny(obj));
+                  }
+                */
+                std::vector<std::any> sta;
+                for (auto el : vdl)
+                  // sta.Append(CastPyToAny(dynamic_cast<py::object&>(el)));
+                  {
+                    auto obj = py::reinterpret_borrow<py::object>(el);
+                    sta.push_back(CastPyToAny(obj));
+                  }
+                
+                flags.SetFlag(s, sta);
+              }
           }
         else
           {
             Array<string> dummystr;
             Array<double> dummydbl;
+            Array<std::any> dummyany;
             flags.SetFlag(s,dummystr);
             flags.SetFlag(s,dummydbl);
+            flags.SetFlag(s,dummyany);            
           }
       }
     else if (py::isinstance<py::tuple>(value))

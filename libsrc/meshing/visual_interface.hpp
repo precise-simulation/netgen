@@ -27,9 +27,9 @@ namespace netgen {
   inline constexpr int NG_TCL_DYNAMIC  = 3;
   */
 
-#define NG_TCL_VOLATILE		((Tcl_FreeProc *) 1)
-#define NG_TCL_STATIC		((Tcl_FreeProc *) 0)
-#define NG_TCL_DYNAMIC		((Tcl_FreeProc *) 3)
+#define NG_TCL_VOLATILE         ((Tcl_FreeProc *) 1)
+#define NG_TCL_STATIC           ((Tcl_FreeProc *) 0)
+#define NG_TCL_DYNAMIC          ((Tcl_FreeProc *) 3)
 
     inline constexpr int NG_TCL_OK       = 0;
     inline constexpr int NG_TCL_ERROR    = 1;
@@ -42,16 +42,16 @@ namespace netgen {
 
     DLL_HEADER extern void (*Ptr_Render)(bool);
     DLL_HEADER extern void (*Ptr_UpdateVisSurfaceMeshData)(int,
-            shared_ptr<NgArray<Point<3>>>,
-            shared_ptr<NgArray<INDEX_2>>,
-            shared_ptr<NgArray<Point<2>>>
+            shared_ptr<Array<Point<3>, LocalPointIndex>>,
+            shared_ptr<Array<IVec<2,LocalPointIndex>>>,
+            shared_ptr<Array<Point<2>, LocalPointIndex>>
             );
 
     inline void Render(bool blocking = false) { if(Ptr_Render) Ptr_Render(blocking); }
     inline void UpdateVisSurfaceMeshData(int oldnl,
-            shared_ptr<NgArray<Point<3>>> locpointsptr = nullptr,
-            shared_ptr<NgArray<INDEX_2>> loclinesptr = nullptr,
-            shared_ptr<NgArray<Point<2>>> plainpointsptr = nullptr
+            shared_ptr<Array<Point<3>, LocalPointIndex>> locpointsptr = nullptr,
+            shared_ptr<Array<IVec<2,LocalPointIndex>>> loclinesptr = nullptr,
+            shared_ptr<Array<Point<2>, LocalPointIndex>> plainpointsptr = nullptr
             ) {
         if(Ptr_UpdateVisSurfaceMeshData) Ptr_UpdateVisSurfaceMeshData(oldnl, locpointsptr, loclinesptr, plainpointsptr);
     }

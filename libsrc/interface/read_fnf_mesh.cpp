@@ -53,7 +53,7 @@ namespace netgen
     string name;
     string placement;
     string valuetype;
-    NgArray<double> places;
+    Array<double> places;
   };
 
 
@@ -124,17 +124,17 @@ namespace netgen
                     
                     if (token == "%ELEM_TYPE")
                       {
-			int nr;
-			string def;
+                        int nr;
+                        string def;
                         char ch;
                         sbuf >> nr >> def >> ch;
-			if (def == "DEF")
-			  {
-			    string classname, type;
-			    sbuf >> classname >> type;
-			    if (classname != "SOLID" || type != "TETRA")
-			      cerr << "Element not supported: " << buf << endl;
-			  }
+                        if (def == "DEF")
+                          {
+                            string classname, type;
+                            sbuf >> classname >> type;
+                            if (classname != "SOLID" || type != "TETRA")
+                              cerr << "Element not supported: " << buf << endl;
+                          }
                       }
                     else if (token == "%END_SECT")
                       {
@@ -187,8 +187,8 @@ namespace netgen
  
             else if (token == "MATERIALS")
               {
-		*testout << "parse materials" << endl;
-                NgArray<double> young_modulus, poisson_ratio, mass_density;
+                *testout << "parse materials" << endl;
+                Array<double> young_modulus, poisson_ratio, mass_density;
 
                 while (1)
                   {
@@ -215,7 +215,7 @@ namespace netgen
                         else
                           {
                             sbuf >> val;
-			    *testout << "prop = " << prop << ", val = " << val << endl;
+                            *testout << "prop = " << prop << ", val = " << val << endl;
                             if (prop == "YOUNG_MODULUS")
                               young_modulus.Append (val);
                             else if  (prop == "POISSON_RATIO")
@@ -229,8 +229,8 @@ namespace netgen
                         mesh.SetUserData ("YOUNG_MODULUS", young_modulus);
                         mesh.SetUserData ("POISSON_RATIO", poisson_ratio);
                         mesh.SetUserData ("MASS_DENSITY", mass_density);
-			*testout << "young = " << young_modulus << endl;
-			*testout << "poisson = " << poisson_ratio << endl;
+                        *testout << "young = " << young_modulus << endl;
+                        *testout << "poisson = " << poisson_ratio << endl;
                         break;
                       }
                     else
@@ -256,7 +256,7 @@ namespace netgen
                         int nr, ks_id;
                         double x,y,z;
                         sbuf >> nr >> st >> ch >> x >> y >> z >> ks_id;
-                        mesh.AddPoint (Point3d (x,y,z) );
+                        mesh.AddPoint (Point<3> (x,y,z) );
                       }
                     else if (token == "%ELEM")
                       {
@@ -266,7 +266,7 @@ namespace netgen
                         string propid;
                         sbuf >> elnr >> def >> ch;
                         sbuf >> typid >> matid >> propid;
-                        NgArray<int> pnums;
+                        Array<int> pnums;
                         while (1)
                           {
                             int pn;
@@ -277,8 +277,8 @@ namespace netgen
                         int pe2ng [] = { 0, 1, 2, 3, 4, 7, 5, 6,  8, 9 };
                         Element el(pnums.Size());
                         for (int j = 0; j < pnums.Size(); j++)
-                          el[pe2ng[j]] = pnums[j];
-                        el.SetIndex (matid);
+                          el[pe2ng[j]] = PointIndex::FromNr1(pnums[j]);
+                        el.SetIndex (VolumeRegionIndex::FromNr1(matid));
                         mesh.AddVolumeElement (el);
                       }
                     else if (token == "%END_SECT")
@@ -307,7 +307,7 @@ namespace netgen
                         sbuf >> nr >> kw >> ch;
                         if (kw == "NODES")
                           {
-                            NgArray<int> enums;
+                            Array<int> enums;
                             while (1)
                               {
                                 int en;
@@ -318,10 +318,9 @@ namespace netgen
                             for (int j = 0; j+2 < enums.Size(); j+=2)
                               {
                                 Segment seg;
-                                seg[0] = enums[j];
-                                seg[1] = enums[j+2];
-                                seg[2] = enums[j+1];
-                                seg.edgenr = nr;
+                                seg[0] = PointIndex::FromNr1(enums[j]);
+                                seg[1] = PointIndex::FromNr1(enums[j+2]);
+                                seg[2] = PointIndex::FromNr1(enums[j+1]);
                                 mesh.AddSegment (seg);
                               }
                           }
@@ -331,7 +330,7 @@ namespace netgen
                         sbuf >> nr >> kw >> ch;
                         if (kw == "FACES")
                           {
-                            NgArray<int> fnums;
+                            Array<int> fnums;
                             while (1)
                               {
                                 int fn;
@@ -340,9 +339,9 @@ namespace netgen
                                 fnums.Append (fn);
                               }                            
 
-                            FaceDescriptor fd(-1, -1, -1, -1);
+                            FaceRegion fd(-1, -1, -1, -1);
                             fd.SetBCProperty (nr);
-			    *testout << "add fd " << mesh.GetNFD() << ", nr = " << nr << endl;
+                            *testout << "add fd " << mesh.GetNFD() << ", nr = " << nr << endl;
                             mesh.AddFaceDescriptor (fd);
                               
                             for (int j = 0; j < fnums.Size(); j += 2)
@@ -350,12 +349,12 @@ namespace netgen
                                 int elnr = fnums[j];
                                 int fnr = fnums[j+1];
                                 
-                                const Element & el = mesh.VolumeElement (elnr);
+                                auto el = mesh[ElementIndex::FromNr1(elnr)];
                                 if(j == 0)
-                                  mesh.GetFaceDescriptor(nr).SetDomainIn(el.GetIndex());
+                                  mesh.GetFaceDescriptor(FaceRegionIndex::FromNr1(nr)).SetDomainIn(el.GetIndex().Nr1());
                                 Element2d el2d;
                                 el.GetFace (fnr, el2d);
-                                el2d.SetIndex (nr);
+                                el2d.SetIndex (FaceRegionIndex::FromNr1(nr));
                                   
                                 mesh.AddSurfaceElement (el2d);
                               }
@@ -377,7 +376,7 @@ namespace netgen
  
             else if (token == "LOADS")
               {
-                NgArray<LoadType*> loadtypes;
+                Array<LoadType*> loadtypes;
 
                 while (1)
                   {
@@ -470,6 +469,7 @@ namespace netgen
           PrintMessage(3, "parse line: (", buf, ")");
       }
     mesh.ComputeNVertices();
+    mesh.ReconstructEdgeDescriptors();
   }
 static RegisterUserFormat reg_fnf ("Pro/ENGINEER Format", {".fnf"}, ReadFNFFormat, nullopt);
 }

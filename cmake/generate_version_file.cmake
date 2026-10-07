@@ -54,7 +54,25 @@ if(NOT NETGEN_VERSION_GIT)
 endif()
 
 if(NOT NETGEN_VERSION_PYTHON)
-    set(NETGEN_VERSION_PYTHON ${NETGEN_VERSION_TWEAK})
+    # Derive a PEP 440 compliant python package version from git, matching
+    # tests/utils.py:get_version() (used for the wheel metadata version).
+    if(NETGEN_VERSION_TWEAK)
+        # commits after the last tag -> post release
+        set(NETGEN_VERSION_PYTHON "${NETGEN_VERSION_SHORT}.post${NETGEN_VERSION_TWEAK}")
+        set(_ng_dev_build TRUE)
+        if(DEFINED ENV{NG_NO_DEV_PIP_VERSION})
+            set(_ng_dev_build FALSE)
+        endif()
+        if("$ENV{CI_COMMIT_REF_NAME}" STREQUAL "release")
+            set(_ng_dev_build FALSE)
+        endif()
+        if(_ng_dev_build)
+            set(NETGEN_VERSION_PYTHON "${NETGEN_VERSION_PYTHON}.dev0")
+        endif()
+    else()
+        # current commit is tagged -> clean release version
+        set(NETGEN_VERSION_PYTHON "${NETGEN_VERSION_SHORT}")
+    endif()
 endif()
 
 
@@ -104,6 +122,7 @@ file(GENERATE OUTPUT netgen_config.hpp CONTENT
 #define NETGEN_USE_SPDLOG               $<BOOL:${USE_SPDLOG}>
 #define NETGEN_DEBUG_LOG                $<BOOL:${DEBUG_LOG}>
 #define NETGEN_USE_CHECK_RANGE          $<BOOL:${CHECK_RANGE}>
+#define NETGEN_POINTINDEX_BASE         ${POINTINDEX_BASE}
 #define NETGEN_BUILD_STUB_FILES         $<BOOL:${BUILD_STUB_FILES}>
 #define NETGEN_BUILD_FOR_CONDA          $<BOOL:${BUILD_FOR_CONDA}>
 #define NETGEN_SHARED_LIBRARY_SUFFIX    \"${CMAKE_SHARED_LIBRARY_SUFFIX}\"

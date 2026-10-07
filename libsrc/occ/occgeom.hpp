@@ -52,7 +52,7 @@ namespace netgen
 #define OCCGEOMETRYVISUALIZATIONFULLCHANGE 1  // Compute transformation matrices and redraw
 #define OCCGEOMETRYVISUALIZATIONHALFCHANGE 2  // Redraw
 
-  bool IsMappedShape(const Transformation<3> & trafo, const TopoDS_Shape & me, const TopoDS_Shape & you);
+  DLL_HEADER bool IsMappedShape(const Transformation<3> & trafo, const TopoDS_Shape & me, const TopoDS_Shape & you);
 
   class EntityVisualizationCode
   {
@@ -136,6 +136,14 @@ namespace netgen
   };
 
 
+  struct OCCAssemblyNode
+  {
+    std::string name;
+    TopoDS_Shape shape;          // null on internal (assembly) nodes
+    bool is_assembly = false;
+    std::vector<std::shared_ptr<OCCAssemblyNode>> children;
+  };
+
   class DLL_HEADER OCCGeometry : public NetgenGeometry
   {
     Point<3> center;
@@ -183,30 +191,31 @@ namespace netgen
     }
 
     TopoDS_Shape shape;
+    std::shared_ptr<OCCAssemblyNode> assembly_tree;
     TopTools_IndexedMapOfShape fmap, emap, vmap, somap, shmap, wmap;
-    NgArray<bool> fsingular, esingular, vsingular;
+    Array<bool> fsingular, esingular, vsingular;
     Box<3> boundingbox;
 
     mutable int changed;
-    mutable NgArray<int> facemeshstatus;
+    mutable Array<int> facemeshstatus;
 
     // Philippose - 15/01/2009
     // Maximum mesh size for a given face
     // (Used to explicitly define mesh size limits on individual faces)
-    NgArray<double> face_maxh;
+    Array<double> face_maxh;
      
     // Philippose - 14/01/2010
     // Boolean array to detect whether a face has been explicitly modified 
     // by the user or not
-    NgArray<bool> face_maxh_modified;
+    Array<bool> face_maxh_modified;
      
     // Philippose - 15/01/2009
     // Indicates which faces have been selected by the user in geometry mode
     // (Currently handles only selection of one face at a time, but an array would
     //  help to extend this to multiple faces)
-    NgArray<bool> face_sel_status;
+    Array<bool> face_sel_status;
      
-    NgArray<EntityVisualizationCode> fvispar, evispar, vvispar;
+    Array<EntityVisualizationCode> fvispar, evispar, vvispar;
      
     double tolerance;
     bool fixsmalledges;
@@ -312,7 +321,7 @@ namespace netgen
     }
 
     void CalcBoundingBox ();
-    void BuildVisualizationMesh (double deflection);
+    void BuildVisualizationMesh (double deflection = 0.01, double angle = 0.5);
     
     void RecursiveTopologyTree (const TopoDS_Shape & sh,
                                 stringstream & str,
@@ -419,12 +428,12 @@ namespace netgen
 
     void LowLightAll()
     {
-      for (int i = 1; i <= fmap.Extent(); i++)
-        fvispar[i-1].Lowlight();
-      for (int i = 1; i <= emap.Extent(); i++)
-        evispar[i-1].Lowlight();
-      for (int i = 1; i <= vmap.Extent(); i++)
-        vvispar[i-1].Lowlight();
+      for (int i = 0; i < fmap.Extent(); i++)
+        fvispar[i].Lowlight();
+      for (int i = 0; i < emap.Extent(); i++)
+        evispar[i].Lowlight();
+      for (int i = 0; i < vmap.Extent(); i++)
+        vvispar[i].Lowlight();
     }
 
     void GetUnmeshedFaceInfo (stringstream & str);
@@ -437,8 +446,8 @@ namespace netgen
     //bool FastProject (int surfi, Point<3> & ap, double& u, double& v) const;
   };
 
-  DLL_HEADER void Identify(const ListOfShapes & me, const ListOfShapes & you, string name, Identifications::ID_TYPE type, Transformation<3> trafo);
-  DLL_HEADER void Identify(const TopoDS_Shape & me, const TopoDS_Shape & you, string name, Identifications::ID_TYPE type, std::optional<std::variant<gp_Trsf, gp_GTrsf>> opt_trafo);
+  DLL_HEADER size_t Identify(const ListOfShapes & me, const ListOfShapes & you, string name, Identifications::ID_TYPE type, Transformation<3> trafo);
+  DLL_HEADER size_t Identify(const TopoDS_Shape & me, const TopoDS_Shape & you, string name, Identifications::ID_TYPE type, std::optional<std::variant<gp_Trsf, gp_GTrsf>> opt_trafo);
    
 
   void PrintContents (OCCGeometry * geom);

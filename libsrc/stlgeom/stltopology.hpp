@@ -194,7 +194,7 @@ public:
 
   //project with a certain normal vector in plane
   void ProjectInPlain(const Array<Point<3>, STLPointId>& ap, 
-		      const Vec<3> & n, Point<3> & pp) const;
+                      const Vec<3> & n, Point<3> & pp) const;
   //project with the triangle's normal vector in plane
   void ProjectInPlain(const Array<Point<3>, STLPointId> & ap, Point<3> & pp) const;
 
@@ -212,14 +212,14 @@ public:
     pp(output) = P1 + lam1 v1 + lam2 v2
   */
   int ProjectInPlain (const Array<Point<3>,STLPointId>& ap, 
-		      const Vec<3> & nproj, 
-		      Point<3> & pp, Vec<3> & lam) const;
+                      const Vec<3> & nproj, 
+                      Point<3> & pp, Vec<3> & lam) const;
 
   bool PointInside(const Array<Point<3>,STLPointId>& ap, const Point<3> & pp) const;
 
   //get nearest point on triangle and distance to it
   double GetNearestPoint(const Array<Point<3>,STLPointId>& ap, 
-			 Point<3> & p3d) const;
+                         Point<3> & p3d) const;
 
   double Area(const Array<Point<3>,STLPointId>& ap) const;
 
@@ -285,12 +285,12 @@ class STLTopology
 {
 protected:
   Array<STLTriangle, STLTrigId> trias;
-  NgArray<STLTopEdge> topedges;
+  Array<STLTopEdge> topedges;
   Array<Point<3>, STLPointId> points;
   bool surface = false;
 
   // mapping of sorted pair of points to topedge
-  INDEX_2_HASHTABLE<int> * ht_topedges;
+  unique_ptr<ClosedHashTable<IVec<2>, int>> ht_topedges;
   // mapping of node to trigs
   TABLE<int, IndexBASE<STLPointId>()> trigsperpoint; 
   // mapping of node to edges
@@ -299,7 +299,7 @@ protected:
   // searchtree for trigs and points
 
   BoxTree<3> * searchtree; // ADT
-  Point3dTree * pointtree;
+  Point3dTree<> * pointtree;
 
   Box<3> boundingbox;
   double pointtol;
@@ -336,7 +336,7 @@ public:
       FindNeighbourTrigs();
   }
   
-  virtual void InitSTLGeometry (const NgArray<STLReadTriangle> & readtrigs);
+  virtual void InitSTLGeometry (const Array<STLReadTriangle> & readtrigs);
 
   virtual void TopologyChanged() {}; //do some things, if topology changed!
 
@@ -345,7 +345,7 @@ public:
 
   
   void GetTrianglesInBox (const Box<3> & box,
-			  NgArray<int> & trias) const;
+                          Array<int> & trias) const;
 
 
   int GetNP() const { return points.Size(); }
@@ -371,8 +371,8 @@ public:
 
 
   int GetNTE() const { return topedges.Size(); }
-  const STLTopEdge & GetTopEdge (int nr) const { return topedges.Get(nr); }
-  STLTopEdge & GetTopEdge (int nr)  { return topedges.Elem(nr); }
+  const STLTopEdge & GetTopEdge (int nr) const { return topedges[nr-1]; }
+  STLTopEdge & GetTopEdge (int nr)  { return topedges[nr-1]; }
   DLL_HEADER int GetTopEdgeNum (int pi1, int pi2) const;
 
 

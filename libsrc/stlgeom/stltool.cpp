@@ -13,11 +13,11 @@ namespace netgen
 
 
 //add a point into a pointlist, return pointnumber
-int AddPointIfNotExists(NgArray<Point3d>& ap, const Point3d& p, double eps)
+int AddPointIfNotExists(Array<Point<3>>& ap, const Point<3>& p, double eps)
 {
   double eps2 = sqr(eps);
   for (int i = 1; i <= ap.Size(); i++)
-    if (Dist2(ap.Get(i),p) <= eps2 ) 
+    if (Dist2(ap[i-1],p) <= eps2 ) 
       return i;
   ap.Append(p);
   return ap.Size();
@@ -26,13 +26,13 @@ int AddPointIfNotExists(NgArray<Point3d>& ap, const Point3d& p, double eps)
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 double GetDistFromLine(const Point<3> & lp1, const Point<3> & lp2, 
-		       Point<3> & p)
+                       Point<3> & p)
 {
-  Vec3d vn = lp2 - lp1;
-  Vec3d v1 = p - lp1;
-  Vec3d v2 = lp2 - p;
+  Vec<3> vn = lp2 - lp1;
+  Vec<3> v1 = p - lp1;
+  Vec<3> v2 = lp2 - p;
 
-  Point3d pold = p;
+  Point<3> pold = p;
 
   if (v2 * vn <= 0) {p = lp2; return (pold - p).Length();}
   if (v1 * vn <= 0) {p = lp1; return (pold - p).Length();}
@@ -47,8 +47,8 @@ double GetDistFromLine(const Point<3> & lp1, const Point<3> & lp2,
 
 double GetDistFromInfiniteLine(const Point<3>& lp1, const Point<3>& lp2, const Point<3>& p)
 {
-  Vec3d vn(lp1, lp2);
-  Vec3d v1(lp1, p);
+  Vec<3> vn(lp1, lp2);
+  Vec<3> v1(lp1, p);
 
   double vnl = vn.Length();
 
@@ -272,7 +272,7 @@ void FIOWriteString(ostream& ios, char* str, int len)
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 STLReadTriangle :: STLReadTriangle (const Point<3> * apts,
-				    const Vec<3> & anormal)
+                                    const Vec<3> & anormal)
 {
   pts[0] = apts[0];
   pts[1] = apts[1];
@@ -298,9 +298,9 @@ int STLTriangle :: IsNeighbourFrom(const STLTriangle& t) const
   for(int i = 0; i <= 2; i++)
     for(int j = 0; j <= 2; j++)
       if (t.pts[(i+1)%3] == pts[j] && 
-	  t.pts[i] == pts[(j+1)%3])
+          t.pts[i] == pts[(j+1)%3])
 
-	return 1;
+        return 1;
 
   return 0;      
 }
@@ -311,9 +311,9 @@ int STLTriangle :: IsWrongNeighbourFrom(const STLTriangle& t) const
   for(int i = 0; i <= 2; i++)
     for(int j = 0; j <= 2; j++)
       if (t.pts[(i+1)%3] == pts[(j+1)%3] &&
-	  t.pts[i] == pts[j])
-	
-	return 1;
+          t.pts[i] == pts[j])
+        
+        return 1;
 
   return 0;      
 }
@@ -323,12 +323,12 @@ void STLTriangle :: GetNeighbourPoints(const STLTriangle& t, STLPointId & p1, ST
   for(int i = 1; i <= 3; i++)
     for(int j = 1; j <= 3; j++)
       if (t.PNumMod(i+1) == PNumMod(j) &&
-	  t.PNumMod(i) == PNumMod(j+1))
-	{
-	  p1 = PNumMod(j); 
-	  p2 = PNumMod(j+1); 
-	  return;
-	}
+          t.PNumMod(i) == PNumMod(j+1))
+        {
+          p1 = PNumMod(j); 
+          p2 = PNumMod(j+1); 
+          return;
+        }
 
   PrintSysError("Get neighbourpoints failed!");
 }
@@ -339,13 +339,13 @@ int STLTriangle :: GetNeighbourPointsAndOpposite(const STLTriangle& t, STLPointI
   for(int i = 1; i <= 3; i++)
     for(int j = 1; j <= 3; j++)
       if (t.PNumMod(i+1) == PNumMod(j) &&
-	  t.PNumMod(i) == PNumMod(j+1))
-	{
-	  p1 = PNumMod(j); 
-	  p2 = PNumMod(j+1); 
-	  po = PNumMod(j+2); 
-	  return 1;
-	}
+          t.PNumMod(i) == PNumMod(j+1))
+        {
+          p1 = PNumMod(j); 
+          p2 = PNumMod(j+1); 
+          po = PNumMod(j+2); 
+          return 1;
+        }
   
   return 0;
 }
@@ -386,7 +386,7 @@ void STLTriangle :: ChangeOrientation()
 double STLTriangle :: Area(const Array<Point<3>,STLPointId>& ap) const
 {
   return 0.5 * Cross(ap[PNum(2)]-ap[PNum(1)], 
-		     ap[PNum(3)]-ap[PNum(1)]).Length();
+                     ap[PNum(3)]-ap[PNum(1)]).Length();
 }
 
 double STLTriangle :: MinHeight(const Array<Point<3>,STLPointId>& ap) const
@@ -400,12 +400,12 @@ double STLTriangle :: MinHeight(const Array<Point<3>,STLPointId>& ap) const
 double STLTriangle :: MaxLength(const Array<Point<3>,STLPointId>& ap) const
 {
   return max3(Dist(ap[PNum(1)],ap[PNum(2)]),
-	      Dist(ap[PNum(2)],ap[PNum(3)]),
-	      Dist(ap[PNum(3)],ap[PNum(1)]));
+              Dist(ap[PNum(2)],ap[PNum(3)]),
+              Dist(ap[PNum(3)],ap[PNum(1)]));
 }
 
 void STLTriangle :: ProjectInPlain(const Array<Point<3>,STLPointId>& ap, 
-				   const Vec<3> & n, Point<3> & pp) const
+                                   const Vec<3> & n, Point<3> & pp) const
 {
   const Point<3> & p1 = ap[PNum(1)];
   const Point<3> & p2 = ap[PNum(2)];
@@ -432,8 +432,8 @@ void STLTriangle :: ProjectInPlain(const Array<Point<3>,STLPointId>& ap,
 
 
 int STLTriangle :: ProjectInPlain (const Array<Point<3>,STLPointId>& ap, 
-				   const Vec<3> & nproj, 
-				   Point<3> & pp, Vec<3> & lam) const
+                                   const Vec<3> & nproj, 
+                                   Point<3> & pp, Vec<3> & lam) const
 {
   const Point<3> & p1 = ap[PNum(1)];
   const Point<3> & p2 = ap[PNum(2)];
@@ -470,7 +470,7 @@ int STLTriangle :: ProjectInPlain (const Array<Point<3>,STLPointId>& ap,
 
 
 void STLTriangle :: ProjectInPlain(const Array<Point<3>,STLPointId>& ap, 
-				   Point<3> & pp) const
+                                   Point<3> & pp) const
 {
   const Point<3> & p1 = ap[PNum(1)];
   const Point<3> & p2 = ap[PNum(2)];
@@ -490,7 +490,7 @@ void STLTriangle :: ProjectInPlain(const Array<Point<3>,STLPointId>& ap,
 }
 
 bool STLTriangle :: PointInside(const Array<Point<3>,STLPointId> & ap, 
-			       const Point<3> & pp) const
+                               const Point<3> & pp) const
 {
   const Point<3> & p1 = ap[PNum(1)];
   const Point<3> & p2 = ap[PNum(2)];
@@ -534,7 +534,7 @@ bool STLTriangle :: PointInside(const Array<Point<3>,STLPointId> & ap,
 }
 
 double STLTriangle :: GetNearestPoint(const Array<Point<3>,STLPointId>& ap, 
-				      Point<3> & p3d) const
+                                      Point<3> & p3d) const
 {
   Point<3> p = p3d;
   ProjectInPlain(ap, p);
@@ -547,15 +547,15 @@ double STLTriangle :: GetNearestPoint(const Array<Point<3>,STLPointId>& ap,
       double nearest = 1E50;
       //int fi = 0;
       for (int j = 1; j <= 3; j++)
-	{
-	  p = p3d;
-	  dist = GetDistFromLine(ap[PNum(j)], ap[PNumMod(j+1)], p);
-	  if (dist < nearest)
-	    {
-	      nearest = dist; 
-	      pf = p;
-	    }
-	}
+        {
+          p = p3d;
+          dist = GetDistFromLine(ap[PNum(j)], ap[PNumMod(j+1)], p);
+          if (dist < nearest)
+            {
+              nearest = dist; 
+              pf = p;
+            }
+        }
       p3d = pf;
       return nearest;
     }
@@ -609,10 +609,10 @@ STLTopEdge :: STLTopEdge (STLPointId p1, STLPointId p2, int trig1, int trig2)
 STLChart :: STLChart(STLGeometry * ageometry, const STLParameters& astlparam)
     : geometry(ageometry), stlparam(astlparam)
 {
-  // charttrigs = new NgArray<int> (0,0);
-  // outertrigs = new NgArray<int> (0,0);
-  // ilimit = new NgArray<twoint> (0,0);
-  // olimit = new NgArray<twoint> (0,0);
+  // charttrigs = new Array<int> (0,0);
+  // outertrigs = new Array<int> (0,0);
+  // ilimit = new Array<IVec<2>> (0,0);
+  // olimit = new Array<IVec<2>> (0,0);
 
   geometry = ageometry;
 
@@ -622,8 +622,8 @@ STLChart :: STLChart(STLGeometry * ageometry, const STLParameters& astlparam)
       box.Increase (0.2*box.Diam()+1e-12);
       searchtree = new BoxTree<3,STLTrigId> (box);
       /*
-      searchtree = new BoxTree<3> (geometry->GetBoundingBox().PMin() - Vec3d(1,1,1),
-                                   geometry->GetBoundingBox().PMax() + Vec3d(1,1,1));
+      searchtree = new BoxTree<3> (geometry->GetBoundingBox().PMin() - Vec<3>(1,1,1),
+                                   geometry->GetBoundingBox().PMax() + Vec<3>(1,1,1));
       */
     }
   else
@@ -643,16 +643,16 @@ void STLChart :: AddChartTrig(STLTrigId i)
   charttrigs.Append(i);
   
   const STLTriangle & trig = geometry->GetTriangle(i);
-  const Point<3> & p1 = geometry->GetPoint (trig.PNum(1));
-  const Point<3> & p2 = geometry->GetPoint (trig.PNum(2));
-  const Point<3> & p3 = geometry->GetPoint (trig.PNum(3));
+  const Point<3> & p1 = geometry->GetPoint (trig[0]);
+  const Point<3> & p2 = geometry->GetPoint (trig[1]);
+  const Point<3> & p3 = geometry->GetPoint (trig[2]);
 
   /*
-  Point3d pmin(p1), pmax(p1);
-  pmin.SetToMin (p2);
-  pmin.SetToMin (p3);
-  pmax.SetToMax (p2);
-  pmax.SetToMax (p3);
+  Point<3> pmin(p1), pmax(p1);
+  SetToMin (pmin, p2);
+  SetToMin (pmin, p3);
+  SetToMax (pmax, p2);
+  SetToMax (pmax, p3);
   */
   /*
   Box<3> box(p1);
@@ -675,15 +675,15 @@ void STLChart :: AddOuterTrig(STLTrigId i)
   outertrigs.Append(i);
 
   const STLTriangle & trig = geometry->GetTriangle(i);
-  const Point3d & p1 = geometry->GetPoint (trig.PNum(1));
-  const Point3d & p2 = geometry->GetPoint (trig.PNum(2));
-  const Point3d & p3 = geometry->GetPoint (trig.PNum(3));
+  const Point<3> & p1 = geometry->GetPoint (trig[0]);
+  const Point<3> & p2 = geometry->GetPoint (trig[1]);
+  const Point<3> & p3 = geometry->GetPoint (trig[2]);
 
-  Point3d pmin(p1), pmax(p1);
-  pmin.SetToMin (p2);
-  pmin.SetToMin (p3);
-  pmax.SetToMax (p2);
-  pmax.SetToMax (p3);
+  Point<3> pmin(p1), pmax(p1);
+  SetToMin (pmin, p2);
+  SetToMin (pmin, p3);
+  SetToMax (pmax, p2);
+  SetToMax (pmax, p3);
   
   if (!geomsearchtreeon && (stlparam.usesearchtree==1))
     {searchtree->Insert (pmin, pmax, i);}
@@ -694,9 +694,9 @@ bool STLChart :: IsInWholeChart(int nr) const
   return charttrigs.Contains(nr) || outertrigs.Contains(nr);
 }
 
-void STLChart :: GetTrianglesInBox (const Point3d & pmin,
-				    const Point3d & pmax,
-				    NgArray<STLTrigId> & trias) const
+void STLChart :: GetTrianglesInBox (const Point<3> & pmin,
+                                    const Point<3> & pmax,
+                                    Array<STLTrigId> & trias) const
 {
   if (geomsearchtreeon) {PrintMessage(5,"geomsearchtreeon is set!!!");}
 
@@ -711,39 +711,39 @@ void STLChart :: GetTrianglesInBox (const Point3d & pmin,
       
       int nt = GetNT();
       for (int i = 1; i <= nt; i++)
-	{
-	  STLTrigId trignum = GetTrig1(i);
-	  const STLTriangle & trig = geometry->GetTriangle(trignum);
-          Box<3> box2(geometry->GetPoint (trig.PNum(1)),
-                      geometry->GetPoint (trig.PNum(2)),
-                      geometry->GetPoint (trig.PNum(3)));
-	  
-	  if (box1.Intersect (box2))
-	    trias.Append (trignum);
-	}
+        {
+          STLTrigId trignum = GetTrig1(i);
+          const STLTriangle & trig = geometry->GetTriangle(trignum);
+          Box<3> box2(geometry->GetPoint (trig[0]),
+                      geometry->GetPoint (trig[1]),
+                      geometry->GetPoint (trig[2]));
+          
+          if (box1.Intersect (box2))
+            trias.Append (trignum);
+        }
     }
 }
 
 //trigs may contain the same triangle double
-void STLChart :: MoveToOuterChart(const NgArray<int>& trigs)
+void STLChart :: MoveToOuterChart(const Array<int>& trigs)
 {
   if (!trigs.Size()) return;
-  for (int i = 1; i <= trigs.Size(); i++)
+  for (int i = 0; i < trigs.Size(); i++)
     {
-      if (charttrigs[trigs.Get(i)-1] != -1) 
-	AddOuterTrig(charttrigs[trigs.Get(i)-1]);
-      charttrigs[trigs.Get(i)-1] = -1;
+      if (charttrigs[trigs[i]-1] != -1) 
+        AddOuterTrig(charttrigs[trigs[i]-1]);
+      charttrigs[trigs[i]-1] = -1;
     }
   DelChartTrigs(trigs);
 }
 
 //trigs may contain the same triangle double
-void STLChart :: DelChartTrigs(const NgArray<int>& trigs)
+void STLChart :: DelChartTrigs(const Array<int>& trigs)
 {
   if (!trigs.Size()) return;
 
-  for (int i = 1; i <= trigs.Size(); i++)
-    charttrigs[trigs.Get(i)-1] = -1;
+  for (int i = 0; i < trigs.Size(); i++)
+    charttrigs[trigs[i]-1] = -1;
 
   int cnt = 0;
   for (int i = 1; i <= charttrigs.Size(); i++)
@@ -761,24 +761,24 @@ void STLChart :: DelChartTrigs(const NgArray<int>& trigs)
     {
       PrintMessage(7, "Warning: unsecure routine due to first use of searchtrees!!!");
       //bould new searchtree!!!
-      searchtree = new BoxTree<3,STLTrigId> (geometry->GetBoundingBox().PMin() - Vec3d(1,1,1),
-                                             geometry->GetBoundingBox().PMax() + Vec3d(1,1,1));
+      searchtree = new BoxTree<3,STLTrigId> (geometry->GetBoundingBox().PMin() - Vec<3>(1,1,1),
+                                             geometry->GetBoundingBox().PMax() + Vec<3>(1,1,1));
 
       for (int i = 1; i <= charttrigs.Size(); i++)
-	{
-	  const STLTriangle & trig = geometry->GetTriangle(i);
-	  const Point3d & p1 = geometry->GetPoint (trig.PNum(1));
-	  const Point3d & p2 = geometry->GetPoint (trig.PNum(2));
-	  const Point3d & p3 = geometry->GetPoint (trig.PNum(3));
-	  
-	  Point3d pmin(p1), pmax(p1);
-	  pmin.SetToMin (p2);
-	  pmin.SetToMin (p3);
-	  pmax.SetToMax (p2);
-	  pmax.SetToMax (p3);
-	  
-	  searchtree->Insert (pmin, pmax, i);
-	}
+        {
+          const STLTriangle & trig = geometry->GetTriangle(i);
+          const Point<3> & p1 = geometry->GetPoint (trig[0]);
+          const Point<3> & p2 = geometry->GetPoint (trig[1]);
+          const Point<3> & p3 = geometry->GetPoint (trig[2]);
+          
+          Point<3> pmin(p1), pmax(p1);
+          SetToMin (pmin, p2);
+          SetToMin (pmin, p3);
+          SetToMax (pmax, p2);
+          SetToMax (pmax, p3);
+          
+          searchtree->Insert (pmin, pmax, i);
+        }
     }
 }
 
@@ -873,7 +873,7 @@ STLTrigId STLChart :: ProjectNormal (Point<3> & p3d) const
       const Point<3> & c = trig.center;
 
       if (quadfun.Eval(c) > sqr (trig.rad))
-	continue;
+        continue;
 
       Point<3> p = p3d;
       Vec<3> lam;
@@ -904,7 +904,7 @@ Point<2> STLChart :: Project2d (const Point<3> & p3d) const
 
 
 /*
-  Point3d p1, p2, center;
+  Point<3> p1, p2, center;
   double rad;
   int i1, i2;
 public:
@@ -912,8 +912,8 @@ public:
 
 /*
 STLBoundarySeg :: 
-STLBoundarySeg (int ai1, int ai2, const NgArray<Point<3> > & points,
-		const STLChart * chart)
+STLBoundarySeg (int ai1, int ai2, const Array<Point<3> > & points,
+                const STLChart * chart)
 {
   i1 = ai1;
   i2 = ai2; 
@@ -1004,11 +1004,11 @@ void STLBoundary ::AddTriangle(const STLTriangle & t)
   for (i = boundary.Size(); i >= 1; i--)
     {
       if (boundary.Get(i) == seg1) 
-	{ boundary.DeleteElement (i); found1 = 1; } 
+        { boundary.DeleteElement (i); found1 = 1; } 
       else if (boundary.Get(i) == seg2) 
-	{ boundary.DeleteElement (i); found2 = 1; } 
+        { boundary.DeleteElement (i); found2 = 1; } 
       else if (boundary.Get(i) == seg3) 
-	{ boundary.DeleteElement (i); found3 = 1; } 
+        { boundary.DeleteElement (i); found3 = 1; } 
     }
 
   if (!found1)
@@ -1096,10 +1096,10 @@ void STLBoundary ::AddTriangle(const STLTriangle & t)
 
   // NgProfiler::StartTimer (timer_new);
 
-  INDEX_2 segs[3];
-  segs[0] = INDEX_2(t[0], t[1]);
-  segs[1] = INDEX_2(t[1], t[2]);
-  segs[2] = INDEX_2(t[2], t[0]);
+  IVec<2> segs[3];
+  segs[0] = IVec<2>(t[0], t[1]);
+  segs[1] = IVec<2>(t[1], t[2]);
+  segs[2] = IVec<2>(t[2], t[0]);
 
   if(!searchtree)
       BuildSearchTree();
@@ -1109,7 +1109,7 @@ void STLBoundary ::AddTriangle(const STLTriangle & t)
       STLBoundarySeg bseg(seg[0], seg[1], geometry->GetPoints(), chart);
       bseg.SetSmoothEdge (geometry->IsSmoothEdge (seg[0],seg[1]));
       
-      INDEX_2 op(seg[1], seg[0]);
+      IVec<2> op(seg[1], seg[0]);
       if (boundary_ht.Used(op))
         {
           boundary_ht.Delete(op);
@@ -1135,19 +1135,20 @@ bool STLBoundary :: TestSeg(const Point<3>& p1, const Point<3> & p2, const Vec<3
   // for statistics
   {
     int i;
-    static NgArray<int> cntclass;
+    static Array<int> cntclass;
     static int cnt = 0;
     static int cnti = 0, cnto = 0;
     static long int cntsegs = 0;
     if (cntclass.Size() == 0)
       {
-	cntclass.SetSize (20);
-	for (i = 1; i <= cntclass.Size(); i++)
-	  cntclass.Elem(i) = 0;
+        cntclass.SetSize (20);
+        for (i = 1; i <= cntclass.Size(); i++)
+          cntclass.Elem(i) = 0;
       }
     
     cntsegs += NOSegments();
-    int cla = int (log (double(NOSegments()+1)) / log(2.0));
+    int cla = 0;
+    for (int n = NOSegments()+1; n > 1; n >>= 1) cla++;
     if (cla < 1) cla = 1;
     if (cla > cntclass.Size()) cla = cntclass.Size();
     cntclass.Elem(cla)++;
@@ -1158,16 +1159,16 @@ bool STLBoundary :: TestSeg(const Point<3>& p1, const Point<3> & p2, const Vec<3
       cnto++;
     if (cnt > 100000) 
       {
-	cnt = 0;
-	/*
-	(*testout) << "TestSeg-calls for classes:" << endl;
-	(*testout) << cnti << " inner calls, " << cnto << " outercalls" << endl;
-	(*testout) << "total tested segments: " << cntsegs << endl;
-	for (i = 1; i <= cntclass.Size(); i++)
-	  {
-	    (*testout) << int (exp (i * log(2.0))) << " bnd segs: " << cntclass.Get(i) << endl;
-	  }
-	*/
+        cnt = 0;
+        /*
+        (*testout) << "TestSeg-calls for classes:" << endl;
+        (*testout) << cnti << " inner calls, " << cnto << " outercalls" << endl;
+        (*testout) << "total tested segments: " << cntsegs << endl;
+        for (i = 1; i <= cntclass.Size(); i++)
+          {
+            (*testout) << int (exp (i * log(2.0))) << " bnd segs: " << cntclass.Get(i) << endl;
+          }
+        */
       }
   }
 #endif
@@ -1203,7 +1204,7 @@ bool STLBoundary :: TestSeg(const Point<3>& p1, const Point<3> & p2, const Vec<3
     { 
 
       if (seg.IsSmoothEdge())
-	continue;
+        continue;
 
 
       sp1 = seg.P1();
@@ -1222,97 +1223,97 @@ bool STLBoundary :: TestSeg(const Point<3>& p1, const Point<3> & p2, const Vec<3
       double maxdiff = max2 (maxsl - minl, maxl - minsl);
       
       /*
-      Point3d sc = Center (sp1, sp2);
+      Point<3> sc = Center (sp1, sp2);
       double mindist = Dist(c, sc) - dist1 - GetSegment(j).Radius();
       if (maxdiff < sinchartangle * mindist)
-	{
-	  possible = 0;
-	}
+        {
+          possible = 0;
+        }
       */
        
       double hscal = maxdiff + sinchartangle * (dist1 + seg.Radius());
       if (hscal * hscal < sinchartangle * Dist2(c, seg.center ))
-	possible = 0;
+        possible = 0;
 
 
       /*      
       if (possible)
-	{
-	  double mindist2ex = MinDistLL2 (p1, p2, sp1, sp2);
-	  if (maxdiff * maxdiff < sinchartangle2 * mindist2ex)
-	    possible = 0;
-	}
+        {
+          double mindist2ex = MinDistLL2 (p1, p2, sp1, sp2);
+          if (maxdiff * maxdiff < sinchartangle2 * mindist2ex)
+            possible = 0;
+        }
       */
 
       if (possible)
-      	{
-	  LinearPolynomial2V lp (scalp1 - scalsp1,
-				 scalp2 - scalp1,
-				 -(scalsp2 - scalsp1));
-	  QuadraticPolynomial2V slp;
-	  slp.Square (lp);
-	  
+        {
+          LinearPolynomial2V lp (scalp1 - scalsp1,
+                                 scalp2 - scalp1,
+                                 -(scalsp2 - scalsp1));
+          QuadraticPolynomial2V slp;
+          slp.Square (lp);
+          
       
-	  Vec3d v (p1, sp1);
-	  Vec3d vl (p1, p2);
-	  Vec3d vsl (sp1, sp2);
+          Vec<3> v (p1, sp1);
+          Vec<3> vl (p1, p2);
+          Vec<3> vsl (sp1, sp2);
       
-	  QuadraticPolynomial2V qp (v.Length2(),
-				    -2 * (v * vl),
-				    2 * (v * vsl),
-				    vl.Length2(),
-				    -2 * (vl * vsl),
-				    vsl.Length2());
-	  
-	  slp.Add (-sinchartangle2, qp);
+          QuadraticPolynomial2V qp (v.Length2(),
+                                    -2 * (v * vl),
+                                    2 * (v * vsl),
+                                    vl.Length2(),
+                                    -2 * (vl * vsl),
+                                    vsl.Length2());
+          
+          slp.Add (-sinchartangle2, qp);
 
-	  double hv = slp.MaxUnitSquare();
+          double hv = slp.MaxUnitSquare();
 
-	  if (hv > eps) return 0;
-	  /*
-	  if (hv > maxvalnew)
-	    maxvalnew = hv;
-	  */
-	}
+          if (hv > eps) return 0;
+          /*
+          if (hv > maxvalnew)
+            maxvalnew = hv;
+          */
+        }
       
 
       // if (possible && 0)
       if (false)
 
-	for (i = 0; i <= divisions; i++)
-	  {
-	    
-	    lambda1 = (double)i/(double)divisions;
-	    seg1p = Point3d(p1(0)*lambda1+p2(0)*(1.-lambda1),
-			    p1(1)*lambda1+p2(1)*(1.-lambda1),
-			    p1(2)*lambda1+p2(2)*(1.-lambda1));
-	    
+        for (i = 0; i <= divisions; i++)
+          {
+            
+            lambda1 = (double)i/(double)divisions;
+            seg1p = Point<3>(p1(0)*lambda1+p2(0)*(1.-lambda1),
+                            p1(1)*lambda1+p2(1)*(1.-lambda1),
+                            p1(2)*lambda1+p2(2)*(1.-lambda1));
+            
 
-	    
-	    for (k = 0; k <= divisions; k++)
-	      {
-		lambda2 = (double)k/(double)divisions;
-		vptpl = Vec3d(sp1(0)*lambda2+sp2(0)*(1.-lambda2)-seg1p(0),
-			      sp1(1)*lambda2+sp2(1)*(1.-lambda2)-seg1p(1),
-			      sp1(2)*lambda2+sp2(2)*(1.-lambda2)-seg1p(2));
-		
-		vlen2 = vptpl.Length2();
+            
+            for (k = 0; k <= divisions; k++)
+              {
+                lambda2 = (double)k/(double)divisions;
+                vptpl = Vec<3>(sp1(0)*lambda2+sp2(0)*(1.-lambda2)-seg1p(0),
+                              sp1(1)*lambda2+sp2(1)*(1.-lambda2)-seg1p(1),
+                              sp1(2)*lambda2+sp2(2)*(1.-lambda2)-seg1p(2));
+                
+                vlen2 = vptpl.Length2();
 
-		//		if (vlen2 > 0)
-		  {
-		    scal = vptpl * sn;
-		    double hv = scal*scal - sinchartangle2*vlen2;
+                //              if (vlen2 > 0)
+                  {
+                    scal = vptpl * sn;
+                    double hv = scal*scal - sinchartangle2*vlen2;
 
 
 
-		    /*
-		    if (hv > maxval)
-		      maxval = hv;
-		    */
-		    if (hv > eps) return 0;
-		  }
-	      } 
-	  }
+                    /*
+                    if (hv > maxval)
+                      maxval = hv;
+                    */
+                    if (hv > eps) return 0;
+                  }
+              } 
+          }
     }
   
   return 1;
@@ -1327,7 +1328,7 @@ void STLBoundary :: BuildSearchTree()
   for (size_t i = 0; i < 8; i++)
     box2d.Add ( chart->Project2d (box3d.GetPointNr(i)));
 
-  searchtree = make_unique<BoxTree<2,INDEX_2>> (box2d);
+  searchtree = make_unique<BoxTree<2,IVec<2>>> (box2d);
 //   searchtree = nullptr;
 }
 
@@ -1338,8 +1339,8 @@ void STLBoundary :: DeleteSearchTree()
 
 
 // checks, whether 2d projection intersects
-bool STLBoundary :: TestSegChartNV(const Point3d & p1, const Point3d& p2, 
-				  const Vec3d& sn)
+bool STLBoundary :: TestSegChartNV(const Point<3> & p1, const Point<3>& p2, 
+                                  const Vec<3>& sn)
 {
   //  static int timerquick = NgProfiler::CreateTimer ("TestSegChartNV-searchtree");
   // static Timer timer("TestSegChartNV");  RegionTimer reg(timer);      

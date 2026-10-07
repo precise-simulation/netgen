@@ -36,12 +36,17 @@ option( ENABLE_UNIT_TESTS "Enable Catch unit tests")
 option( ENABLE_CPP_CORE_GUIDELINES_CHECK "Enable cpp core guideline checks on ngcore" OFF)
 option( DEBUG_LOG "Enable more debug output (may increase computation time) - only works with USE_SPDLOG=ON" OFF)
 option( CHECK_RANGE "Check array range access, automatically enabled if built in debug mode" OFF)
+set( POINTINDEX_BASE 1 CACHE STRING "index of first mesh point: 1 (default) or 0 (experimental)")
+set_property(CACHE POINTINDEX_BASE PROPERTY STRINGS 0 1)
+if(NOT POINTINDEX_BASE MATCHES "^[01]$")
+  message(FATAL_ERROR "POINTINDEX_BASE must be 0 or 1, got '${POINTINDEX_BASE}'")
+endif()
 option( BUILD_STUB_FILES "Build stub files for better autocompletion" ON)
 option( BUILD_FOR_CONDA "Link python libraries only to executables" OFF)
 option( NETGEN_NATIVE_SDK "Install a relocatable native ngcore/nglib SDK" OFF)
 
 option( USE_SUPERBUILD       "build dependencies automatically" ON)
-option( TRACE_MEMORY     "Enable memory tracing" OFF)
+option( NG_FP_CONTRACT "allow contraction of a*b+c into fma in the mesher (OFF gives reproducible meshes across platforms)" OFF)
 
 set(NG_COMPILE_FLAGS "" CACHE STRING "Additional compile flags")
 
@@ -433,6 +438,22 @@ if (USE_OCC)
     endif()
     target_include_directories(occ_libs INTERFACE ${occ_include_dir})
     message(STATUS "OpenCasCade include dirs: ${occ_include_dir}")
+    # The OpenCascade libraries are not copied into the install tree, so the
+    # install rpath (@loader_path) alone cannot find them. Append where they
+    # really are as a fallback - @loader_path stays first, so a bundled
+    # OpenCascade still takes precedence.
+    if(OpenCASCADE_LIBRARY_DIR AND OpenCASCADE_BUILD_SHARED_LIBS)
+      # for targets created after this point
+      list(APPEND CMAKE_INSTALL_RPATH "${OpenCASCADE_LIBRARY_DIR}")
+      # nglib and nggui are created further up, so they already captured the
+      # old value of CMAKE_INSTALL_RPATH - extend their property directly
+      foreach(occ_target nglib nggui)
+        if(TARGET ${occ_target})
+          set_property(TARGET ${occ_target} APPEND PROPERTY INSTALL_RPATH "${OpenCASCADE_LIBRARY_DIR}")
+        endif()
+      endforeach()
+      message(STATUS "OpenCasCade library dir added to install rpath: ${OpenCASCADE_LIBRARY_DIR}")
+    endif()
     if(NOT OpenCASCADE_BUILD_SHARED_LIBS)
       if(OpenCASCADE_WITH_FREETYPE)
         find_library( FREETYPE NAMES freetype HINTS ${OpenCASCADE_LIBRARY_DIR})
@@ -567,6 +588,29 @@ add_subdirectory(nglib)
 add_subdirectory(tests)
 
 #######################################################################
+# Contraction of a*b+c into fma changes results by one ulp, which is enough to
+# flip decisions in degenerate geometric configurations - meshes then differ
+# between compilers and platforms.  Switch it off for netgen's own sources.
+# PRIVATE: nothing is imposed on projects using netgen.
+if(NOT NG_FP_CONTRACT)
+    if(MSVC)
+        message(STATUS "NG_FP_CONTRACT=OFF: /fp:precise does not contract, nothing to do")
+    else()
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag("-ffp-contract=off" NG_HAS_FP_CONTRACT_OFF)
+        if(NG_HAS_FP_CONTRACT_OFF)
+            foreach(ng_target nglib nggui ngpy ngcore)
+                if(TARGET ${ng_target})
+                    target_compile_options(${ng_target} PRIVATE -ffp-contract=off)
+                endif()
+            endforeach()
+        else()
+            message(WARNING "NG_FP_CONTRACT=OFF: compiler does not accept -ffp-contract=off")
+        endif()
+    endif()
+endif()
+
+#######################################################################
 if(USE_NATIVE_ARCH)
     if(WIN32)
         include(CheckCXXSourceRuns)
@@ -666,7 +710,7 @@ if(USE_PYTHON AND NOT SKBUILD)
   file( WRITE "netgen_mesher-py3.egg-info"
 "Metadata-Version: 2.1
 Name: netgen-mesher
-Version: ${NETGEN_VERSION_MAJOR}.${NETGEN_VERSION_MINOR}.${NETGEN_VERSION_PATCH}.post${NETGEN_VERSION_TWEAK}
+Version: ${NETGEN_VERSION_PYTHON}
 ")
   install(FILES netgen_mesher-py3.egg-info DESTINATION ${NG_INSTALL_DIR_PYTHON} COMPONENT netgen)
 endif()
@@ -765,6 +809,7 @@ message("
     GUI: ............... ${USE_GUI}
     MPI: ............... ${USE_MPI}
     PYTHON: ............ ${USE_PYTHON}
+    FP-CONTRACT: ....... ${NG_FP_CONTRACT}
 
 
   Building: ")

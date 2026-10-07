@@ -20,8 +20,12 @@ void ReadMeditFormat (Mesh & mesh, const filesystem::path & filename, map<tuple<
     if(index_map.count({eldim,index})==0) {
       auto n = ++index_cnt[eldim];
       index_map[{eldim, index}] = n;
+      if(eldim==1) {
+        auto ed = EdgeRegion{};
+        mesh.AddEdgeDescriptor(ed);
+      }
       if(eldim==2) {
-        auto fd = FaceDescriptor(n-1,1,0,0);
+        auto fd = FaceRegion(n-1,1,0,0);
         fd.SetBCProperty(n);
         mesh.AddFaceDescriptor (fd);
       }
@@ -64,9 +68,10 @@ void ReadMeditFormat (Mesh & mesh, const filesystem::path & filename, map<tuple<
       for([[maybe_unused]] auto k : Range(nedge)) {
         for(auto i : Range(2))
           fin >> seg[i];
-        fin >> seg.edgenr;
-        seg.edgenr = getIndex(1, seg.edgenr);
-        seg.si = seg.edgenr;
+        int edgenr_tmp;
+        fin >> edgenr_tmp;
+        edgenr_tmp = getIndex(1, edgenr_tmp);
+        seg.SetIndex(EdgeRegionIndex::FromNr1(edgenr_tmp));
         mesh.AddSegment(seg);
       }
     }
@@ -78,7 +83,7 @@ void ReadMeditFormat (Mesh & mesh, const filesystem::path & filename, map<tuple<
         for(auto i : Range(3))
           fin >> sel[i];
         fin >> index;
-        sel.SetIndex(getIndex(2, index));
+        sel.SetIndex(FaceRegionIndex::FromNr1(getIndex(2, index)));
         mesh.AddSurfaceElement(sel);
       }
     }
@@ -90,7 +95,7 @@ void ReadMeditFormat (Mesh & mesh, const filesystem::path & filename, map<tuple<
         for(auto i : Range(4))
           fin >> el[i];
         fin >> index;
-        el.SetIndex(getIndex(3, index));
+        el.SetIndex(VolumeRegionIndex::FromNr1(getIndex(3, index)));
         el.Invert();
         mesh.AddVolumeElement(el);
       }
@@ -168,6 +173,7 @@ void ReadMeditFormat (Mesh & mesh, const filesystem::path & filename, map<tuple<
         fin >> s; // read one line
     }
   }
+  mesh.ReconstructEdgeDescriptors();
 }
 
 void ReadMeditFormat (Mesh & mesh, const filesystem::path & filename)
@@ -204,17 +210,17 @@ void WriteMeditFormat (const Mesh & mesh, const filesystem::path & filename, map
   base_index = max_index;
   fout << "Edges\n" << mesh.GetNSeg() << endl;
   for(const auto & seg : mesh.LineSegments())
-    fout << seg[0] << ' ' << seg[1] << ' ' << getIndex(seg.edgenr, 1) << endl;
+    fout << seg[0] << ' ' << seg[1] << ' ' << getIndex(mesh.HasEdgeDescriptor(seg) ? mesh.GetEdgeDescriptor(seg).EdgeNr() : -1, 1) << endl;
 
   base_index = max_index;
   fout << "Triangles\n" << mesh.GetNSE() << endl;
   for(const auto & sel : mesh.SurfaceElements())
-    fout << sel[0] << ' ' << sel[1] << ' ' << sel[2] << ' ' << getIndex(sel.GetIndex(), 2) << endl;
+    fout << sel[0] << ' ' << sel[1] << ' ' << sel[2] << ' ' << getIndex(sel.GetIndex().Nr1(), 2) << endl;
 
   base_index = max_index;
   fout << "Tetrahedra\n" << mesh.GetNE() << endl;
   for(const auto & el : mesh.VolumeElements())
-    fout << el[0] << ' ' << el[1] << ' ' << el[2] << ' ' << el[3] << '\t' << getIndex(el.GetIndex(), 3) << endl;
+    fout << el[0] << ' ' << el[1] << ' ' << el[2] << ' ' << el[3] << '\t' << getIndex(el.GetIndex().Nr1(), 3) << endl;
 
   fout << "End" << endl;
 }

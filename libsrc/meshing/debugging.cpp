@@ -13,14 +13,14 @@ namespace netgen
         interesting_points = false;
 
         mesh->FindOpenElements(dom);
-        NgArray<Element2d> openelements;
+        Array<Element2d> openelements;
         openelements = mesh->OpenElements();
 
         for (auto & el : openelements)
             for (auto i : el.PNums())
                 interesting_points[i] = true;
 
-        for (auto & el : mesh->VolumeElements())
+        for (auto el : mesh->VolumeElements())
         {
             int num_interesting_points = 0;
 
@@ -30,7 +30,7 @@ namespace netgen
 
             if(num_interesting_points==0)
                 el.Delete();
-            el.SetIndex(num_interesting_points);
+            el.SetIndex(VolumeRegionIndex::FromNr1(num_interesting_points));
         }
 
         mesh->SetMaterial(1, "1_point");
@@ -82,7 +82,7 @@ namespace netgen
                     mesh[ind].Delete();
             }
 
-            for(auto i = 0; i<els.Size(); i++)
+            for(auto i : Range(els))
                 if(els[i].IsDeleted())
                 {
                     els.DeleteElement(i);
@@ -125,7 +125,7 @@ namespace netgen
       Array<std::tuple<PointIndex, PointIndex>> edges;
       auto elementsonnode = mesh.CreatePoint2ElementTable();
       BuildEdgeList(mesh, elementsonnode, edges);
-      mesh.BoundaryEdge(1, 2); // trigger build of boundary edges
+      mesh.BoundaryEdge(IndexBASE<PointIndex>(), IndexBASE<PointIndex>()+1); // trigger build of boundary edges
 
       ArrayMem<ElementIndex, 20> hasbothpoints;
       for (auto [pi0, pi1] : edges)
@@ -157,7 +157,7 @@ namespace netgen
           tetused = false;
           tetused[0] = true;
 
-          auto el = mesh[hasbothpoints[0]];
+          auto el = Copy(mesh[hasbothpoints[0]]);
           PointIndex pi2 = PointIndex::INVALID;
           PointIndex pi3 = PointIndex::INVALID;
           for (auto pi : el.PNums())
@@ -177,7 +177,7 @@ namespace netgen
               for (int k = 0; k < nsuround && !newpi.IsValid(); k++)
                 if (!tetused[k])
                   {
-                    const Element& nel = mesh[hasbothpoints[k]];
+                    auto nel = mesh[hasbothpoints[k]];
                     for (int k2 = 0; k2 < 4 && !newpi.IsValid(); k2++)
                       if (nel[k2] == oldpi)
                         {

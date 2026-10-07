@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
-  BASELINE_TAG: v6.2.2604
-  BASELINE_SHA: 3ee489c7d58fdbc2a6708cca3cbaefaae506dc17
+  BASELINE_TAG: v6.2.2608
+  BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
   ZLIB_URL: https://zlib.net/fossils/zlib-1.3.1.tar.gz
   ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
@@ -83,14 +83,14 @@ jobs:
         include:
           - architecture: arm64
             runner: macos-15
-            occt_asset: opencascade-7.9.3-macos13-arm64-shared-a016080bf673.tar.gz
-            occt_size: '26258607'
-            occt_sha256: aea81a9f2c15e83ee9ce96229610b03bd8e6d8b420e6f283475a65e92463bed7
+            occt_asset: opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz
+            occt_size: '28807219'
+            occt_sha256: 042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d
           - architecture: x86_64
             runner: macos-15-intel
-            occt_asset: opencascade-7.9.3-macos13-x86_64-shared-a016080bf673.tar.gz
-            occt_size: '27526131'
-            occt_sha256: 8c6f81794a0a50429e1fd120650e74fa0c658aeb4d8a742ec41234b3d2dfd081
+            occt_asset: opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz
+            occt_size: '30181757'
+            occt_sha256: b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab
     steps:
       - name: Check out exact producer commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -116,8 +116,8 @@ jobs:
           set -euo pipefail
           inputs="$RUNNER_TEMP/netgen-sdk-inputs"
           mkdir -p "$inputs"
-          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-7.9.3/$OCCT_ASSET"
-          release="$(curl --fail --silent --show-error --location -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/precise-simulation/OCCT/releases/tags/occt-sdk-7.9.3)"
+          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1/$OCCT_ASSET"
+          release="$(curl --fail --silent --show-error --location -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/precise-simulation/OCCT/releases/tags/occt-sdk-8.0.1)"
           test "$(jq -r '.immutable' <<<"$release")" = true
           asset="$(jq -c --arg name "$OCCT_ASSET" '.assets[] | select(.name == $name)' <<<"$release")"
           test -n "$asset"

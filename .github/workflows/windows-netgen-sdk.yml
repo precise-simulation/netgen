@@ -25,10 +25,10 @@ permissions:
   actions: read
 
 env:
-  BASELINE_TAG: v6.2.2604
-  BASELINE_SHA: 3ee489c7d58fdbc2a6708cca3cbaefaae506dc17
-  OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V7_9_3/opencascade-7.9.3-vc14-64-combined.zip
-  OCCT_SHA256: afbef3457fbc4a2bdca0608e0fe284392f51e4c2c42ccbfb9df7168d8e4eb9b3
+  BASELINE_TAG: v6.2.2608
+  BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
+  OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V8.0.1/occt-combined-release-no-pch.zip
+  OCCT_SHA256: afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d
   ZLIB_URL: https://zlib.net/fossils/zlib-1.3.1.tar.gz
   ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
@@ -54,7 +54,7 @@ jobs:
         shell: pwsh
         run: |
           $prefix = $env:GITHUB_SHA.Substring(0, 12)
-          $archive = "netgen-featool-v6.2.2604-$prefix-occt7.9.3-win64-msvc.zip"
+          $archive = "netgen-featool-v6.2.2608-$prefix-occt8.0.1-win64-msvc.zip"
           "source_prefix=$prefix" >> $env:GITHUB_OUTPUT
           "archive_name=$archive" >> $env:GITHUB_OUTPUT
           "checksum_name=$archive.sha256" >> $env:GITHUB_OUTPUT
@@ -228,7 +228,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $downloads = "$env:RUNNER_TEMP\netgen-sdk-downloads"
-          $archive = Join-Path $downloads "opencascade-7.9.3-vc14-64-combined.zip"
+          $archive = Join-Path $downloads "occt-combined-release-no-pch.zip"
           New-Item -ItemType Directory -Force -Path $downloads | Out-Null
           if(-not (Test-Path -LiteralPath $archive)) {
             Invoke-WebRequest -Uri $env:OCCT_URL -OutFile $archive
@@ -238,13 +238,24 @@ jobs:
             throw "OCCT SHA-256 mismatch: $actual"
           }
 
-          $extract = "$env:RUNNER_TEMP\occt-7.9.3"
+          $extract = "$env:RUNNER_TEMP\occt-8.0.1"
           if(Test-Path -LiteralPath $extract) {
             Remove-Item -LiteralPath $extract -Recurse -Force
           }
           Expand-Archive -LiteralPath $archive -DestinationPath $extract
 
-          $configs = @(Get-ChildItem -LiteralPath $extract -Recurse -File |
+          $innerArchive = Join-Path $extract "opencascade-8.0.1-vc14-64-combined.zip"
+          $outerEntries = @(Get-ChildItem -LiteralPath $extract)
+          if($outerEntries.Count -ne 1 -or -not (Test-Path -LiteralPath $innerArchive -PathType Leaf)) {
+            throw "Unexpected OCCT 8.0.1 outer archive layout: $($outerEntries.Name -join '; ')"
+          }
+          $payload = "$env:RUNNER_TEMP\occt-8.0.1-payload"
+          if(Test-Path -LiteralPath $payload) {
+            Remove-Item -LiteralPath $payload -Recurse -Force
+          }
+          Expand-Archive -LiteralPath $innerArchive -DestinationPath $payload
+
+          $configs = @(Get-ChildItem -LiteralPath $payload -Recurse -File |
             Where-Object { $_.Name -eq "OpenCASCADEConfig.cmake" -and $_.Directory.Name -eq "cmake" })
           $sourceRoots = @()
           foreach($config in $configs) {
@@ -260,7 +271,7 @@ jobs:
             throw "Expected exactly one OCCT distribution root, found $($sourceRoots.Count). Configs: $($configs.FullName -join '; ')"
           }
 
-          $thirdPartyTrees = @(Get-ChildItem -LiteralPath $extract -Recurse -Directory |
+          $thirdPartyTrees = @(Get-ChildItem -LiteralPath $payload -Recurse -Directory |
             Where-Object { $_.Name -eq "3rdparty-vc14-64" })
           if($thirdPartyTrees.Count -ne 1) {
             throw "Expected exactly one 3rdparty-vc14-64 tree, found $($thirdPartyTrees.Count)."
@@ -324,7 +335,7 @@ jobs:
           [pscustomobject]@{
             asset_url = $env:OCCT_URL
             sha256 = $env:OCCT_SHA256
-            package_family = "OCCT 7.9.3 vc14-64 combined"
+            package_family = "OCCT 8.0.1 combined Release/no-PCH"
             inspection = "dumpbin /dependents on every OCCT DLL named by the Netgen OCC link set"
             observed_dynamic_crt_imports = @($dynamicCrt | Sort-Object -Unique)
             libraries = $evidence
@@ -932,7 +943,7 @@ jobs:
           $nl = [Environment]::NewLine
           $notes = "Source commit: $env:GITHUB_SHA" + $nl +
             "Prior successful branch qualification run: $env:QUALIFICATION_RUN_ID" + $nl +
-            "OCCT: 7.9.3 vc14-64 combined" + $nl +
+            "OCCT: 8.0.1 combined Release/no-PCH" + $nl +
             "Configuration: VS2022 x64 Release /MD"
           $createBody = @{
             tag_name = $env:GITHUB_REF_NAME

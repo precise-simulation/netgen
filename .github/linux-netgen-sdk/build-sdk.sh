@@ -17,7 +17,7 @@ inputs_dir=/inputs
 occt_archive="$inputs_dir/occt.tar.gz"
 zlib_archive="$inputs_dir/zlib.tar.gz"
 short_sha="${SOURCE_SHA:0:12}"
-sdk_name="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-linux-x86_64-glibc2.17-gcc10"
+sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10"
 build_dir="$work_root/netgen-build"
 install_dir="$work_root/netgen-install"
 sdk_dir="$work_root/$sdk_name"
@@ -75,8 +75,8 @@ occt_manifest="$occt_root/build-manifest.json"
 import json, pathlib, sys
 data = json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert data["schema_version"] == 1
-assert data["occt"]["version"] == "7.9.3"
-assert data["occt"]["commit"] == "a016080bf6738d6aeae020badee4e888ad1540a5"
+assert data["occt"]["version"] == "8.0.1"
+assert data["occt"]["commit"] == "b8f597c677811d1f9f4d8a97f5ae2825c0353a42"
 assert data["linkage"] == "shared"
 assert data["producer"]["architecture"] == "x86_64"
 assert data["producer"]["glibc_baseline"] == "2.17"
@@ -204,7 +204,7 @@ if glibc and tuple(map(int, glibc.split("."))) > (2, 17):
     raise SystemExit(f"Netgen shared libraries require GLIBC_{glibc}")
 info = {
     "schema_version": 1,
-    "upstream": {"tag": "v6.2.2604", "commit": "3ee489c7d58fdbc2a6708cca3cbaefaae506dc17"},
+    "upstream": {"tag": "v6.2.2608", "commit": "96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e"},
     "source": {"commit": os.environ["SOURCE_SHA"], "qualification_run_id": sys.argv[7]},
     "producer": {
         "image": sys.argv[2], "image_tag": sys.argv[3], "image_digest": sys.argv[4],
@@ -213,7 +213,7 @@ info = {
         "glibc_baseline": "2.17"
     },
     "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": "shared", "native_arch": False},
-    "occt": {"release": "occt-sdk-7.9.3", "commit": "a016080bf6738d6aeae020badee4e888ad1540a5", "asset_sha256": sys.argv[5], "linkage": "shared"},
+    "occt": {"release": "occt-sdk-8.0.1", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": "shared"},
     "zlib": {"version": "1.3.1", "sha256": sys.argv[6], "linkage": "static", "pic": True},
     "symbol_versions": {"GLIBC": glibc, "GLIBCXX": symbol_max("GLIBCXX"), "CXXABI": symbol_max("CXXABI")},
     "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([sdk / "lib/libngcore.so", sdk / "lib/libnglib.so", *sorted((sdk / "cmake").glob("*.cmake"))])}

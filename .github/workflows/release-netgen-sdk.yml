@@ -15,12 +15,12 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
-  NETGEN_BASELINE_TAG: v6.2.2604
-  NETGEN_BASELINE_SHA: 3ee489c7d58fdbc2a6708cca3cbaefaae506dc17
-  WINDOWS_OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V7_9_3/opencascade-7.9.3-vc14-64-combined.zip
-  WINDOWS_OCCT_SHA256: afbef3457fbc4a2bdca0608e0fe284392f51e4c2c42ccbfb9df7168d8e4eb9b3
-  OCCT_RELEASE: occt-sdk-7.9.3
-  OCCT_SOURCE_SHA: a016080bf6738d6aeae020badee4e888ad1540a5
+  NETGEN_BASELINE_TAG: v6.2.2608
+  NETGEN_BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
+  WINDOWS_OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V8.0.1/occt-combined-release-no-pch.zip
+  WINDOWS_OCCT_SHA256: afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d
+  OCCT_RELEASE: occt-sdk-8.0.1
+  OCCT_SOURCE_SHA: b8f597c677811d1f9f4d8a97f5ae2825c0353a42
 
 jobs:
   windows:
@@ -103,10 +103,10 @@ jobs:
           test "${BASH_REMATCH[1],,}" = "$short_sha"
 
           root="$RUNNER_TEMP/release-assets"
-          windows="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-win64-msvc.zip"
-          linux="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-linux-x86_64-glibc2.17-gcc10.tar.gz"
-          mac_x86="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-macos13-x86_64-clang.tar.gz"
-          mac_arm="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-macos13-arm64-clang.tar.gz"
+          windows="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-win64-msvc.zip"
+          linux="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz"
+          mac_x86="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang.tar.gz"
+          mac_arm="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-arm64-clang.tar.gz"
 
           test -f "$root/windows/$windows"
           test -f "$root/windows/$windows.sha256"
@@ -197,7 +197,7 @@ jobs:
           mapfile -t assets < <(find "$RUNNER_TEMP/release-assets" -type f -print | sort)
           test "${#assets[@]}" -eq 8
           notes="Netgen native SDK bundle built from source $GITHUB_SHA (upstream baseline $NETGEN_BASELINE_TAG / $NETGEN_BASELINE_SHA)."
-          notes="$notes"$'\n\n'"Windows OCCT input: official Open-Cascade-SAS V7_9_3 binary archive, SHA-256 $WINDOWS_OCCT_SHA256."
+          notes="$notes"$'\n\n'"Windows OCCT input: official Open-Cascade-SAS V8.0.1 Release/no-PCH binary archive, SHA-256 $WINDOWS_OCCT_SHA256."
           notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
           notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD."
           notes="$notes"$'\n'"Linux: x86_64 shared SDK, manylinux2014 / glibc 2.17 / GCC 10 baseline."
@@ -209,7 +209,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --draft \
-            --title "Netgen v6.2.2604 SDKs - Windows, Linux, macOS" \
+            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
             --notes "$notes"
 
           draft_id="$(find_draft_id)"

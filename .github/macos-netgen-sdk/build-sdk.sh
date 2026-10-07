@@ -23,7 +23,7 @@ case "$architecture" in arm64|x86_64) ;; *) exit 2 ;; esac
 
 deployment_target=13.0
 short_sha="${SOURCE_SHA:0:12}"
-sdk_name="netgen-featool-v6.2.2604-${short_sha}-occt7.9.3-macos13-${architecture}-clang"
+sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-${architecture}-clang"
 source_dir="$GITHUB_WORKSPACE"
 work_root="$RUNNER_TEMP/netgen-macos-sdk/$architecture"
 inputs_dir="$RUNNER_TEMP/netgen-sdk-inputs"
@@ -54,8 +54,8 @@ python3 - "$occt_manifest" "$architecture" "$deployment_target" "$runner_label" 
 import json, pathlib, sys
 data = json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert data["schema_version"] == 1
-assert data["occt"]["version"] == "7.9.3"
-assert data["occt"]["commit"] == "a016080bf6738d6aeae020badee4e888ad1540a5"
+assert data["occt"]["version"] == "8.0.1"
+assert data["occt"]["commit"] == "b8f597c677811d1f9f4d8a97f5ae2825c0353a42"
 assert data["linkage"] == "shared"
 assert data["artifact"]["architecture"] == sys.argv[2]
 assert data["artifact"]["deployment_target"] == sys.argv[3]
@@ -202,7 +202,7 @@ def sha(path):
     h = hashlib.sha256(); h.update(path.read_bytes()); return h.hexdigest()
 info = {
     "schema_version": 1,
-    "upstream": {"tag": "v6.2.2604", "commit": "3ee489c7d58fdbc2a6708cca3cbaefaae506dc17"},
+    "upstream": {"tag": "v6.2.2608", "commit": "96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e"},
     "source": {"commit": os.environ["SOURCE_SHA"], "qualification_run_id": sys.argv[7]},
     "producer": {
         "runner_label": sys.argv[2], "architecture": sys.argv[3], "deployment_target": sys.argv[4],
@@ -211,7 +211,7 @@ info = {
         "cmake": run("cmake", "--version").splitlines()[0], "sdk_version": run("xcrun", "--sdk", "macosx", "--show-sdk-version")
     },
     "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": "shared", "native_arch": False},
-    "occt": {"release": "occt-sdk-7.9.3", "commit": "a016080bf6738d6aeae020badee4e888ad1540a5", "asset_sha256": sys.argv[5], "linkage": "shared"},
+    "occt": {"release": "occt-sdk-8.0.1", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": "shared"},
     "zlib": {"version": "1.3.1", "sha256": sys.argv[6], "linkage": "static", "pic": True},
     "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([sdk / "lib/libngcore.dylib", sdk / "lib/libnglib.dylib", *sorted((sdk / "cmake").glob("*.cmake"))])}
 }

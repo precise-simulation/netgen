@@ -219,10 +219,12 @@ before relying on upstream documentation, historical branches, or old build reci
 - `CMakeLists.txt` and `cmake/SuperBuild.cmake`: primary native build definitions.
   The superbuild is enabled by default and configures the real Netgen project in a
   nested `netgen` build directory.
-- `setup.py`: scikit-build packaging path for the Python wheel, using the CMake
-  superbuild and the separately packaged OpenCascade dependency.
+- `pyproject.toml`: scikit-build-core packaging path for the Python wheel, using
+  the CMake superbuild and the separately packaged OpenCascade dependency.
 - `.gitlab-ci.yml` and `tests/build_*`: current platform build/test examples; treat
   them as environment-specific references rather than universally portable commands.
+- `.github/README.md`: native SDK qualification/release procedure and the
+  repository's upstream Netgen baseline migration instructions.
 - `external_dependencies/pybind11`: git submodule used by Python-enabled builds.
 - `plans/`: proposals and execution records, governed by `plans/AGENTS.md`.
 
@@ -243,6 +245,18 @@ before relying on upstream documentation, historical branches, or old build reci
   corresponding native artifacts have been built or qualified.
 - Changes in sibling repositories or downstream consumers must follow their own
   instructions and the authorized task scope.
+
+### Upstream release ports
+
+- Follow the source-integration and SDK migration procedure in
+  `.github/README.md`. Merge the exact canonical NGSolve release tag with an
+  explicit merge commit so the selected upstream baseline remains an ancestor of
+  `netgen-featool`; do not rebase, squash, or replace the release range with
+  cherry-picks.
+- Preserve the fork-owned triangle-to-quad refinement behavior/tests and
+  `NETGEN_NATIVE_SDK` contract across upstream conflicts. Update baseline/dependency
+  metadata before pushing the coherent branch head, then require the documented
+  Windows, Linux, and macOS qualification before creating an SDK release tag.
 
 ### Build and validation
 
@@ -283,8 +297,9 @@ before relying on upstream documentation, historical branches, or old build reci
   For OCC changes, use the real OpenCascade integration rather than a substitute path.
 - For native interface or packaging changes, validate the produced library/package
   through the affected consumer surface (`nglib`, Python import, executable, or wheel)
-  in addition to compiling it. Wheel builds through `setup.py` use scikit-build and
-  have dependency assumptions that differ from a plain native CMake build.
+  in addition to compiling it. Wheel builds through `pyproject.toml` use
+  scikit-build-core and have dependency assumptions that differ from a plain native
+  CMake build.
 - Compare semantic results within justified tolerances. Require identical bytes,
   entity numbering, or mesh ordering only where the existing contract requires it.
 - Proposed scripts in draft plans are not available validation commands until

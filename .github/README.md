@@ -191,6 +191,87 @@ The Windows workflow also retains the older `netgen-featool-sdk-*` tag trigger,
 but combined cross-platform releases should use `netgen-sdk-*` and the release
 workflow above.
 
+## Merging a new upstream Netgen release
+
+The SDK baseline must come from an exact NGSolve Netgen release tag. The
+`netgen-featool` branch is a long-lived fork, so retain the upstream release as a
+real merge parent instead of rebasing or replaying the release as individual
+commits. The `v6.2.2608` migration is the reference shape: merge commit
+`9ec924e2` has fork commit `5300263c` as its first parent and exact upstream
+`v6.2.2608` commit `96e5682f` as its second parent.
+
+Use a clean integration checkout. Configure the canonical upstream remote once,
+then fetch the fork and upstream refs:
+
+```text
+git remote add upstream https://github.com/NGSolve/netgen.git
+git fetch origin --prune
+git fetch upstream --tags --prune
+```
+
+If `upstream` already exists, verify its URL with `git remote -v` instead of
+adding it again. Do not rely on `origin/master` or the fork's local tag set being
+current when selecting a newly published NGSolve release.
+
+Before changing the fork, record and inspect the release boundary:
+
+```text
+git rev-parse "<current-baseline-tag>^{commit}"
+git rev-parse "<new-baseline-tag>^{commit}"
+git merge-base --is-ancestor <new-baseline-tag> upstream/master
+git log --oneline <current-baseline-tag>..<new-baseline-tag>
+git diff --stat <current-baseline-tag>..<new-baseline-tag>
+git diff --name-status <current-baseline-tag>..origin/netgen-featool
+```
+
+The last command records the current fork-owned tree delta that must be accounted
+for during the port. At minimum, check the FEATool triangle-to-quad refinement
+implementation and `tests/catch/refinement.cpp`, together with the
+`NETGEN_NATIVE_SDK` CMake/install path and native SDK consumer/workflow files.
+
+Update the local fork branch and merge the exact release tag:
+
+```text
+git switch netgen-featool
+git pull --ff-only origin netgen-featool
+git merge --no-ff <new-baseline-tag> -m "Merge upstream <new-baseline-tag> baseline"
+```
+
+Resolve conflicts by adapting the fork changes to the upstream APIs now present in
+the release. Do not choose an entire conflicted file from one side. The
+`v6.2.2608` merge, for example, had to preserve `tri2quad` while converting it
+to upstream's newer indexed arrays, point-index helpers, surface-element access,
+and sorting types.
+
+Before pushing, verify the merge and re-audit the resulting fork delta:
+
+```text
+git merge-base --is-ancestor <new-baseline-tag> HEAD
+git show -s --format="%H %P %s" HEAD
+git diff --check <new-baseline-tag>..HEAD
+git diff --name-status <new-baseline-tag>..HEAD
+```
+
+Immediately after the merge, the second parent shown by `git show` must be the
+commit resolved by `<new-baseline-tag>`. If baseline/dependency updates are made
+as follow-up commits, record the merge commit first and perform the parent check on
+that commit.
+
+Complete the version/dependency migration below before pushing the branch. This is
+important because an SDK qualification run builds the current source tree while
+also publishing baseline information in artifact names and `producer-info.json`.
+Do not push an intermediate merge-only revision that still identifies the previous
+baseline. Push the coherent branch head once the merge, pin changes, metadata, and
+focused regression updates all agree.
+
+The first focused behavioral check after an upstream port is the refinement
+regression (`unit_refinement` / `test_refinement`), because the fork's
+triangle-to-quad implementation has historically conflicted with upstream
+refinement changes. Also run focused checks for every upstream change that touches
+the native SDK build or exported interface. The pushed coherent head must then pass
+the Windows, Linux, and macOS qualification workflows before any
+`netgen-sdk-*` tag is created.
+
 ## Updating Netgen or OCCT again
 
 When moving to a new Netgen baseline or OCCT version, update the complete set of

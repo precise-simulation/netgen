@@ -6,6 +6,12 @@ baseline, OCCT inputs, zlib input, producer toolchains, and artifact names so a
 published SDK can be traced back to exact source and dependency revisions.
 
 The current release line is based on Netgen `v6.2.2608` with OCCT `8.0.1`.
+The reference published bundle for this line is
+`netgen-sdk-d5035dcba83a-r1`, built from
+`d5035dcba83a1fc1bd1f15b60d0ad55422415666` by release workflow run
+`37926080718`. GitHub release assets are the canonical distributable SDKs;
+Actions artifacts are qualification/staging outputs.
+
 Earlier SDK releases used Netgen `v6.2.2604` with OCCT `7.9.3`; the historical
 values are recorded below because future dependency upgrades should follow the
 same migration pattern rather than changing only one workflow.
@@ -116,12 +122,15 @@ used by this fork.
 
 ### Windows
 
-The Windows SDK is built with Visual Studio 2022, x64, Release, and `/MD`. The
-workflow:
+The Windows shared and static SDKs are built with Visual Studio 2022, x64,
+Release, and `/MD`. The shared variant consumes the mirrored OCCT
+Release/no-PCH archive; the static variant consumes the project-built lean
+vc143 static `/MD` OCCT SDK from `occt-sdk-8.0.1-r2`. Netgen qualification
+does not rebuild OCCT from source. The workflow:
 
-1. verifies and normalizes the pinned OCCT archive;
+1. verifies and normalizes the matching pinned shared or static OCCT archive;
 2. builds a pinned zlib;
-3. configures/builds Netgen with native SDK settings;
+3. configures/builds Netgen with matching shared or static native SDK settings;
 4. runs focused refinement and Catch tests;
 5. installs and constructs the compact SDK;
 6. audits DLL dependencies and producer metadata;
@@ -171,6 +180,29 @@ Every archive has a sibling `.sha256` file. Each SDK also contains
 `producer-info.json`, which records the full source SHA, Netgen baseline,
 toolchain/producer identity, OCCT provenance, and dependency hashes.
 
+## Actions artifact retention and cleanup
+
+GitHub release assets are the long-lived distribution record. Actions artifacts
+exist only to move qualified SDKs between workflow jobs and to aid short-term
+debugging.
+
+After a combined release has been published and independently verified:
+
+- keep the published GitHub release, its tag, archives, checksum sidecars, and
+  workflow-run history;
+- it is safe to delete older or superseded Actions artifacts, including
+  artifacts from failed/intermediate qualification heads;
+- keeping the latest successful branch-qualification artifacts and the latest
+  release-run artifacts for a short post-release window is useful but not
+  required for reproducibility, because the release assets contain the final
+  archives and `producer-info.json`;
+- routine artifact cleanup must not delete or replace published release assets
+  or move an existing release tag.
+
+The platform workflows currently retain Actions artifacts for 30 days, so
+periodic cleanup is optional storage hygiene rather than part of release
+correctness.
+
 ## Normal qualification and release procedure
 
 1. Make and commit the source/workflow changes on `netgen-featool`.
@@ -186,7 +218,9 @@ toolchain/producer identity, OCCT provenance, and dependency hashes.
 
    `r1` is the first SDK release for that source revision; increment `N` only
    when republishing the same source revision with a new SDK packaging/release
-   revision.
+   revision. Treat a pushed `netgen-sdk-*` tag as immutable: if another release
+   attempt is needed for the same source revision, use the next `rN` instead of
+   moving or reusing the existing tag.
 5. Push the tag to `origin`.
 6. `release-netgen-sdk.yml` calls all three platform workflows again with
    `bundle_release=true`. Each platform verifies the tag format, that the tag SHA
@@ -284,20 +318,48 @@ the Windows, Linux, and macOS qualification workflows before any
 
 ## Updating Netgen or OCCT again
 
+A new Netgen upstream release does **not** automatically require a new OCCT
+release. Keep the currently qualified OCCT SDK line when it remains compatible;
+change the OCCT release/pins only when the new Netgen baseline requires a
+different OCCT API/build contract or when an OCCT upgrade is an explicit goal.
+Even for a Netgen-only bump, inspect upstream changes to
+`CMakeLists.txt`, `cmake/SuperBuild.cmake`, `libsrc/occ/`, and
+`python/` for dependency or exported-interface changes.
+
 When moving to a new Netgen baseline or OCCT version, update the complete set of
-pins rather than only changing artifact filenames:
+pins and embedded provenance rather than only changing artifact filenames:
 
 - `BASELINE_TAG` / `BASELINE_SHA` in all three platform workflows;
-- `NETGEN_BASELINE_TAG` / `NETGEN_BASELINE_SHA` in the release workflow;
-- Windows OCCT URL, SHA-256, archive extraction/normalization assumptions, and
-  producer metadata;
-- Linux OCCT asset name, size, SHA-256, URL, source commit, and build-script
-  producer metadata;
-- both macOS OCCT asset names, sizes, SHA-256s, release tag/source commit, and
-  build-script producer metadata;
-- expected artifact names in every platform workflow and the release workflow;
-- `cmake/SuperBuild.cmake` if Netgen's source-built OCCT version also changes;
-- this README's current/historical dependency table.
+- shared and static artifact names in `windows-netgen-sdk.yml`;
+- `NETGEN_BASELINE_TAG` / `NETGEN_BASELINE_SHA`, all expected archive names,
+  and the release title in `release-netgen-sdk.yml`;
+- the SDK-name version and `upstream` producer metadata in
+  `linux-netgen-sdk/build-sdk.sh`;
+- the SDK-name version and `upstream` producer metadata in
+  `macos-netgen-sdk/build-sdk.sh`;
+- Windows OCCT release/URL/size/SHA-256, extraction assumptions, manifest
+  contract, and producer metadata if OCCT changes;
+- Linux OCCT asset name, size, SHA-256, URL, release/source commit, and
+  build-script producer metadata if OCCT changes;
+- all macOS OCCT asset names, sizes, SHA-256s, release/source commit, and
+  build-script producer metadata if OCCT changes;
+- `cmake/SuperBuild.cmake` if upstream's source-built OCCT pin or integration
+  changed;
+- this README's current/historical dependency table and reference release.
+
+Before pushing the coherent migration head, perform a stale-pin sweep for the
+old baseline tag, full SHA, and version string, for example:
+
+```text
+git grep -n -E '<old-tag>|<old-full-sha>|<old-version>' -- .github cmake CMakeLists.txt
+```
+
+Any remaining match must be intentionally historical documentation. Also review
+the upstream release delta in the areas most likely to affect this fork:
+
+```text
+git diff <current-baseline-tag>..<new-baseline-tag> -- CMakeLists.txt cmake libsrc/occ python tests/catch/refinement.cpp
+```
 
 After any dependency migration, qualify the real dependency packages on all
 platforms and run the external native consumer. A successful compile alone is

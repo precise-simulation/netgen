@@ -46,9 +46,12 @@ Pinned OCCT inputs:
 | Platform | OCCT input | SHA-256 |
 | --- | --- | --- |
 | Windows | Open-Cascade-SAS `V8.0.1` `occt-combined-release-no-pch.zip` | `afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d` |
-| Linux x86_64 | `opencascade-8.0.1-linux-x86_64-glibc2.17-shared-b8f597c67781.tar.gz` | `d68d32c088c5c0cceac7600182d55cf896df7be0ff8a19c79eddfff456ef44e4` |
-| macOS arm64 | `opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz` | `042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d` |
-| macOS x86_64 | `opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz` | `b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab` |
+| Linux x86_64 shared | `opencascade-8.0.1-linux-x86_64-glibc2.17-shared-b8f597c67781.tar.gz` | `d68d32c088c5c0cceac7600182d55cf896df7be0ff8a19c79eddfff456ef44e4` |
+| Linux x86_64 static | `opencascade-8.0.1-linux-x86_64-glibc2.17-static-b8f597c67781.tar.gz` | `d787fda2e3fa4e180b7b9d980dbd64c6f385aab9a4a6a4652d49e8c99ad35fad` |
+| macOS arm64 shared | `opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz` | `042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d` |
+| macOS arm64 static | `opencascade-8.0.1-macos13-arm64-static-b8f597c67781.tar.gz` | `7ba195dbc29159f35829ebebf1b8a33487b2734171b4e9ff597b48db64cc682d` |
+| macOS x86_64 shared | `opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz` | `b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab` |
+| macOS x86_64 static | `opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz` | `d10c8a3ca24d224ff438eba2afaed5ab611a29c8b55f0ea45f0d1a3f2c74e2b2` |
 
 The Windows `8.0.1` asset is an outer archive. It contains
 `opencascade-8.0.1-vc14-64-combined.zip`, which the Windows workflow explicitly
@@ -124,11 +127,13 @@ workflow:
 
 ### Linux
 
-The Linux producer runs in the pinned `manylinux2014_x86_64` image. The SDK is a
-shared x86_64 build with glibc 2.17 / GCC 10 compatibility. The build script
-checks symbol-version ceilings, RPATH/RUNPATH relocatability, disabled runtime
-dependencies, CMake metadata, and an external native OCC consumer before and
-after archive relocation.
+The Linux producer runs in the pinned `manylinux2014_x86_64` image. It builds
+shared and static x86_64 SDKs with glibc 2.17 / GCC 10 compatibility, using the
+matching shared or static OCCT SDK. The build script checks the linkage-specific
+library shape, CMake metadata, and an external native OCC consumer before and
+after archive relocation. The shared package additionally checks symbol-version
+ceilings, RPATH/RUNPATH relocatability, and disabled runtime dependencies; the
+static package contains the pinned `libz.a` needed by its exported target.
 
 The uploaded SDK is then consumed independently on Ubuntu 20.04, 22.04, and
 24.04. Ubuntu 20.04 intentionally installs GCC/G++ 10 because OCCT 8.0.1 and the
@@ -137,10 +142,10 @@ GCC 9.
 
 ### macOS
 
-The matrix produces separate arm64 and x86_64 archives with Xcode 16.4 and a
-macOS 13 deployment target. Each architecture uses its matching OCCT SDK, then
+The matrix produces arm64 and x86_64 shared and static archives with Xcode 16.4
+and a macOS 13 deployment target. Each variant uses the matching OCCT SDK, then
 builds, packages, relocates, and qualifies the native consumer before uploading
-the archive and checksum sidecar.
+the archive and checksum sidecar. Static packages include the pinned `libz.a`.
 
 ## Artifact names
 
@@ -150,8 +155,11 @@ of the fork source SHA, and the OCCT version. For the current line:
 ```text
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-win64-msvc.zip
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt8.0.1-linux-x86_64-glibc2.17-gcc10-static.tar.gz
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-x86_64-clang.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-x86_64-clang-static.tar.gz
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-arm64-clang.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-arm64-clang-static.tar.gz
 ```
 
 Every archive has a sibling `.sha256` file. Each SDK also contains
@@ -179,7 +187,7 @@ toolchain/producer identity, OCCT provenance, and dependency hashes.
    `bundle_release=true`. Each platform verifies the tag format, that the tag SHA
    is contained in `origin/netgen-featool`, and that the same SHA has a successful
    branch qualification run.
-7. The release job requires exactly four archives plus four checksum sidecars,
+7. The release job requires exactly seven archives plus seven checksum sidecars,
    verifies every checksum and `producer-info.json`, creates a draft release,
    verifies the uploaded GitHub asset digests, and then changes the release to
    `draft=false`.

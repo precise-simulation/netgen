@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <arm64|x86_64> <runner-label>" >&2
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 <arm64|x86_64> <shared|static> <runner-label>" >&2
   exit 2
 fi
 architecture="$1"
-runner_label="$2"
+linkage="$2"
+runner_label="$3"
 case "$architecture" in arm64|x86_64) ;; *) exit 2 ;; esac
+case "$linkage" in
+  shared) library_type=SHARED ;;
+  static) library_type=STATIC ;;
+  *) exit 2 ;;
+esac
 
 : "${SOURCE_SHA:?SOURCE_SHA is required}"
 : "${SOURCE_DATE_EPOCH:?SOURCE_DATE_EPOCH is required}"
@@ -24,15 +30,18 @@ case "$architecture" in arm64|x86_64) ;; *) exit 2 ;; esac
 deployment_target=13.0
 short_sha="${SOURCE_SHA:0:12}"
 sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-${architecture}-clang"
+if [[ "$linkage" == "static" ]]; then
+  sdk_name="${sdk_name}-static"
+fi
 source_dir="$GITHUB_WORKSPACE"
-work_root="$RUNNER_TEMP/netgen-macos-sdk/$architecture"
+work_root="$RUNNER_TEMP/netgen-macos-sdk/$architecture/$linkage"
 inputs_dir="$RUNNER_TEMP/netgen-sdk-inputs"
 occt_archive="$inputs_dir/occt.tar.gz"
 zlib_archive="$inputs_dir/zlib.tar.gz"
 build_dir="$work_root/netgen-build"
 install_dir="$work_root/netgen-install"
 sdk_dir="$work_root/$sdk_name"
-out_dir="$RUNNER_TEMP/netgen-macos-sdk-out/$architecture"
+out_dir="$RUNNER_TEMP/netgen-macos-sdk-out/$architecture/$linkage"
 consumer_dir="$work_root/consumer"
 relocated_dir="$work_root/relocated"
 
@@ -50,13 +59,13 @@ occt_roots=("$work_root/occt"/*)
 occt_root="${occt_roots[0]}"
 occt_manifest="$occt_root/build-manifest.json"
 [[ -f "$occt_manifest" ]]
-python3 - "$occt_manifest" "$architecture" "$deployment_target" "$runner_label" <<'PY'
+python3 - "$occt_manifest" "$architecture" "$deployment_target" "$runner_label" "$linkage" <<'PY'
 import json, pathlib, sys
 data = json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert data["schema_version"] == 1
 assert data["occt"]["version"] == "8.0.1"
 assert data["occt"]["commit"] == "b8f597c677811d1f9f4d8a97f5ae2825c0353a42"
-assert data["linkage"] == "shared"
+assert data["linkage"] == sys.argv[5]
 assert data["artifact"]["architecture"] == sys.argv[2]
 assert data["artifact"]["deployment_target"] == sys.argv[3]
 assert data["producer"]["runner_label"] == sys.argv[4]
@@ -86,6 +95,7 @@ zlib_library="${zlib_libraries[0]}"
 configure_options=(
   -G "Unix Makefiles"
   -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON
   -DCMAKE_INSTALL_PREFIX="$install_dir"
   -DCMAKE_OSX_ARCHITECTURES="$architecture"
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$deployment_target"
@@ -112,8 +122,8 @@ configure_options=(
   -DUSE_GEOM2D=ON
   -DUSE_NATIVE_ARCH=OFF
   -DUSE_OCC=ON
-  -DNGLIB_LIBRARY_TYPE=SHARED
-  -DNGCORE_LIBRARY_TYPE=SHARED
+  -DNGLIB_LIBRARY_TYPE="$library_type"
+  -DNGCORE_LIBRARY_TYPE="$library_type"
   -DNETGEN_NATIVE_SDK=ON
   -DENABLE_UNIT_TESTS=ON
   -DOpenCascade_DIR="$occt_root/lib/cmake/opencascade"
@@ -125,60 +135,76 @@ printf '%s\n' "${configure_options[@]}" > "$work_root/configure-options.txt"
 cmake -S "$source_dir" -B "$build_dir" "${configure_options[@]}"
 cmake --build "$build_dir" --parallel "$(sysctl -n hw.logicalcpu)" --target unit_tests
 
-DYLD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib" \
+if [[ "$linkage" == "shared" ]]; then
+  DYLD_LIBRARY_PATH="$build_dir/libsrc/core:$build_dir/nglib:$occt_root/lib" \
+    ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
+else
   ctest --test-dir "$build_dir" -R '^unit_' --output-on-failure
+fi
 cmake --install "$build_dir"
 
 mkdir -p "$sdk_dir/include" "$sdk_dir/lib" "$sdk_dir/cmake"
 cp -a "$install_dir/include/." "$sdk_dir/include/"
-cp -a "$install_dir/lib/libngcore.dylib" "$sdk_dir/lib/"
-cp -a "$install_dir/lib/libnglib.dylib" "$sdk_dir/lib/"
+if [[ "$linkage" == "shared" ]]; then
+  cp -a "$install_dir/lib/libngcore.dylib" "$sdk_dir/lib/"
+  cp -a "$install_dir/lib/libnglib.dylib" "$sdk_dir/lib/"
+else
+  cp -a "$install_dir/lib/libngcore.a" "$sdk_dir/lib/"
+  cp -a "$install_dir/lib/libnglib.a" "$sdk_dir/lib/"
+  cp -a "$zlib_library" "$sdk_dir/lib/libz.a"
+fi
 cp -a "$install_dir/cmake/NetgenConfig.cmake" "$sdk_dir/cmake/"
 cp -a "$install_dir/cmake/netgen-targets.cmake" "$sdk_dir/cmake/"
 cp -a "$install_dir/cmake/netgen-targets-release.cmake" "$sdk_dir/cmake/"
 
-for library in "$sdk_dir/lib/libngcore.dylib" "$sdk_dir/lib/libnglib.dylib"; do
-  [[ "$(lipo -archs "$library")" == "$architecture" ]]
-  install_name="$(otool -D "$library" | sed -n '2p' | xargs)"
-  expected_install_name="@rpath/$(basename "$library")"
-  [[ "$install_name" == "$expected_install_name" ]] || {
-    echo "unexpected install name in $(basename "$library"): $install_name" >&2
-    exit 1
-  }
-  load_commands="$(otool -l "$library")"
-  dependencies="$(otool -L "$library")"
-  grep -Eq 'minos[[:space:]]+13\.0([[:space:]]|$)' <<<"$load_commands"
-  for forbidden in "$source_dir" "$build_dir" "$install_dir" "$occt_root" "$work_root/zlib-stage"; do
-    if grep -Fq "$forbidden" <<<"$load_commands$dependencies"; then
-      echo "producer path leaked into $(basename "$library"): $forbidden" >&2
+if [[ "$linkage" == "shared" ]]; then
+  for library in "$sdk_dir/lib/libngcore.dylib" "$sdk_dir/lib/libnglib.dylib"; do
+    [[ "$(lipo -archs "$library")" == "$architecture" ]]
+    install_name="$(otool -D "$library" | sed -n '2p' | xargs)"
+    expected_install_name="@rpath/$(basename "$library")"
+    [[ "$install_name" == "$expected_install_name" ]] || {
+      echo "unexpected install name in $(basename "$library"): $install_name" >&2
+      exit 1
+    }
+    load_commands="$(otool -l "$library")"
+    dependencies="$(otool -L "$library")"
+    grep -Eq 'minos[[:space:]]+13\.0([[:space:]]|$)' <<<"$load_commands"
+    for forbidden in "$source_dir" "$build_dir" "$install_dir" "$occt_root" "$work_root/zlib-stage"; do
+      if grep -Fq "$forbidden" <<<"$load_commands$dependencies"; then
+        echo "producer path leaked into $(basename "$library"): $forbidden" >&2
+        exit 1
+      fi
+    done
+    if grep -Eqi '(libz\.|python|tcl|tk[0-9]|mpi|cgns|jpeg|avcodec|avformat)' <<<"$dependencies"; then
+      echo "disabled runtime dependency found in $(basename "$library")" >&2
       exit 1
     fi
+    while IFS= read -r dependency; do
+      [[ -z "$dependency" ]] && continue
+      case "$dependency" in
+        @rpath/*|@loader_path/*|/usr/lib/*|/System/Library/*) ;;
+        *) echo "non-relocatable dependency in $(basename "$library"): $dependency" >&2; exit 1 ;;
+      esac
+    done < <(awk 'NR > 1 {print $1}' <<<"$dependencies")
+    if [[ "$(basename "$library")" == libnglib.dylib ]]; then
+      grep -Eq '^[[:space:]]+@rpath/libngcore\.dylib[[:space:]]' <<<"$dependencies"
+      grep -Eq '^[[:space:]]+@rpath/libTK[^[:space:]]*\.dylib[[:space:]]' <<<"$dependencies"
+    fi
+    runtime_paths="$(awk '/cmd LC_RPATH/{getline; getline; print $2}' <<<"$load_commands")"
+    [[ -n "$runtime_paths" ]] || { echo "missing LC_RPATH in $(basename "$library")" >&2; exit 1; }
+    while IFS= read -r runtime_path; do
+      [[ -z "$runtime_path" ]] && continue
+      case "$runtime_path" in
+        @loader_path|@loader_path/*) ;;
+        *) echo "non-relocatable LC_RPATH in $(basename "$library"): $runtime_path" >&2; exit 1 ;;
+      esac
+    done <<<"$runtime_paths"
   done
-  if grep -Eqi '(libz\.|python|tcl|tk[0-9]|mpi|cgns|jpeg|avcodec|avformat)' <<<"$dependencies"; then
-    echo "disabled runtime dependency found in $(basename "$library")" >&2
-    exit 1
-  fi
-  while IFS= read -r dependency; do
-    [[ -z "$dependency" ]] && continue
-    case "$dependency" in
-      @rpath/*|@loader_path/*|/usr/lib/*|/System/Library/*) ;;
-      *) echo "non-relocatable dependency in $(basename "$library"): $dependency" >&2; exit 1 ;;
-    esac
-  done < <(awk 'NR > 1 {print $1}' <<<"$dependencies")
-  if [[ "$(basename "$library")" == libnglib.dylib ]]; then
-    grep -Eq '^[[:space:]]+@rpath/libngcore\.dylib[[:space:]]' <<<"$dependencies"
-    grep -Eq '^[[:space:]]+@rpath/libTK[^[:space:]]*\.dylib[[:space:]]' <<<"$dependencies"
-  fi
-  runtime_paths="$(awk '/cmd LC_RPATH/{getline; getline; print $2}' <<<"$load_commands")"
-  [[ -n "$runtime_paths" ]] || { echo "missing LC_RPATH in $(basename "$library")" >&2; exit 1; }
-  while IFS= read -r runtime_path; do
-    [[ -z "$runtime_path" ]] && continue
-    case "$runtime_path" in
-      @loader_path|@loader_path/*) ;;
-      *) echo "non-relocatable LC_RPATH in $(basename "$library"): $runtime_path" >&2; exit 1 ;;
-    esac
-  done <<<"$runtime_paths"
-done
+else
+  for library in "$sdk_dir/lib/libngcore.a" "$sdk_dir/lib/libnglib.a" "$sdk_dir/lib/libz.a"; do
+    [[ "$(lipo -archs "$library")" == "$architecture" ]]
+  done
+fi
 
 for cmake_file in "$sdk_dir"/cmake/*.cmake; do
   for forbidden in "$source_dir" "$build_dir" "$install_dir" "$occt_root" "$work_root/zlib-stage"; do
@@ -193,13 +219,18 @@ for cmake_file in "$sdk_dir"/cmake/*.cmake; do
   fi
 done
 
-python3 - "$sdk_dir" "$runner_label" "$architecture" "$deployment_target" "$OCCT_SHA256" "$ZLIB_SHA256" "$QUALIFICATION_RUN_ID" <<'PY'
+python3 - "$sdk_dir" "$runner_label" "$architecture" "$deployment_target" "$OCCT_SHA256" "$ZLIB_SHA256" "$QUALIFICATION_RUN_ID" "$linkage" <<'PY'
 import hashlib, json, os, pathlib, subprocess, sys
 sdk = pathlib.Path(sys.argv[1])
+linkage = sys.argv[8]
 def run(*args):
     return subprocess.check_output(args, text=True).strip()
 def sha(path):
     h = hashlib.sha256(); h.update(path.read_bytes()); return h.hexdigest()
+suffix = ".dylib" if linkage == "shared" else ".a"
+artifacts = [sdk / f"lib/libngcore{suffix}", sdk / f"lib/libnglib{suffix}"]
+if linkage == "static":
+    artifacts.append(sdk / "lib/libz.a")
 info = {
     "schema_version": 1,
     "upstream": {"tag": "v6.2.2608", "commit": "96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e"},
@@ -210,10 +241,10 @@ info = {
         "xcode": run("xcodebuild", "-version"), "clang": run(os.environ["NETGEN_CLANG"], "--version").splitlines()[0],
         "cmake": run("cmake", "--version").splitlines()[0], "sdk_version": run("xcrun", "--sdk", "macosx", "--show-sdk-version")
     },
-    "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": "shared", "native_arch": False},
-    "occt": {"release": "occt-sdk-8.0.1", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": "shared"},
+    "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": linkage, "native_arch": False, "position_independent_code": True},
+    "occt": {"release": "occt-sdk-8.0.1", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": linkage},
     "zlib": {"version": "1.3.1", "sha256": sys.argv[6], "linkage": "static", "pic": True},
-    "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([sdk / "lib/libngcore.dylib", sdk / "lib/libnglib.dylib", *sorted((sdk / "cmake").glob("*.cmake"))])}
+    "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([*artifacts, *sorted((sdk / "cmake").glob("*.cmake"))])}
 }
 (sdk / "producer-info.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
 PY
@@ -232,9 +263,17 @@ configure_consumer() {
     -DCMAKE_CXX_COMPILER="$NETGEN_CLANGXX" \
     -DCMAKE_BUILD_RPATH="$root/lib;$occt_root/lib" \
     -DNETGEN_SDK_DIR="$root" \
+    -DOpenCASCADE_DIR="$occt_root/lib/cmake/opencascade" \
     -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
   cmake --build "$build" --parallel "$(sysctl -n hw.logicalcpu)"
   "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
+  if [[ "$linkage" == "static" ]]; then
+    if otool -L "$build/netgen_native_sdk_smoke" | grep -Eq '/lib(ng|TK)[^/]*\.dylib'; then
+      echo "static consumer unexpectedly depends on shared Netgen/OCCT libraries" >&2
+      otool -L "$build/netgen_native_sdk_smoke" >&2
+      exit 1
+    fi
+  fi
 }
 
 configure_consumer "$sdk_dir" "$consumer_dir"
@@ -248,6 +287,14 @@ mkdir -p "$relocated_dir"
 tar -xzf "$archive" -C "$relocated_dir"
 relocated_sdk="$relocated_dir/$sdk_name"
 [[ -f "$relocated_sdk/producer-info.json" ]]
+if [[ "$linkage" == "shared" ]]; then
+  [[ -f "$relocated_sdk/lib/libngcore.dylib" ]]
+  [[ -f "$relocated_sdk/lib/libnglib.dylib" ]]
+else
+  [[ -f "$relocated_sdk/lib/libngcore.a" ]]
+  [[ -f "$relocated_sdk/lib/libnglib.a" ]]
+  [[ -f "$relocated_sdk/lib/libz.a" ]]
+fi
 configure_consumer "$relocated_sdk" "$work_root/consumer-relocated"
 
 echo "SDK_ARCHIVE=$archive"

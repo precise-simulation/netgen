@@ -104,21 +104,26 @@ jobs:
 
           root="$RUNNER_TEMP/release-assets"
           windows="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-win64-msvc.zip"
-          linux="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz"
-          mac_x86="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang.tar.gz"
-          mac_arm="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-arm64-clang.tar.gz"
+          linux_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz"
+          linux_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10-static.tar.gz"
+          mac_x86_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang.tar.gz"
+          mac_x86_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang-static.tar.gz"
+          mac_arm_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-arm64-clang.tar.gz"
+          mac_arm_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-arm64-clang-static.tar.gz"
 
           test -f "$root/windows/$windows"
           test -f "$root/windows/$windows.sha256"
-          test -f "$root/linux/$linux"
-          test -f "$root/linux/$linux.sha256"
-          test -f "$root/macos/$mac_x86"
-          test -f "$root/macos/$mac_x86.sha256"
-          test -f "$root/macos/$mac_arm"
-          test -f "$root/macos/$mac_arm.sha256"
+          for archive in "$linux_shared" "$linux_static"; do
+            test -f "$root/linux/$archive"
+            test -f "$root/linux/$archive.sha256"
+          done
+          for archive in "$mac_x86_shared" "$mac_x86_static" "$mac_arm_shared" "$mac_arm_static"; do
+            test -f "$root/macos/$archive"
+            test -f "$root/macos/$archive.sha256"
+          done
 
           count="$(find "$root" -type f | wc -l | tr -d ' ')"
-          test "$count" = 8
+          test "$count" = 14
 
           verify_checksum() {
             local archive="$1"
@@ -129,20 +134,34 @@ jobs:
             test "$expected" = "$actual"
           }
           verify_checksum "$root/windows/$windows"
-          verify_checksum "$root/linux/$linux"
-          verify_checksum "$root/macos/$mac_x86"
-          verify_checksum "$root/macos/$mac_arm"
+          verify_checksum "$root/linux/$linux_shared"
+          verify_checksum "$root/linux/$linux_static"
+          verify_checksum "$root/macos/$mac_x86_shared"
+          verify_checksum "$root/macos/$mac_x86_static"
+          verify_checksum "$root/macos/$mac_arm_shared"
+          verify_checksum "$root/macos/$mac_arm_static"
 
           windows_info="$(unzip -p "$root/windows/$windows" producer-info.json)"
           test "$(jq -r '.source.commit' <<<"$windows_info")" = "$GITHUB_SHA"
           test "$(jq -r '.occt.asset_url' <<<"$windows_info")" = "$WINDOWS_OCCT_URL"
           test "$(jq -r '.occt.sha256' <<<"$windows_info")" = "$WINDOWS_OCCT_SHA256"
-          for archive in "$root/linux/$linux" "$root/macos/$mac_x86" "$root/macos/$mac_arm"; do
+          verify_unix_archive() {
+            local archive="$1"
+            local linkage="$2"
+            local info
             info="$(tar -xOzf "$archive" --wildcards '*/producer-info.json')"
             test "$(jq -r '.source.commit' <<<"$info")" = "$GITHUB_SHA"
             test "$(jq -r '.occt.release' <<<"$info")" = "$OCCT_RELEASE"
             test "$(jq -r '.occt.commit' <<<"$info")" = "$OCCT_SOURCE_SHA"
-          done
+            test "$(jq -r '.netgen.linkage' <<<"$info")" = "$linkage"
+            test "$(jq -r '.occt.linkage' <<<"$info")" = "$linkage"
+          }
+          verify_unix_archive "$root/linux/$linux_shared" shared
+          verify_unix_archive "$root/linux/$linux_static" static
+          verify_unix_archive "$root/macos/$mac_x86_shared" shared
+          verify_unix_archive "$root/macos/$mac_x86_static" static
+          verify_unix_archive "$root/macos/$mac_arm_shared" shared
+          verify_unix_archive "$root/macos/$mac_arm_static" static
 
       - name: Create, verify and publish combined release
         shell: bash
@@ -195,13 +214,13 @@ jobs:
           fi
 
           mapfile -t assets < <(find "$RUNNER_TEMP/release-assets" -type f -print | sort)
-          test "${#assets[@]}" -eq 8
+          test "${#assets[@]}" -eq 14
           notes="Netgen native SDK bundle built from source $GITHUB_SHA (upstream baseline $NETGEN_BASELINE_TAG / $NETGEN_BASELINE_SHA)."
           notes="$notes"$'\n\n'"Windows OCCT input: official Open-Cascade-SAS V8.0.1 Release/no-PCH binary archive, SHA-256 $WINDOWS_OCCT_SHA256."
           notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
           notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD."
-          notes="$notes"$'\n'"Linux: x86_64 shared SDK, manylinux2014 / glibc 2.17 / GCC 10 baseline."
-          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared SDKs targeting macOS 13.0 with Xcode 16.4."
+          notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
+          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."
           notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
 
           verify_remote_tag
@@ -217,7 +236,7 @@ jobs:
           release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
           test "$(jq -r '.draft' <<<"$release_json")" = true
           test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
-          test "$(jq '.assets | length' <<<"$release_json")" -eq 8
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 14
           for file in "${assets[@]}"; do
             name="$(basename "$file")"
             expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
@@ -234,7 +253,7 @@ jobs:
           release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
           test "$(jq -r '.draft' <<<"$release_json")" = false
           test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
-          test "$(jq '.assets | length' <<<"$release_json")" -eq 8
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 14
           for file in "${assets[@]}"; do
             name="$(basename "$file")"
             expected="sha256:$(sha256sum "$file" | awk '{print $1}')"

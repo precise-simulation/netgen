@@ -74,7 +74,7 @@ jobs:
           echo "qualification_run_id=$qualification_run_id" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build ${{ matrix.architecture }} SDK
+    name: Build ${{ matrix.architecture }} / ${{ matrix.linkage }} SDK
     needs: metadata
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -82,15 +82,29 @@ jobs:
       matrix:
         include:
           - architecture: arm64
+            linkage: shared
             runner: macos-15
             occt_asset: opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz
             occt_size: '28807219'
             occt_sha256: 042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d
+          - architecture: arm64
+            linkage: static
+            runner: macos-15
+            occt_asset: opencascade-8.0.1-macos13-arm64-static-b8f597c67781.tar.gz
+            occt_size: '43775435'
+            occt_sha256: 7ba195dbc29159f35829ebebf1b8a33487b2734171b4e9ff597b48db64cc682d
           - architecture: x86_64
+            linkage: shared
             runner: macos-15-intel
             occt_asset: opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz
             occt_size: '30181757'
             occt_sha256: b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab
+          - architecture: x86_64
+            linkage: static
+            runner: macos-15-intel
+            occt_asset: opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz
+            occt_size: '44983074'
+            occt_sha256: d10c8a3ca24d224ff438eba2afaed5ab611a29c8b55f0ea45f0d1a3f2c74e2b2
     steps:
       - name: Check out exact producer commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -140,12 +154,12 @@ jobs:
           OCCT_SHA256: ${{ matrix.occt_sha256 }}
         run: |
           set -euo pipefail
-          bash .github/macos-netgen-sdk/build-sdk.sh "${{ matrix.architecture }}" "${{ matrix.runner }}"
+          bash .github/macos-netgen-sdk/build-sdk.sh "${{ matrix.architecture }}" "${{ matrix.linkage }}" "${{ matrix.runner }}"
 
       - name: Upload qualified macOS SDK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: netgen-macos-sdk-${{ matrix.architecture }}-${{ github.sha }}
-          path: ${{ runner.temp }}/netgen-macos-sdk-out/${{ matrix.architecture }}/*
+          name: ${{ matrix.linkage == 'shared' && format('netgen-macos-sdk-{0}-{1}', matrix.architecture, github.sha) || format('netgen-macos-sdk-{0}-static-{1}', matrix.architecture, github.sha) }}
+          path: ${{ runner.temp }}/netgen-macos-sdk-out/${{ matrix.architecture }}/${{ matrix.linkage }}/*
           if-no-files-found: error
           retention-days: 30

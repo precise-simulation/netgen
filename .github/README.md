@@ -187,7 +187,7 @@ toolchain/producer identity, OCCT provenance, and dependency hashes.
    `bundle_release=true`. Each platform verifies the tag format, that the tag SHA
    is contained in `origin/netgen-featool`, and that the same SHA has a successful
    branch qualification run.
-7. The release job requires exactly seven archives plus seven checksum sidecars,
+7. The release job requires exactly eight archives plus eight checksum sidecars,
    verifies every checksum and `producer-info.json`, creates a draft release,
    verifies the uploaded GitHub asset digests, and then changes the release to
    `draft=false`.
@@ -195,9 +195,6 @@ toolchain/producer identity, OCCT provenance, and dependency hashes.
 **A matching `netgen-sdk-*` tag therefore publishes the GitHub release
 automatically. It is not a draft-only trigger.**
 
-The Windows workflow also retains the older `netgen-featool-sdk-*` tag trigger,
-but combined cross-platform releases should use `netgen-sdk-*` and the release
-workflow above.
 
 ## Merging a new upstream Netgen release
 

@@ -104,6 +104,7 @@ jobs:
 
           root="$RUNNER_TEMP/release-assets"
           windows="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-win64-msvc.zip"
+          windows_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-win64-msvc-static.zip"
           linux_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz"
           linux_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10-static.tar.gz"
           mac_x86_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang.tar.gz"
@@ -113,6 +114,8 @@ jobs:
 
           test -f "$root/windows/$windows"
           test -f "$root/windows/$windows.sha256"
+          test -f "$root/windows/$windows_static"
+          test -f "$root/windows/$windows_static.sha256"
           for archive in "$linux_shared" "$linux_static"; do
             test -f "$root/linux/$archive"
             test -f "$root/linux/$archive.sha256"
@@ -123,7 +126,7 @@ jobs:
           done
 
           count="$(find "$root" -type f | wc -l | tr -d ' ')"
-          test "$count" = 14
+          test "$count" = 16
 
           verify_checksum() {
             local archive="$1"
@@ -134,6 +137,7 @@ jobs:
             test "$expected" = "$actual"
           }
           verify_checksum "$root/windows/$windows"
+          verify_checksum "$root/windows/$windows_static"
           verify_checksum "$root/linux/$linux_shared"
           verify_checksum "$root/linux/$linux_static"
           verify_checksum "$root/macos/$mac_x86_shared"
@@ -145,6 +149,12 @@ jobs:
           test "$(jq -r '.source.commit' <<<"$windows_info")" = "$GITHUB_SHA"
           test "$(jq -r '.occt.asset_url' <<<"$windows_info")" = "$WINDOWS_OCCT_URL"
           test "$(jq -r '.occt.sha256' <<<"$windows_info")" = "$WINDOWS_OCCT_SHA256"
+          windows_static_info="$(unzip -p "$root/windows/$windows_static" producer-info.json)"
+          test "$(jq -r '.source.commit' <<<"$windows_static_info")" = "$GITHUB_SHA"
+          test "$(jq -r '.netgen.linkage' <<<"$windows_static_info")" = static
+          test "$(jq -r '.occt.commit' <<<"$windows_static_info")" = "$OCCT_SOURCE_SHA"
+          test "$(jq -r '.occt.linkage' <<<"$windows_static_info")" = static
+          test "$(jq -r '.occt.bundled' <<<"$windows_static_info")" = true
           verify_unix_archive() {
             local archive="$1"
             local linkage="$2"
@@ -214,9 +224,55 @@ jobs:
           fi
 
           mapfile -t assets < <(find "$RUNNER_TEMP/release-assets" -type f -print | sort)
-          test "${#assets[@]}" -eq 14
+          test "${#assets[@]}" -eq 16
           notes="Netgen native SDK bundle built from source $GITHUB_SHA (upstream baseline $NETGEN_BASELINE_TAG / $NETGEN_BASELINE_SHA)."
-          notes="$notes"$'\n\n'"Windows OCCT input: official Open-Cascade-SAS V8.0.1 Release/no-PCH binary archive, SHA-256 $WINDOWS_OCCT_SHA256."
+          notes="$notes"
+          notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
+          notes="$notes"
+          notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
+          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."
+          notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
+
+          verify_remote_tag
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
+            --notes "$notes"
+
+          draft_id="$(find_draft_id)"
+          test -n "$draft_id"
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = true
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+
+          verify_remote_tag
+          gh api -X PATCH \
+            -H "X-GitHub-Api-Version: $api_version" \
+            "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
+            -F draft=false >/dev/null
+
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = false
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+          verify_remote_tag
+\n\n'"Windows shared OCCT input: official Open-Cascade-SAS V8.0.1 Release/no-PCH binary archive, SHA-256 $WINDOWS_OCCT_SHA256."
+          notes="$notes"
           notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
           notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD."
           notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
@@ -236,7 +292,7 @@ jobs:
           release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
           test "$(jq -r '.draft' <<<"$release_json")" = true
           test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
-          test "$(jq '.assets | length' <<<"$release_json")" -eq 14
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
           for file in "${assets[@]}"; do
             name="$(basename "$file")"
             expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
@@ -253,7 +309,186 @@ jobs:
           release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
           test "$(jq -r '.draft' <<<"$release_json")" = false
           test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
-          test "$(jq '.assets | length' <<<"$release_json")" -eq 14
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+          verify_remote_tag
+\n'"Windows static OCCT input: source $OCCT_SOURCE_SHA, built and bundled as static /MD in the qualified Netgen SDK."
+          notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
+          notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD."
+          notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
+          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."
+          notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
+
+          verify_remote_tag
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
+            --notes "$notes"
+
+          draft_id="$(find_draft_id)"
+          test -n "$draft_id"
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = true
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+
+          verify_remote_tag
+          gh api -X PATCH \
+            -H "X-GitHub-Api-Version: $api_version" \
+            "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
+            -F draft=false >/dev/null
+
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = false
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+          verify_remote_tag
+\n\n'"Windows: x64 VS2022 Release /MD, shared and static SDKs."
+          notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
+          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."
+          notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
+
+          verify_remote_tag
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
+            --notes "$notes"
+
+          draft_id="$(find_draft_id)"
+          test -n "$draft_id"
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = true
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+
+          verify_remote_tag
+          gh api -X PATCH \
+            -H "X-GitHub-Api-Version: $api_version" \
+            "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
+            -F draft=false >/dev/null
+
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = false
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+          verify_remote_tag
+\n\n'"Windows shared OCCT input: official Open-Cascade-SAS V8.0.1 Release/no-PCH binary archive, SHA-256 $WINDOWS_OCCT_SHA256."
+          notes="$notes"
+          notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
+          notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD."
+          notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
+          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."
+          notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
+
+          verify_remote_tag
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
+            --notes "$notes"
+
+          draft_id="$(find_draft_id)"
+          test -n "$draft_id"
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = true
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+
+          verify_remote_tag
+          gh api -X PATCH \
+            -H "X-GitHub-Api-Version: $api_version" \
+            "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
+            -F draft=false >/dev/null
+
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = false
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+          verify_remote_tag
+\n'"Windows static OCCT input: source $OCCT_SOURCE_SHA, built and bundled as static /MD in the qualified Netgen SDK."
+          notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
+          notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD."
+          notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
+          notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."
+          notes="$notes"$'\n\n'"Each archive has a SHA-256 sidecar and was re-extracted and qualified through the native OCC consumer."
+
+          verify_remote_tag
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
+            --notes "$notes"
+
+          draft_id="$(find_draft_id)"
+          test -n "$draft_id"
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = true
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
+          for file in "${assets[@]}"; do
+            name="$(basename "$file")"
+            expected="sha256:$(sha256sum "$file" | awk '{print $1}')"
+            actual="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual" = "$expected"
+          done
+
+          verify_remote_tag
+          gh api -X PATCH \
+            -H "X-GitHub-Api-Version: $api_version" \
+            "repos/$GITHUB_REPOSITORY/releases/$draft_id" \
+            -F draft=false >/dev/null
+
+          release_json="$(gh api -H "X-GitHub-Api-Version: $api_version" "repos/$GITHUB_REPOSITORY/releases/$draft_id")"
+          test "$(jq -r '.draft' <<<"$release_json")" = false
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$GITHUB_REF_NAME"
+          test "$(jq '.assets | length' <<<"$release_json")" -eq 16
           for file in "${assets[@]}"; do
             name="$(basename "$file")"
             expected="sha256:$(sha256sum "$file" | awk '{print $1}')"

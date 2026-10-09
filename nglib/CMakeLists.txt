@@ -1,5 +1,9 @@
 target_sources(nglib PRIVATE nglib.cpp)
 
+if(WIN32 AND NGLIB_LIBRARY_TYPE STREQUAL "STATIC")
+    target_compile_definitions(nglib PUBLIC NGLIB_STATIC)
+endif()
+
 if(USE_OCC)
     target_sources(nglib PRIVATE nglib_occ.cpp)
     install(FILES nglib_occ.h DESTINATION ${NG_INSTALL_DIR_INCLUDE} COMPONENT netgen_devel)

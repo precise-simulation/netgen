@@ -26,7 +26,9 @@
 // Philippose - 14.02.2009
 // Modifications for creating a DLL in Windows
 #ifdef WIN32
-   #ifdef nglib_EXPORTS
+   #ifdef NGLIB_STATIC
+      #define NGLIB_API
+   #elif defined(nglib_EXPORTS)
       #define NGLIB_API   __declspec(dllexport)
    #else
       #define NGLIB_API   __declspec(dllimport)

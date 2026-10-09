@@ -129,7 +129,7 @@ jobs:
           set -euo pipefail
           inputs="$RUNNER_TEMP/netgen-sdk-inputs"
           mkdir -p "$inputs"
-          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1/$OCCT_ASSET"
+          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/$OCCT_ASSET"
           downloaded=false
           for attempt in 1 2 3 4 5; do
             rm -f "$inputs/occt.tar.gz"

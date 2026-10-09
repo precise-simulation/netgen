@@ -242,7 +242,7 @@ info = {
         "cmake": run("cmake", "--version").splitlines()[0], "sdk_version": run("xcrun", "--sdk", "macosx", "--show-sdk-version")
     },
     "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": linkage, "native_arch": False, "position_independent_code": True},
-    "occt": {"release": "occt-sdk-8.0.1", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": linkage},
+    "occt": {"release": "occt-sdk-8.0.1-r2", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": linkage},
     "zlib": {"version": "1.3.1", "sha256": sys.argv[6], "linkage": "static", "pic": True},
     "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([*artifacts, *sorted((sdk / "cmake").glob("*.cmake"))])}
 }

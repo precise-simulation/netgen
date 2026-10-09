@@ -37,7 +37,7 @@ commit: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
 OCCT source revision used by the Linux/macOS SDK release:
 
 ```text
-release: occt-sdk-8.0.1
+release: occt-sdk-8.0.1-r2
 commit:  b8f597c677811d1f9f4d8a97f5ae2825c0353a42
 ```
 
@@ -45,7 +45,8 @@ Pinned OCCT inputs:
 
 | Platform | OCCT input | SHA-256 |
 | --- | --- | --- |
-| Windows | Open-Cascade-SAS `V8.0.1` `occt-combined-release-no-pch.zip` | `afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d` |
+| Windows shared | `occt-combined-release-no-pch.zip` | `afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d` |
+| Windows static | `opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip` | `a0e7c6ff3e9a93fcf3aa926e20b598b9f6e8cac92b7711782e76f8c1d1cbfa42` |
 | Linux x86_64 shared | `opencascade-8.0.1-linux-x86_64-glibc2.17-shared-b8f597c67781.tar.gz` | `d68d32c088c5c0cceac7600182d55cf896df7be0ff8a19c79eddfff456ef44e4` |
 | Linux x86_64 static | `opencascade-8.0.1-linux-x86_64-glibc2.17-static-b8f597c67781.tar.gz` | `d787fda2e3fa4e180b7b9d980dbd64c6f385aab9a4a6a4652d49e8c99ad35fad` |
 | macOS arm64 shared | `opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz` | `042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d` |
@@ -53,13 +54,15 @@ Pinned OCCT inputs:
 | macOS x86_64 shared | `opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz` | `b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab` |
 | macOS x86_64 static | `opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz` | `d10c8a3ca24d224ff438eba2afaed5ab611a29c8b55f0ea45f0d1a3f2c74e2b2` |
 
-The Windows `8.0.1` asset is an outer archive. It contains
+The Windows shared `8.0.1` asset is the upstream Release/no-PCH outer archive,
+mirrored in the immutable project release. It contains
 `opencascade-8.0.1-vc14-64-combined.zip`, which the Windows workflow explicitly
 extracts before locating `OpenCASCADEConfig.cmake`, `inc`, `win64/vc14`, and
-`3rdparty-vc14-64`.
+`3rdparty-vc14-64`. The Windows static asset is the project-built lean vc143
+static /MD SDK; Netgen verifies its producer manifest and consumes it directly.
 
-The Linux and macOS OCCT archives come from the immutable
-`precise-simulation/OCCT` `occt-sdk-8.0.1` release. Linux verifies the release
+The Linux and macOS OCCT archives come from the same immutable
+`precise-simulation/OCCT` `occt-sdk-8.0.1-r2` release. Linux verifies the release
 metadata as well as the pinned asset. The parallel macOS jobs deliberately do
 not call the unauthenticated GitHub release-metadata API because shared runner
 rate limits can return HTTP 403 during tagged rebuilds. Instead they download
@@ -94,9 +97,10 @@ The main migration differences from `7.9.3` to `8.0.1` were:
 1. Netgen moved from upstream `v6.2.2604` to `v6.2.2608`, which already contains
    the upstream OCCT 8 compatibility work, including the `python_occ_shapes.cpp`
    integer-size fix.
-2. Windows changed from a directly consumable OCCT combined ZIP to the nested
-   `8.0.1` Release/no-PCH wrapper described above.
-3. Linux/macOS changed to the `occt-sdk-8.0.1` assets and source commit.
+2. Windows shared changed from a directly consumable OCCT combined ZIP to the
+   nested `8.0.1` Release/no-PCH wrapper described above; Windows static now
+   consumes the project-built lean vc143 static /MD SDK from the same release.
+3. Linux/macOS changed to the `occt-sdk-8.0.1-r2` assets and source commit.
 4. Upstream `v6.2.2608` appends an absolute OCCT library path for ordinary
    installs; `NETGEN_NATIVE_SDK=ON` suppresses that fallback so the packaged SDK
    remains relocatable.
@@ -154,6 +158,7 @@ of the fork source SHA, and the OCCT version. For the current line:
 
 ```text
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-win64-msvc.zip
+netgen-featool-v6.2.2608-<sha12>-occt8.0.1-win64-msvc-static.zip
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-linux-x86_64-glibc2.17-gcc10-static.tar.gz
 netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-x86_64-clang.tar.gz

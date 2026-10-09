@@ -31,8 +31,15 @@ permissions:
 env:
   BASELINE_TAG: v6.2.2608
   BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
-  OCCT_URL: https://github.com/Open-Cascade-SAS/OCCT/releases/download/V8.0.1/occt-combined-release-no-pch.zip
+  OCCT_RELEASE: occt-sdk-8.0.1-r2
+  OCCT_ASSET: occt-combined-release-no-pch.zip
+  OCCT_ASSET_SIZE: '257767212'
+  OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/occt-combined-release-no-pch.zip
   OCCT_SHA256: afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d
+  OCCT_STATIC_ASSET: opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
+  OCCT_STATIC_ASSET_SIZE: '118774584'
+  OCCT_STATIC_SHA256: a0e7c6ff3e9a93fcf3aa926e20b598b9f6e8cac92b7711782e76f8c1d1cbfa42
+  OCCT_STATIC_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
   OCCT_SOURCE_SHA: b8f597c677811d1f9f4d8a97f5ae2825c0353a42
   ZLIB_URL: https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
   ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
@@ -230,10 +237,25 @@ jobs:
 
       - name: Download and qualify pinned OCCT
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/precise-simulation/OCCT/releases/tags/$env:OCCT_RELEASE" -Headers $headers
+          if(-not $release.immutable) { throw "OCCT release $env:OCCT_RELEASE is not immutable." }
+          $asset = @($release.assets | Where-Object { $_.name -eq $env:OCCT_ASSET })
+          if($asset.Count -ne 1) { throw "Expected exactly one OCCT shared asset named $env:OCCT_ASSET." }
+          if([int64]$asset[0].size -ne [int64]$env:OCCT_ASSET_SIZE) { throw "OCCT shared asset size mismatch." }
+          if($asset[0].digest -ne "sha256:$env:OCCT_SHA256") { throw "OCCT shared release digest mismatch." }
+          if($asset[0].browser_download_url -ne $env:OCCT_URL) { throw "OCCT shared release URL mismatch." }
+
           $downloads = "$env:RUNNER_TEMP\netgen-sdk-downloads"
-          $archive = Join-Path $downloads "occt-combined-release-no-pch.zip"
+          $archive = Join-Path $downloads $env:OCCT_ASSET
           New-Item -ItemType Directory -Force -Path $downloads | Out-Null
           if(-not (Test-Path -LiteralPath $archive)) {
             Invoke-WebRequest -Uri $env:OCCT_URL -OutFile $archive
@@ -241,6 +263,9 @@ jobs:
           $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           if($actual -ne $env:OCCT_SHA256) {
             throw "OCCT SHA-256 mismatch: $actual"
+          }
+          if((Get-Item -LiteralPath $archive).Length -ne [int64]$env:OCCT_ASSET_SIZE) {
+            throw "OCCT shared archive size mismatch."
           }
 
           $extract = "$env:RUNNER_TEMP\occt-8.0.1"
@@ -750,6 +775,9 @@ jobs:
               }
             }
             occt = [ordered]@{
+              release = $env:OCCT_RELEASE
+              commit = $env:OCCT_SOURCE_SHA
+              linkage = "shared"
               asset_url = $env:OCCT_URL
               sha256 = $env:OCCT_SHA256
               runtime_evidence = $occtEvidence
@@ -907,13 +935,55 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Check out exact OCCT source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          repository: Open-Cascade-SAS/OCCT
-          ref: ${{ env.OCCT_SOURCE_SHA }}
-          path: occt-source
-          fetch-depth: 1
+      - name: Download and qualify pinned static OCCT
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/precise-simulation/OCCT/releases/tags/$env:OCCT_RELEASE" -Headers $headers
+          if(-not $release.immutable) { throw "OCCT release $env:OCCT_RELEASE is not immutable." }
+          $asset = @($release.assets | Where-Object { $_.name -eq $env:OCCT_STATIC_ASSET })
+          if($asset.Count -ne 1) { throw "Expected exactly one OCCT static asset named $env:OCCT_STATIC_ASSET." }
+          if([int64]$asset[0].size -ne [int64]$env:OCCT_STATIC_ASSET_SIZE) { throw "OCCT static asset size mismatch." }
+          if($asset[0].digest -ne "sha256:$env:OCCT_STATIC_SHA256") { throw "OCCT static release digest mismatch." }
+          if($asset[0].browser_download_url -ne $env:OCCT_STATIC_URL) { throw "OCCT static release URL mismatch." }
+
+          $downloads = Join-Path $env:RUNNER_TEMP "netgen-sdk-downloads"
+          New-Item -ItemType Directory -Force -Path $downloads | Out-Null
+          $archive = Join-Path $downloads $env:OCCT_STATIC_ASSET
+          Invoke-WebRequest -Uri $env:OCCT_STATIC_URL -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($actual -ne $env:OCCT_STATIC_SHA256) { throw "OCCT static SHA-256 mismatch: $actual" }
+          if((Get-Item -LiteralPath $archive).Length -ne [int64]$env:OCCT_STATIC_ASSET_SIZE) { throw "OCCT static archive size mismatch." }
+
+          $extract = Join-Path $env:RUNNER_TEMP "occt-static-input"
+          if(Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract
+          $roots = @(Get-ChildItem -LiteralPath $extract -Directory)
+          if($roots.Count -ne 1) { throw "Expected exactly one OCCT static SDK root, found $($roots.Count)." }
+          $root = $roots[0].FullName
+          $manifest = @(Get-Content -LiteralPath (Join-Path $root "sdk-manifest.txt"))
+          foreach($expected in @(
+            "occt-version=8.0.1",
+            "occt-source-sha=$env:OCCT_SOURCE_SHA",
+            "platform=windows-x86_64",
+            "msvc-toolset=vc143",
+            "msvc-runtime=MultiThreadedDLL",
+            "linkage=static",
+            "profile=lean",
+            "toolkit-count=28",
+            "consumer-definitions=OCCT_STATIC_BUILD;OCCT_NO_PLUGINS",
+            "consumer-system-libs=advapi32;gdi32;user32;wsock32;psapi;windowscodecs;winmm"
+          )) {
+            if($manifest -notcontains $expected) { throw "OCCT static manifest is missing: $expected" }
+          }
+          "OCCT_STATIC_ROOT=$root" >> $env:GITHUB_ENV
 
       - name: Define static artifact names
         id: names
@@ -931,7 +1001,7 @@ jobs:
           QUALIFICATION_RUN_ID: ${{ needs.build.outputs.qualification_run_id }}
           ARCHIVE_NAME: ${{ steps.names.outputs.archive_name }}
         run: |
-          & .github/windows-netgen-sdk/build-static.ps1 -OcctSource "$env:GITHUB_WORKSPACE\occt-source" -ArchiveName "$env:ARCHIVE_NAME"
+          & .github/windows-netgen-sdk/build-static.ps1 -OcctRoot "$env:OCCT_STATIC_ROOT" -ArchiveName "$env:ARCHIVE_NAME"
           if($LASTEXITCODE -ne 0) { throw "Windows static SDK producer failed." }
 
       - name: Upload qualified static workflow artifact

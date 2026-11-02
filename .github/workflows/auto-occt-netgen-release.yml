@@ -10,7 +10,7 @@ on:
         required: false
         type: string
       retry_existing:
-        description: Re-run qualification for the existing automation update PR
+        description: Re-run qualification for the existing automation update branch
         required: false
         type: boolean
         default: false
@@ -22,7 +22,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
   actions: write
 
 concurrency:

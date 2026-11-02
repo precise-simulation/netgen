@@ -85,26 +85,26 @@ jobs:
             linkage: shared
             runner: macos-15
             occt_asset: opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz
-            occt_size: '28807219'
-            occt_sha256: 042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d
+            occt_size: '26754520'
+            occt_sha256: 391e2adaccfb25443c30392c3a5afdd46b95a90fa669c1e8a4c555a6fedeb27a
           - architecture: arm64
             linkage: static
             runner: macos-15
             occt_asset: opencascade-8.0.1-macos13-arm64-static-b8f597c67781.tar.gz
-            occt_size: '43775435'
-            occt_sha256: 7ba195dbc29159f35829ebebf1b8a33487b2734171b4e9ff597b48db64cc682d
+            occt_size: '40589772'
+            occt_sha256: 51803af9476e05296a2d38d611e9f8b62ed2e914b8472e96d551386ffe0ebcd5
           - architecture: x86_64
             linkage: shared
             runner: macos-15-intel
             occt_asset: opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz
-            occt_size: '30181757'
-            occt_sha256: b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab
+            occt_size: '28130208'
+            occt_sha256: 90d6366a6fd533a76bcd85dc9236075d58c2999c6398e892c8a90a904075a9ca
           - architecture: x86_64
             linkage: static
             runner: macos-15-intel
             occt_asset: opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz
-            occt_size: '44983074'
-            occt_sha256: d10c8a3ca24d224ff438eba2afaed5ab611a29c8b55f0ea45f0d1a3f2c74e2b2
+            occt_size: '41818832'
+            occt_sha256: dfe67614542388eaf46e42442258e725d16cbe9ad42b5fc88a3f9239e62bb65a
     steps:
       - name: Check out exact producer commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -129,7 +129,7 @@ jobs:
           set -euo pipefail
           inputs="$RUNNER_TEMP/netgen-sdk-inputs"
           mkdir -p "$inputs"
-          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/$OCCT_ASSET"
+          url="https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/$OCCT_ASSET"
           downloaded=false
           for attempt in 1 2 3 4 5; do
             rm -f "$inputs/occt.tar.gz"

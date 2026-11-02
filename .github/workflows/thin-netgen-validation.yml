@@ -21,33 +21,5 @@ jobs:
 
       - name: Run source preparation negative cases
         run: |
-          python3 tests/thin-repo/test_prepare_netgen_source.py
-          python3 tests/thin-repo/test_release_contract.py
-
-  parity:
-    name: Compare reconstructed source with fork tree
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Check out producer repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          fetch-depth: 1
-
-      - name: Reconstruct pinned source
-        run: |
-          python3 scripts/prepare-netgen-source.py \
-            --destination "$RUNNER_TEMP/netgen-source" \
-            --provenance "$RUNNER_TEMP/source-provenance.json"
-
-      - name: Compare SDK build and regression inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          staged="$RUNNER_TEMP/netgen-source"
-          git diff --no-index --exit-code -- CMakeLists.txt "$staged/CMakeLists.txt"
-          git diff --no-index --exit-code -- cmake/NetgenNativeConfig.cmake.in "$staged/cmake/NetgenNativeConfig.cmake.in"
-          git diff --no-index --exit-code -- libsrc/core "$staged/libsrc/core"
-          git diff --no-index --exit-code -- libsrc/meshing "$staged/libsrc/meshing"
-          git diff --no-index --exit-code -- nglib "$staged/nglib"
-          git diff --no-index --exit-code -- tests/catch/CMakeLists.txt "$staged/tests/catch/CMakeLists.txt"
-          git diff --no-index --exit-code -- tests/catch/refinement.cpp "$staged/tests/catch/refinement.cpp"
+          python3 scripts/tests/test_prepare_netgen_source.py
+          python3 scripts/tests/test_release_contract.py

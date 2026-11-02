@@ -1,9 +1,8 @@
-*.whl
-dist
-build
-*.vol.gz
-*.vol
-*.ini
-__pycache__
+__pycache__/
+*.py[cod]
+.cache/
+build/
+dist/
 *.zip
-.cache
+*.tar.gz
+*.whl

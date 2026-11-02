@@ -1,30 +1,15 @@
-# normalise line endings in the repository; check out native
+# Normalize ordinary text, and make source-provenance inputs deterministic.
 * text=auto
 
-*.cpp   text
-*.hpp   text
-*.h     text
-*.c     text
-*.py    text
-*.tcl   text
-*.cmake text
-CMakeLists.txt text
+*.md text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=lf
+*.txt text eol=lf
+AGENTS.md text eol=lf
 patches/netgen/*.patch text eol=lf -whitespace
 patches/netgen/series text eol=lf
 
-# keep CRLF in the working tree for Windows-only files
-*.rc          text eol=crlf
-*.rc.template text eol=crlf
-*.bat         text eol=crlf
-
-# vendored third-party: leave exactly as upstream has it
-ng/Togl2.1/** -text
-
-# data and binaries: never touched
-*.step  -text
-*.stl   -text
-*.geo   -text
-*.vol   -text
-*.png   binary
-*.ico   binary
-*.gz    binary
+# Keep the native SDK geometry fixtures byte-for-byte stable.
+tests/*-native-sdk/*.brep -text

@@ -22,11 +22,16 @@ affected_files:
   - .github/workflows/linux-netgen-sdk.yml
   - .github/workflows/macos-netgen-sdk.yml
   - .github/workflows/release-netgen-sdk.yml
+  - .github/workflows/thin-netgen-validation.yml
   - .github/workflows/windows-netgen-sdk.yml
   - AGENTS.md
   - README.md
   - upstream/netgen.json
+  - scripts/netgen_source.py
   - scripts/prepare-netgen-source.py
+  - scripts/check-release-qualification.py
+  - scripts/verify-netgen-sdk-release.py
+  - scripts/tests/**
   - patches/netgen/*
   - tests/**
   - CMakeLists.txt
@@ -646,10 +651,44 @@ negative evidence. The ordered validation now covers malformed patch-series and
 source-identity inputs, tampered cross-platform provenance, wrong-SHA/event/
 conclusion qualification results, and failed branch-containment decisions.
 
-The plan is ready for implementation: scope, local-commit disposition, root-file
-ownership, source/version/provenance contracts, release gating, and both
-positive and negative validation are settled. Step 0 synchronizes the working
-branch and rechecks the remote head before patch extraction; it is an
-implementation step rather than an unresolved planning decision. No native
-build or runtime test was run while correcting this plan, in accordance with
-the plan-only task and repository rule that builds run on GitHub Actions.
+Implementation re-fetched `origin/netgen-featool` and confirmed the reviewed tip
+was still `9b56af11f29b1daf8ecae13f57c05efa0826df55`. The stale local branch was
+synchronized to that tip, only the settled nine-line build-policy text was
+carried forward, and migration baseline
+`ffe3a8b078785c492b86e7a0e2add96a12284148` was created. The final source delta
+against exact upstream `96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e` covered
+exactly the planned 13 upstream-owned paths with no patch-group overlap or
+ordering dependency.
+
+Commit `d6eded77c6c95ed72dac243b468e334cdb0b1cd4` added the manifest, ordered
+three-patch source representation, shared source/provenance helper, preparation
+script, focused non-build contract fixtures, and temporary source-parity workflow
+while the checked-in source tree still existed. Local non-build validation
+materialized the real pinned NGSolve tag and compared the reconstructed SDK build
+and regression inputs byte-for-content against the synchronized fork paths with
+no differences. The source-preparation fixture suite passed all eight positive
+and required rejection cases.
+
+Commit `64050b14ce7918157e7f5a24e92ed6ff7550e373` converted Windows
+shared/static, Linux shared/static, and macOS x86_64/arm64 shared/static producers
+to reconstructed source, deterministic manifest-derived version identity, and
+schema-version-2 producer provenance. It also introduced exact-SHA GitHub API
+qualification/containment logic, reusable combined release verification, the
+non-publishing release path, provenance tamper fixtures, qualification negative
+fixtures, and installed/runtime SDK version assertions. Final review found that
+the separate Linux compatibility matrix also needed the required semantic version
+at CMake configure and runtime invocation. That correction was moved before the
+thin-tree deletion, producing the full-source transition qualification target
+`105081a09141ea8cb5698bb9ca92f3e205ce26b2`. Local non-build checks passed both
+Python contract suites, Bash syntax checks, PowerShell parsing, YAML loading,
+`git diff --check`, a complete native-consumer invocation sweep, and a stale
+executable baseline/version sweep.
+
+The final active-tree deletion and documentation rewrite are committed locally
+after that corrected transition target, but the ordered migration requires
+`105081a09141ea8cb5698bb9ca92f3e205ce26b2` to pass the complete remote GitHub
+Actions branch qualification matrix before the deletion commit is published. The
+same remote phase must also
+exercise the non-publishing combined release workflow and the positive temporary-
+ref exact-SHA dispatch path. Until those GitHub-run results are recorded here,
+producer/runtime acceptance and the plan's final `done` state remain pending.

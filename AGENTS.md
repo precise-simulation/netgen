@@ -213,107 +213,95 @@ Claim only the level of validation actually performed.
 
 ## Repository profile: Netgen
 
-This checkout contains the Netgen 6.x mesh generator, native libraries, command-line
-and GUI executable, and Python bindings. Inspect the current source and build options
-before relying on upstream documentation, historical branches, or old build recipes.
+This checkout is a thin producer for FEATool Netgen native SDK release artifacts.
+The active branch does not contain the full upstream Netgen source tree. GitHub
+Actions reconstructs the exact source from a pinned canonical upstream release and
+an ordered repository-owned patch set before each build.
 
-- `libsrc/`: core containers, geometry kernels, meshing algorithms, import/export,
-  OpenCascade support, and the native meshing implementation.
-- `nglib/`: public native library interface used by embedded/downstream consumers.
-- `ng/`: Netgen executable and GUI integration.
-- `python/`: Python bindings and package support for `netgen` and `pyngcore`.
-- `tests/catch/`: C++ Catch-based unit tests, enabled with `ENABLE_UNIT_TESTS=ON`.
-- `tests/pytest/`: Python integration and meshing tests; slow cases require the
-  pytest `--runslow` option.
-- `CMakeLists.txt` and `cmake/SuperBuild.cmake`: primary native build definitions.
-  The superbuild is enabled by default and configures the real Netgen project in a
-  nested `netgen` build directory.
-- `pyproject.toml`: scikit-build-core packaging path for the Python wheel, using
-  the CMake superbuild and the separately packaged OpenCascade dependency.
-- `.gitlab-ci.yml` and `tests/build_*`: current platform build/test examples; treat
-  them as environment-specific references rather than universally portable commands.
-- `.github/README.md`: native SDK qualification/release procedure and the
-  repository's upstream Netgen baseline migration instructions.
-- `external_dependencies/pybind11`: git submodule used by Python-enabled builds.
+- `upstream/netgen.json`: the only executable Netgen upstream repository/tag/full
+  commit pin.
+- `patches/netgen/series`: authoritative patch order; every listed patch must exist
+  exactly once and every `*.patch` file must be listed exactly once.
+- `scripts/prepare-netgen-source.py`: validates the manifest and LF patch bytes,
+  shallow-fetches the exact upstream tag, verifies its commit, applies the ordered
+  patch set, checks the result, and writes source provenance.
+- `scripts/netgen_source.py`: shared manifest, patch, version, and provenance logic.
+- `scripts/check-release-qualification.py`: exact-SHA workflow qualification and
+  GitHub compare-API branch-containment decision.
+- `scripts/verify-netgen-sdk-release.py`: combined eight-archive release verifier.
+- `tests/windows-native-sdk/` and `tests/unix-native-sdk/`: repository-owned
+  external SDK consumer fixtures. These are not copied into reconstructed source.
+- `.github/`: platform producer, OCCT update, combined qualification, and release
+  automation. `.github/README.md` is the release/upstream-port procedure.
 - `plans/`: proposals and execution records, governed by `plans/AGENTS.md`.
+
+Historical Git objects and release tags still contain the old full source fork by
+design. Do not treat their presence in history as active source ownership.
 
 ### Compatibility and ownership
 
-- Preserve public C++, `nglib`, Python, CLI, file-format, and mesh semantics unless
-  the task explicitly changes their contract.
-- Preserve geometric and meshing meaning, including topology, entity/region and
-  boundary mappings, orientation, connectivity, element types, units, and tolerances.
-- Account for affected optional profiles such as `USE_OCC`, `USE_GUI`, `USE_PYTHON`,
-  `USE_MPI`, `USE_CGNS`, and `ENABLE_UNIT_TESTS`; do not assume one profile proves
-  another configuration works.
-- Keep compiler, architecture, C/C++ runtime, Python ABI, OpenCascade, Tcl/Tk, zlib,
-  and downstream native consumers compatible across binary boundaries. On Windows,
-  do not mix MinGW and MSVC artifacts or incompatible MSVC runtime-library choices.
-- Keep dependency pins and producer settings in their owning CMake, packaging, CI,
-  or migration-plan files. A target version in a draft plan is not proof that the
-  corresponding native artifacts have been built or qualified.
+- Preserve the public native SDK behavior represented by the reconstructed Netgen
+  source unless the task explicitly changes that contract. This includes geometry,
+  meshing, topology, connectivity, entity/region and boundary mappings, units,
+  tolerances, and exported native interfaces affected by repository patches.
+- Preserve the current Windows, Linux, and macOS toolchain, runtime, architecture,
+  OpenCascade, zlib, linkage, relocation, and archive contracts unless the task
+  explicitly changes them. On Windows, keep one coherent MSVC toolchain/runtime.
+- Keep source identity in `upstream/netgen.json` and `patches/netgen/`; do not add
+  independent current-baseline tag, SHA, or semantic-version constants to platform
+  workflows, producer scripts, or release logic.
+- Patch hashes are release provenance. Preserve canonical LF bytes in
+  `patches/netgen/*.patch` and `patches/netgen/series`.
+- Catch regressions that must run inside Netgen belong in the patch set. External
+  SDK consumer fixtures belong in this repository's retained native test folders.
+- Keep OCCT release identity in `.github/occt-sdk-release.txt` and platform producer
+  settings in their owning workflow/build scripts.
 - Changes in sibling repositories or downstream consumers must follow their own
   instructions and the authorized task scope.
 
 ### Upstream release ports
 
-- Follow the source-integration and SDK migration procedure in
-  `.github/README.md`. Merge the exact canonical NGSolve release tag with an
-  explicit merge commit so the selected upstream baseline remains an ancestor of
-  `netgen-featool`; do not rebase, squash, or replace the release range with
-  cherry-picks.
-- Preserve the fork-owned triangle-to-quad refinement behavior/tests and
-  `NETGEN_NATIVE_SDK` contract across upstream conflicts. Update baseline/dependency
-  metadata before pushing the coherent branch head, then require the documented
-  Windows, Linux, and macOS qualification before creating an SDK release tag.
+- Follow `.github/README.md`. Do not merge an upstream Netgen release tag into the
+  active producer branch. Select the exact canonical tag/commit in
+  `upstream/netgen.json`, then rebase only the repository-owned patches needed by
+  FEATool onto that baseline.
+- Preserve the triangle-to-quad behavior/regression, native SDK CMake/export
+  contract, and any other still-required patch behavior while adapting patches to
+  upstream API changes.
+- Inspect upstream changes that affect native interfaces, OpenCascade integration,
+  compiler/runtime requirements, package exports, or dependency compatibility.
+- Update one coherent producer revision and require the documented Windows, Linux,
+  and macOS qualification plus non-publishing combined release verification before
+  creating an SDK release tag.
 
 ### Build and validation
 
-- Inspect the current CMake options, installed dependencies, compiler, Python, and
-  target architecture before choosing commands. Use explicit executable paths when
-  tool identity matters and record the build profile actually validated.
-- Prefer an out-of-source CMake build. `USE_SUPERBUILD=ON` is the default; with it,
-  dependency setup happens in the outer build and the actual Netgen project is built
-  under `<build>/netgen`. Run Netgen's CTest checks from that nested build directory.
-  A `USE_SUPERBUILD=OFF` build is a different profile and requires its dependencies
-  to be supplied directly.
-- Initialize `external_dependencies/pybind11` for Python-enabled builds when needed.
-  Do not assume a source checkout has populated submodules merely because CMake can
-  attempt to update them automatically.
-- Match dependencies to the feature under test. `USE_OCC=ON` requires a compatible
-  OpenCascade installation or `BUILD_OCC=ON`; GUI builds require Tcl/Tk; Python builds
-  require the selected Python interpreter/development ABI. `BUILD_ZLIB` and other
-  superbuild dependency choices are part of the build identity when they affect a
-  produced binary.
-- On Windows, use one coherent MSVC toolchain and runtime across Netgen and native
-  dependencies. Record architecture, configuration, generator/compiler, and runtime
-  choice when qualifying distributable or downstream-consumed libraries.
-- Enable `ENABLE_UNIT_TESTS=ON` when validating affected C++ unit-test coverage.
-  CTest registers the Catch tests as `unit_*` and also registers pytest when
-  `USE_PYTHON=ON`; use `ctest -R <pattern> --output-on-failure` for focused checks.
-  Pass the configuration (for example `-C Release`) when using a multi-config build.
-- For direct Python tests, use the Python interpreter and Netgen package produced by
-  the build being validated. Install the test-only dependencies required by the
-  selected tests (for example `pytest-check`) and do not count tests skipped because
-  an optional module such as OCC, NGSolve, MPI, or mpi4py is absent as validation of
-  that integration.
-- The pytest suite skips tests marked `slow` unless invoked with `--runslow`. MPI
-  coverage is registered separately only when the corresponding MPI/Python support
-  is enabled. Run these profiles only when the change affects them.
-- For meshing or geometry changes, exercise the actual affected generator/import path
-  on representative geometry and verify mesh validity plus the relevant element
-  types, connectivity, region/material and boundary mappings, and geometric meaning.
-  For OCC changes, use the real OpenCascade integration rather than a substitute path.
-- For native interface or packaging changes, validate the produced library/package
-  through the affected consumer surface (`nglib`, Python import, executable, or wheel)
-  in addition to compiling it. Wheel builds through `pyproject.toml` use
-  scikit-build-core and have dependency assumptions that differ from a plain native
-  CMake build.
+- Do not compile or build Netgen on the local host. Platform builds, Catch runtime
+  tests, relocation checks, and native SDK consumer builds/runs execute on GitHub
+  Actions runners through the repository workflows.
+- Local non-build validation may inspect files, run Python contract fixtures,
+  validate YAML/shell/PowerShell syntax, reconstruct source for content inspection,
+  run `git apply --check`/`git diff --check`, and audit manifest/patch provenance.
+- All producers must call `scripts/prepare-netgen-source.py` and pass the resulting
+  manifest-derived `NETGEN_VERSION_GIT` to CMake. A staged patched checkout's
+  `git describe --dirty` is not a valid public version identity.
+- When producer behavior changes, qualify the actual affected platform profile and
+  native consumer surface. Do not treat source reconstruction or static syntax
+  checks as evidence that a Windows/Linux/macOS SDK compiled or ran successfully.
+- Release changes require the same combined archive verifier used by publication.
+  A non-publishing `release-netgen-sdk.yml` dispatch is the supported end-to-end
+  combined verification path.
+- Release-tag eligibility remains exact-SHA based. Accepted qualification is a
+  successful `netgen-featool` branch push or exact-SHA workflow dispatch plus
+  compare-API containment in the current branch line; do not reintroduce a deep
+  checkout of historical fork ancestry for this decision.
+- Auto-OCCT coordination may retain full producer-branch history where its merge
+  safety algorithm requires it. That is separate from Netgen upstream provenance.
 - Compare semantic results within justified tolerances. Require identical bytes,
   entity numbering, or mesh ordering only where the existing contract requires it.
-- Proposed scripts in draft plans are not available validation commands until
-  implemented. Report unavailable compilers, dependencies, runtimes, or optional
-  integrations as validation gaps.
+- Report unavailable runners, external dependencies, workflow permissions, or
+  blocked GitHub integration as validation gaps rather than substituting a local
+  native build.
 - Documentation and plan-only changes need no native build or runtime tests.
 
 ### Plan validation

@@ -59,4 +59,4 @@ target_include_directories(netgen_native_sdk_headers PRIVATE "${OCCT_INCLUDE_DIR
 target_link_libraries(netgen_native_sdk_headers PRIVATE nglib)
 
 add_executable(netgen_native_sdk_smoke main.cpp)
-target_link_libraries(netgen_native_sdk_smoke PRIVATE nglib)
+target_link_libraries(netgen_native_sdk_smoke PRIVATE nglib ngcore)

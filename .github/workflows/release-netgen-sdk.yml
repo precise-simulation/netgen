@@ -2,6 +2,12 @@ name: Release Netgen SDK bundle
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the combined release for a netgen-sdk-* tag
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - netgen-sdk-*
@@ -26,7 +32,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/windows-netgen-sdk.yml
     with:
-      bundle_release: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/netgen-sdk-') }}
+      bundle_release: ${{ startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
 
   linux:
     name: Linux SDK
@@ -35,7 +41,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/linux-netgen-sdk.yml
     with:
-      bundle_release: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/netgen-sdk-') }}
+      bundle_release: ${{ startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
 
   macos:
     name: macOS SDKs
@@ -44,11 +50,11 @@ jobs:
       actions: read
     uses: ./.github/workflows/macos-netgen-sdk.yml
     with:
-      bundle_release: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/netgen-sdk-') }}
+      bundle_release: ${{ startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
 
   publish:
     name: Publish combined Netgen SDK release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/netgen-sdk-')
+    if: startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release))
     needs:
       - windows
       - linux

@@ -21,10 +21,9 @@ same migration pattern rather than changing only one workflow.
 
 This fork intentionally keeps only two long-lived branches:
 
-- `master` is the repository default branch and follows the upstream Netgen
-  development/release history;
-- `netgen-featool` is the only maintained fork branch and contains the FEATool
-  SDK integration.
+- `master` follows the upstream Netgen development/release history;
+- `netgen-featool` is the repository default and the only maintained fork
+  branch; it contains the FEATool SDK integration and its release automation.
 
 SDK baseline updates must come from exact upstream release tags on the canonical
 NGSolve Netgen history. Topic or integration branches may be used temporarily,
@@ -40,6 +39,7 @@ tags are the release record.
 | `workflows/linux-netgen-sdk.yml` | Build and qualify the Linux x86_64 SDK and external consumers | push to `netgen-featool`, manual dispatch, reusable workflow call |
 | `workflows/macos-netgen-sdk.yml` | Build and qualify thin arm64 and x86_64 macOS SDKs | push to `netgen-featool`, manual dispatch, reusable workflow call |
 | `workflows/release-netgen-sdk.yml` | Rebuild all platforms, verify the exact release inventory, and publish one combined GitHub release | `netgen-sdk-*` tag or manual dispatch |
+| `workflows/auto-occt-netgen-release.yml` | Detect a newer immutable OCCT SDK release, qualify the pin update, merge it, requalify the exact merge SHA, and dispatch the combined Netgen release | every six hours or manual dispatch |
 
 The platform workflows are qualification workflows first. A normal branch push
 must succeed before a release tag is created. During a tagged release the
@@ -234,6 +234,50 @@ made.
 
 **A matching `netgen-sdk-*` tag therefore publishes the GitHub release
 automatically. It is not a draft-only trigger.**
+
+## Automatic OCCT SDK updates
+
+`auto-occt-netgen-release.yml` polls `precise-simulation/OCCT` for the highest
+published, non-prerelease, immutable `occt-sdk-X.Y.Z[-rN]` release. If that tag
+is newer than `.github/occt-sdk-release.txt`, the workflow:
+
+1. creates `automation/occt-sdk-update` from the current `netgen-featool`
+   head and changes only the OCCT release pin;
+2. opens a PR and explicitly dispatches Windows, Linux, and macOS qualification
+   on the exact update-branch SHA;
+3. leaves the PR open without merging if any platform fails;
+4. constructs a merge commit from the checked target SHA and exact qualified PR
+   head, then pushes it non-force so Git atomically rejects the update if
+   `netgen-featool` moved; after a successful merge it deletes the update
+   branch, creates a temporary qualification ref pinned to the exact merge SHA,
+   explicitly qualifies that immutable commit, then deletes the qualification
+   ref;
+5. creates the next immutable `netgen-sdk-<sha12>-rN` tag and explicitly
+   dispatches `release-netgen-sdk.yml` with `publish_release=true`.
+
+The repository settings are part of this contract: `netgen-featool` must be
+the default branch so GitHub can run the scheduled coordinator, and GitHub
+Actions must be allowed to create pull requests with the repository workflow
+token.
+
+The explicit workflow dispatches are intentional. Commits, PR merges, and tags
+created with GitHub's workflow token do not recursively trigger ordinary push
+workflows. The release workflow therefore accepts a successful exact-SHA
+`workflow_dispatch` qualification from a temporary pinned ref in addition to
+an ordinary `netgen-featool` branch-push qualification. In both cases the
+release tag commit must still be reachable from `origin/netgen-featool`.
+
+An existing failed automation PR is not retried by the schedule. After correcting
+the branch or a transient runner problem, manually run the coordinator with
+`retry_existing=true`. The optional `occt_release` input selects an exact
+immutable OCCT SDK release for a manual run; downgrades are rejected.
+
+If the update has already merged but post-merge qualification failed before any
+release tag was created, later scheduled runs automatically resume that exact
+automation merge. If a `netgen-sdk-*` tag already exists without a published
+release, the schedule stops rather than generating repeated release revisions;
+after investigating the failed release attempt, use `retry_release=true` to
+requalify the same merge SHA and create the next `rN` tag.
 
 
 ## Merging a new upstream Netgen release

@@ -31,15 +31,15 @@ permissions:
 env:
   BASELINE_TAG: v6.2.2608
   BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
-  OCCT_RELEASE: occt-sdk-8.0.1-r2
-  OCCT_ASSET: occt-combined-release-no-pch.zip
-  OCCT_ASSET_SIZE: '257767212'
-  OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/occt-combined-release-no-pch.zip
-  OCCT_SHA256: afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d
+  OCCT_RELEASE: occt-sdk-8.0.1-r3
+  OCCT_ASSET: opencascade-8.0.1-windows-x86_64-vc143-shared-lean-b8f597c67781.zip
+  OCCT_ASSET_SIZE: '34003686'
+  OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/opencascade-8.0.1-windows-x86_64-vc143-shared-lean-b8f597c67781.zip
+  OCCT_SHA256: f42f29e67c681c75ecd5387dcc95167ef7209b3d54e746c74b08b470b62d8e19
   OCCT_STATIC_ASSET: opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
-  OCCT_STATIC_ASSET_SIZE: '118774584'
-  OCCT_STATIC_SHA256: a0e7c6ff3e9a93fcf3aa926e20b598b9f6e8cac92b7711782e76f8c1d1cbfa42
-  OCCT_STATIC_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
+  OCCT_STATIC_ASSET_SIZE: '118774071'
+  OCCT_STATIC_SHA256: 156f3eccf70a9a2bef6b33fa004f3da783a34c67f3e4636b36ac2c7ecee9bd3f
+  OCCT_STATIC_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
   OCCT_SOURCE_SHA: b8f597c677811d1f9f4d8a97f5ae2825c0353a42
   ZLIB_URL: https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
   ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
@@ -274,61 +274,35 @@ jobs:
           }
           Expand-Archive -LiteralPath $archive -DestinationPath $extract
 
-          $innerArchive = Join-Path $extract "opencascade-8.0.1-vc14-64-combined.zip"
-          $outerEntries = @(Get-ChildItem -LiteralPath $extract)
-          if($outerEntries.Count -ne 1 -or -not (Test-Path -LiteralPath $innerArchive -PathType Leaf)) {
-            throw "Unexpected OCCT 8.0.1 outer archive layout: $($outerEntries.Name -join '; ')"
+          $roots = @(Get-ChildItem -LiteralPath $extract -Directory)
+          if($roots.Count -ne 1) {
+            throw "Expected exactly one OCCT shared SDK root, found $($roots.Count)."
           }
-          $payload = "$env:RUNNER_TEMP\occt-8.0.1-payload"
-          if(Test-Path -LiteralPath $payload) {
-            Remove-Item -LiteralPath $payload -Recurse -Force
-          }
-          Expand-Archive -LiteralPath $innerArchive -DestinationPath $payload
-
-          $configs = @(Get-ChildItem -LiteralPath $payload -Recurse -File |
-            Where-Object { $_.Name -eq "OpenCASCADEConfig.cmake" -and $_.Directory.Name -eq "cmake" })
-          $sourceRoots = @()
-          foreach($config in $configs) {
-            $candidate = Split-Path -Parent $config.Directory.FullName
-            if((Test-Path -LiteralPath "$candidate\inc") -and
-               (Test-Path -LiteralPath "$candidate\win64\vc14\lib") -and
-               (Test-Path -LiteralPath "$candidate\win64\vc14\bin")) {
-              $sourceRoots += $candidate
-            }
-          }
-          $sourceRoots = @($sourceRoots | Select-Object -Unique)
-          if($sourceRoots.Count -ne 1) {
-            throw "Expected exactly one OCCT distribution root, found $($sourceRoots.Count). Configs: $($configs.FullName -join '; ')"
-          }
-
-          $thirdPartyTrees = @(Get-ChildItem -LiteralPath $payload -Recurse -Directory |
-            Where-Object { $_.Name -eq "3rdparty-vc14-64" })
-          if($thirdPartyTrees.Count -ne 1) {
-            throw "Expected exactly one 3rdparty-vc14-64 tree, found $($thirdPartyTrees.Count)."
-          }
-
-          $root = "$env:RUNNER_TEMP\occt-normalized"
-          if(Test-Path -LiteralPath $root) {
-            Remove-Item -LiteralPath $root -Recurse -Force
-          }
-          New-Item -ItemType Directory -Force -Path $root | Out-Null
-          Copy-Item -Path "$($sourceRoots[0])\*" -Destination $root -Recurse
-          if(-not (Test-Path -LiteralPath "$root\3rdparty-vc14-64")) {
-            Copy-Item -LiteralPath $thirdPartyTrees[0].FullName -Destination "$root\3rdparty-vc14-64" -Recurse
-          }
-          foreach($required in @("cmake\OpenCASCADEConfig.cmake","inc","win64\vc14\lib","win64\vc14\bin","3rdparty-vc14-64")) {
+          $root = $roots[0].FullName
+          foreach($required in @("sdk-manifest.txt","cmake\OpenCASCADEConfig.cmake","inc","win64\vc14\lib","win64\vc14\bin")) {
             if(-not (Test-Path -LiteralPath (Join-Path $root $required))) {
-              throw "Normalized OCCT root is missing $required."
+              throw "OCCT shared SDK root is missing $required."
             }
+          }
+          $manifest = @(Get-Content -LiteralPath (Join-Path $root "sdk-manifest.txt"))
+          foreach($expected in @(
+            "occt-version=8.0.1",
+            "occt-source-sha=$env:OCCT_SOURCE_SHA",
+            "platform=windows-x86_64",
+            "msvc-toolset=vc143",
+            "msvc-runtime=MultiThreadedDLL",
+            "linkage=shared",
+            "profile=lean",
+            "build-opt-profile=Production",
+            "optional-third-party=none",
+            "toolkit-count=28"
+          )) {
+            if($manifest -notcontains $expected) { throw "OCCT shared manifest is missing: $expected" }
           }
           "OCCT_ROOT=$root" >> $env:GITHUB_ENV
           Write-Host "OCCT root: $root"
 
           $runtimeDirs = @("$root\win64\vc14\bin")
-          $runtimeDirs += @(Get-ChildItem -LiteralPath "$root\3rdparty-vc14-64" -Recurse -File -Filter "*.dll" |
-            ForEach-Object { $_.Directory.FullName } |
-            Sort-Object -Unique)
-          $runtimeDirs = @($runtimeDirs | Select-Object -Unique)
           "OCCT_RUNTIME_PATH=$($runtimeDirs -join ';')" >> $env:GITHUB_ENV
 
           $configuredOcctLibraries = @(
@@ -365,7 +339,7 @@ jobs:
           [pscustomobject]@{
             asset_url = $env:OCCT_URL
             sha256 = $env:OCCT_SHA256
-            package_family = "OCCT 8.0.1 combined Release/no-PCH"
+            package_family = "OCCT 8.0.1 lean vc143 shared /MD SDK"
             inspection = "dumpbin /dependents on every OCCT DLL named by the Netgen OCC link set"
             observed_dynamic_crt_imports = @($dynamicCrt | Sort-Object -Unique)
             libraries = $evidence
@@ -641,12 +615,10 @@ jobs:
           }
 
           $known = @{}
-          foreach($root in @("$env:OCCT_ROOT\win64\vc14\bin", "$env:OCCT_ROOT\3rdparty-vc14-64")) {
-            Get-ChildItem -LiteralPath $root -Recurse -File -Filter "*.dll" | ForEach-Object {
-              $key = $_.Name.ToLowerInvariant()
-              if(-not $known.ContainsKey($key)) {
-                $known[$key] = $_.FullName
-              }
+          Get-ChildItem -LiteralPath "$env:OCCT_ROOT\win64\vc14\bin" -File -Filter "*.dll" | ForEach-Object {
+            $key = $_.Name.ToLowerInvariant()
+            if(-not $known.ContainsKey($key)) {
+              $known[$key] = $_.FullName
             }
           }
 
@@ -666,7 +638,7 @@ jobs:
             $key = $name.ToLowerInvariant()
             if($closure.Contains($key)) { continue }
             if(-not $known.ContainsKey($key)) {
-              throw "Non-system dependency $name is not present in the pinned OCCT combined package."
+              throw "Non-system dependency $name is not present in the pinned lean OCCT SDK."
             }
             $path = $known[$key]
             $closure[$key] = $path

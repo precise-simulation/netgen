@@ -40,10 +40,10 @@ tag:    v6.2.2608
 commit: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
 ```
 
-OCCT source revision used by the Linux/macOS SDK release:
+OCCT SDK release/source revision:
 
 ```text
-release: occt-sdk-8.0.1-r2
+release: occt-sdk-8.0.1-r3
 commit:  b8f597c677811d1f9f4d8a97f5ae2825c0353a42
 ```
 
@@ -51,24 +51,22 @@ Pinned OCCT inputs:
 
 | Platform | OCCT input | SHA-256 |
 | --- | --- | --- |
-| Windows shared | `occt-combined-release-no-pch.zip` | `afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d` |
-| Windows static | `opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip` | `a0e7c6ff3e9a93fcf3aa926e20b598b9f6e8cac92b7711782e76f8c1d1cbfa42` |
-| Linux x86_64 shared | `opencascade-8.0.1-linux-x86_64-glibc2.17-shared-b8f597c67781.tar.gz` | `d68d32c088c5c0cceac7600182d55cf896df7be0ff8a19c79eddfff456ef44e4` |
-| Linux x86_64 static | `opencascade-8.0.1-linux-x86_64-glibc2.17-static-b8f597c67781.tar.gz` | `d787fda2e3fa4e180b7b9d980dbd64c6f385aab9a4a6a4652d49e8c99ad35fad` |
-| macOS arm64 shared | `opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz` | `042347367185726ad16124f465c0654aef4455b247127834e4011e70ed548e1d` |
-| macOS arm64 static | `opencascade-8.0.1-macos13-arm64-static-b8f597c67781.tar.gz` | `7ba195dbc29159f35829ebebf1b8a33487b2734171b4e9ff597b48db64cc682d` |
-| macOS x86_64 shared | `opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz` | `b7c00fea5c7d3a1ff64b367e7d7780f323e00044748c9b57dfe400a206c653ab` |
-| macOS x86_64 static | `opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz` | `d10c8a3ca24d224ff438eba2afaed5ab611a29c8b55f0ea45f0d1a3f2c74e2b2` |
+| Windows shared | `opencascade-8.0.1-windows-x86_64-vc143-shared-lean-b8f597c67781.zip` | `f42f29e67c681c75ecd5387dcc95167ef7209b3d54e746c74b08b470b62d8e19` |
+| Windows static | `opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip` | `156f3eccf70a9a2bef6b33fa004f3da783a34c67f3e4636b36ac2c7ecee9bd3f` |
+| Linux x86_64 shared | `opencascade-8.0.1-linux-x86_64-glibc2.17-shared-b8f597c67781.tar.gz` | `49d98c9f8e76aff3e1efebd411bf68aaad47db8de3ba97b034b296add1c9018d` |
+| Linux x86_64 static | `opencascade-8.0.1-linux-x86_64-glibc2.17-static-b8f597c67781.tar.gz` | `9d26d9230a3742225edc68a83e49a9329ee79850632513d295de7b7917cdafb3` |
+| macOS arm64 shared | `opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz` | `391e2adaccfb25443c30392c3a5afdd46b95a90fa669c1e8a4c555a6fedeb27a` |
+| macOS arm64 static | `opencascade-8.0.1-macos13-arm64-static-b8f597c67781.tar.gz` | `51803af9476e05296a2d38d611e9f8b62ed2e914b8472e96d551386ffe0ebcd5` |
+| macOS x86_64 shared | `opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz` | `90d6366a6fd533a76bcd85dc9236075d58c2999c6398e892c8a90a904075a9ca` |
+| macOS x86_64 static | `opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz` | `dfe67614542388eaf46e42442258e725d16cbe9ad42b5fc88a3f9239e62bb65a` |
 
-The Windows shared `8.0.1` asset is the upstream Release/no-PCH outer archive,
-mirrored in the immutable project release. It contains
-`opencascade-8.0.1-vc14-64-combined.zip`, which the Windows workflow explicitly
-extracts before locating `OpenCASCADEConfig.cmake`, `inc`, `win64/vc14`, and
-`3rdparty-vc14-64`. The Windows static asset is the project-built lean vc143
-static /MD SDK; Netgen verifies its producer manifest and consumes it directly.
+The Windows shared and static assets are project-built lean vc143 /MD SDKs with
+the same 28-toolkit geometry/data-exchange closure and no optional third-party
+runtime bundle. Netgen verifies the producer manifest and consumes each SDK
+directly.
 
 The Linux and macOS OCCT archives come from the same immutable
-`precise-simulation/OCCT` `occt-sdk-8.0.1-r2` release. Linux verifies the release
+`precise-simulation/OCCT` `occt-sdk-8.0.1-r3` release. Linux verifies the release
 metadata as well as the pinned asset. The parallel macOS jobs deliberately do
 not call the unauthenticated GitHub release-metadata API because shared runner
 rate limits can return HTTP 403 during tagged rebuilds. Instead they download
@@ -103,10 +101,10 @@ The main migration differences from `7.9.3` to `8.0.1` were:
 1. Netgen moved from upstream `v6.2.2604` to `v6.2.2608`, which already contains
    the upstream OCCT 8 compatibility work, including the `python_occ_shapes.cpp`
    integer-size fix.
-2. Windows shared changed from a directly consumable OCCT combined ZIP to the
-   nested `8.0.1` Release/no-PCH wrapper described above; Windows static now
-   consumes the project-built lean vc143 static /MD SDK from the same release.
-3. Linux/macOS changed to the `occt-sdk-8.0.1-r2` assets and source commit.
+2. Windows shared and static consume the project-built lean vc143 /MD SDKs from
+   the same immutable release.
+3. Linux/macOS consume the `occt-sdk-8.0.1-r3` assets from the same source
+   commit.
 4. Upstream `v6.2.2608` appends an absolute OCCT library path for ordinary
    installs; `NETGEN_NATIVE_SDK=ON` suppresses that fallback so the packaged SDK
    remains relocatable.
@@ -123,12 +121,11 @@ used by this fork.
 ### Windows
 
 The Windows shared and static SDKs are built with Visual Studio 2022, x64,
-Release, and `/MD`. The shared variant consumes the mirrored OCCT
-Release/no-PCH archive; the static variant consumes the project-built lean
-vc143 static `/MD` OCCT SDK from `occt-sdk-8.0.1-r2`. Netgen qualification
-does not rebuild OCCT from source. The workflow:
+Release, and `/MD`. Both variants consume the matching project-built lean
+vc143 `/MD` OCCT SDK from `occt-sdk-8.0.1-r3`. Netgen qualification does not
+rebuild OCCT from source. The workflow:
 
-1. verifies and normalizes the matching pinned shared or static OCCT archive;
+1. verifies and extracts the matching pinned shared or static OCCT archive;
 2. builds a pinned zlib;
 3. configures/builds Netgen with matching shared or static native SDK settings;
 4. runs focused refinement and Catch tests;

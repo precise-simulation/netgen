@@ -17,11 +17,11 @@ concurrency:
 env:
   NETGEN_BASELINE_TAG: v6.2.2608
   NETGEN_BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
-  WINDOWS_OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/occt-combined-release-no-pch.zip
-  WINDOWS_OCCT_SHA256: afe36b6abcc7964d0f8b0404ccb16e7c1f6ddd8e43b450c865f7e7f092440e9d
-  WINDOWS_STATIC_OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r2/opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
-  WINDOWS_STATIC_OCCT_SHA256: a0e7c6ff3e9a93fcf3aa926e20b598b9f6e8cac92b7711782e76f8c1d1cbfa42
-  OCCT_RELEASE: occt-sdk-8.0.1-r2
+  WINDOWS_OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/opencascade-8.0.1-windows-x86_64-vc143-shared-lean-b8f597c67781.zip
+  WINDOWS_OCCT_SHA256: f42f29e67c681c75ecd5387dcc95167ef7209b3d54e746c74b08b470b62d8e19
+  WINDOWS_STATIC_OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
+  WINDOWS_STATIC_OCCT_SHA256: 156f3eccf70a9a2bef6b33fa004f3da783a34c67f3e4636b36ac2c7ecee9bd3f
+  OCCT_RELEASE: occt-sdk-8.0.1-r3
   OCCT_SOURCE_SHA: b8f597c677811d1f9f4d8a97f5ae2825c0353a42
 
 jobs:
@@ -234,7 +234,7 @@ jobs:
           mapfile -t assets < <(find "$RUNNER_TEMP/release-assets" -type f -print | sort)
           test "${#assets[@]}" -eq 16
           notes="Netgen native SDK bundle built from source $GITHUB_SHA (upstream baseline $NETGEN_BASELINE_TAG / $NETGEN_BASELINE_SHA)."
-          notes="$notes"$'\n\n'"Windows shared OCCT input: precise-simulation/OCCT $OCCT_RELEASE Release/no-PCH archive, SHA-256 $WINDOWS_OCCT_SHA256."
+          notes="$notes"$'\n\n'"Windows shared OCCT input: precise-simulation/OCCT $OCCT_RELEASE lean vc143 shared /MD archive, SHA-256 $WINDOWS_OCCT_SHA256."
           notes="$notes"$'\n'"Windows static OCCT input: precise-simulation/OCCT $OCCT_RELEASE lean vc143 static /MD archive, SHA-256 $WINDOWS_STATIC_OCCT_SHA256."
           notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
           notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD, shared and static SDKs."

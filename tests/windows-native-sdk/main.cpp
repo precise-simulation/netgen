@@ -1,4 +1,5 @@
 #include <iostream>
+#include <map>
 #include <core/version.hpp>
 
 namespace nglib

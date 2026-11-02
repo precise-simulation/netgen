@@ -2,14 +2,15 @@
 
 This directory contains the CI used to build, qualify, and publish the FEATool
 Netgen native SDKs. The workflows intentionally pin the Netgen upstream
-baseline, OCCT inputs, zlib input, producer toolchains, and artifact names so a
-published SDK can be traced back to exact source and dependency revisions.
+baseline, the immutable OCCT SDK release, zlib input, and producer toolchains so
+a published SDK can be traced back to exact source and dependency revisions.
 
-The current release line is based on Netgen `v6.2.2608` with OCCT `8.0.1`.
+The current release line is based on Netgen `v6.2.2608` and the lean OCCT SDK
+selected by `.github/occt-sdk-release.txt`.
 The reference published bundle for this line is
-`netgen-sdk-d5035dcba83a-r1`, built from
-`d5035dcba83a1fc1bd1f15b60d0ad55422415666` by release workflow run
-`37926080718`. GitHub release assets are the canonical distributable SDKs;
+`netgen-sdk-1254bcb88ebd-r1`, built from
+`1254bcb88ebd98ea1ce40706f82d9f22d18e3cef` by release workflow run
+`41376331026`. GitHub release assets are the canonical distributable SDKs;
 Actions artifacts are qualification/staging outputs.
 
 Earlier SDK releases used Netgen `v6.2.2604` with OCCT `7.9.3`; the historical
@@ -31,7 +32,7 @@ combined workflow calls the same platform workflows with `bundle_release=true`;
 those jobs verify that the tagged SHA already has a successful branch
 qualification run.
 
-## Current dependency line: Netgen v6.2.2608 + OCCT 8.0.1
+## Current dependency line
 
 Netgen baseline:
 
@@ -40,38 +41,20 @@ tag:    v6.2.2608
 commit: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
 ```
 
-OCCT SDK release/source revision:
+OCCT is pinned by release tag only:
 
 ```text
-release: occt-sdk-8.0.1-r3
-commit:  b8f597c677811d1f9f4d8a97f5ae2825c0353a42
+.github/occt-sdk-release.txt
 ```
 
-Pinned OCCT inputs:
-
-| Platform | OCCT input | SHA-256 |
-| --- | --- | --- |
-| Windows shared | `opencascade-8.0.1-windows-x86_64-vc143-shared-lean-b8f597c67781.zip` | `f42f29e67c681c75ecd5387dcc95167ef7209b3d54e746c74b08b470b62d8e19` |
-| Windows static | `opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip` | `156f3eccf70a9a2bef6b33fa004f3da783a34c67f3e4636b36ac2c7ecee9bd3f` |
-| Linux x86_64 shared | `opencascade-8.0.1-linux-x86_64-glibc2.17-shared-b8f597c67781.tar.gz` | `49d98c9f8e76aff3e1efebd411bf68aaad47db8de3ba97b034b296add1c9018d` |
-| Linux x86_64 static | `opencascade-8.0.1-linux-x86_64-glibc2.17-static-b8f597c67781.tar.gz` | `9d26d9230a3742225edc68a83e49a9329ee79850632513d295de7b7917cdafb3` |
-| macOS arm64 shared | `opencascade-8.0.1-macos13-arm64-shared-b8f597c67781.tar.gz` | `391e2adaccfb25443c30392c3a5afdd46b95a90fa669c1e8a4c555a6fedeb27a` |
-| macOS arm64 static | `opencascade-8.0.1-macos13-arm64-static-b8f597c67781.tar.gz` | `51803af9476e05296a2d38d611e9f8b62ed2e914b8472e96d551386ffe0ebcd5` |
-| macOS x86_64 shared | `opencascade-8.0.1-macos13-x86_64-shared-b8f597c67781.tar.gz` | `90d6366a6fd533a76bcd85dc9236075d58c2999c6398e892c8a90a904075a9ca` |
-| macOS x86_64 static | `opencascade-8.0.1-macos13-x86_64-static-b8f597c67781.tar.gz` | `dfe67614542388eaf46e42442258e725d16cbe9ad42b5fc88a3f9239e62bb65a` |
-
-The Windows shared and static assets are project-built lean vc143 /MD SDKs with
-the same 28-toolkit geometry/data-exchange closure and no optional third-party
-runtime bundle. Netgen verifies the producer manifest and consumes each SDK
-directly.
-
-The Linux and macOS OCCT archives come from the same immutable
-`precise-simulation/OCCT` `occt-sdk-8.0.1-r3` release. Linux verifies the release
-metadata as well as the pinned asset. The parallel macOS jobs deliberately do
-not call the unauthenticated GitHub release-metadata API because shared runner
-rate limits can return HTTP 403 during tagged rebuilds. Instead they download
-the fully pinned public asset URL with explicit retry/backoff and require both
-the exact pinned byte size and SHA-256 before using it.
+`.github/resolve-occt-release.py` resolves the matching Windows, Linux, or macOS
+shared/static asset from that exact GitHub release. The resolver requires the
+release to be immutable and uses GitHub's published asset ID, name, size, URL,
+and SHA-256 digest. The workflows download that exact asset through GitHub's
+authenticated asset API, then verify the downloaded bytes and the SDK's
+embedded manifest; the full OCCT source SHA comes from that manifest and is
+recorded in Netgen's `producer-info.json`. Asset filenames, byte sizes, hashes,
+URLs, and the OCCT source SHA are therefore not duplicated as Netgen pins.
 
 Netgen's `BUILD_OCC=ON` superbuild separately pins the upstream OCCT source
 archive `V8_0_1.zip` with MD5 `5b0b171d7028cf73bd9369997091347a`.
@@ -121,9 +104,9 @@ used by this fork.
 ### Windows
 
 The Windows shared and static SDKs are built with Visual Studio 2022, x64,
-Release, and `/MD`. Both variants consume the matching project-built lean
-vc143 `/MD` OCCT SDK from `occt-sdk-8.0.1-r3`. Netgen qualification does not
-rebuild OCCT from source. The workflow:
+Release, and `/MD`. Both variants consume the matching project-built lean vc143
+`/MD` SDK from the selected immutable OCCT release. Netgen qualification does
+not rebuild OCCT from source. The workflow:
 
 1. verifies and extracts the matching pinned shared or static OCCT archive;
 2. builds a pinned zlib;
@@ -160,17 +143,17 @@ the archive and checksum sidecar. Static packages include the pinned `libz.a`.
 ## Artifact names
 
 Artifact filenames include the upstream Netgen baseline, the first 12 characters
-of the fork source SHA, and the OCCT version. For the current line:
+of the fork source SHA, and the OCCT version resolved from the selected release:
 
 ```text
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-win64-msvc.zip
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-win64-msvc-static.zip
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-linux-x86_64-glibc2.17-gcc10-static.tar.gz
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-x86_64-clang.tar.gz
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-x86_64-clang-static.tar.gz
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-arm64-clang.tar.gz
-netgen-featool-v6.2.2608-<sha12>-occt8.0.1-macos13-arm64-clang-static.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-win64-msvc.zip
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-win64-msvc-static.zip
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-linux-x86_64-glibc2.17-gcc10.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-linux-x86_64-glibc2.17-gcc10-static.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-macos13-x86_64-clang.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-macos13-x86_64-clang-static.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-macos13-arm64-clang.tar.gz
+netgen-featool-v6.2.2608-<sha12>-occt<occt-version>-macos13-arm64-clang-static.tar.gz
 ```
 
 Every archive has a sibling `.sha256` file. Each SDK also contains
@@ -317,14 +300,27 @@ the Windows, Linux, and macOS qualification workflows before any
 
 A new Netgen upstream release does **not** automatically require a new OCCT
 release. Keep the currently qualified OCCT SDK line when it remains compatible;
-change the OCCT release/pins only when the new Netgen baseline requires a
-different OCCT API/build contract or when an OCCT upgrade is an explicit goal.
+change the OCCT release only when the new Netgen baseline requires a different
+OCCT API/build contract or when an OCCT upgrade is an explicit goal.
 Even for a Netgen-only bump, inspect upstream changes to
 `CMakeLists.txt`, `cmake/SuperBuild.cmake`, `libsrc/occ/`, and
 `python/` for dependency or exported-interface changes.
 
-When moving to a new Netgen baseline or OCCT version, update the complete set of
-pins and embedded provenance rather than only changing artifact filenames:
+For an OCCT-only SDK update that keeps the qualified platform contract (Windows
+VC143 `/MD`, Linux x86_64/glibc 2.17, and macOS 13 native architectures), change
+exactly one Netgen pin:
+
+```text
+.github/occt-sdk-release.txt
+```
+
+Set it to the already-published immutable lean `occt-sdk-*` release. The
+platform workflows resolve its assets and provenance automatically. Push the
+coherent change and require Windows, Linux, and macOS qualification before
+creating a Netgen SDK release tag.
+
+When moving to a new Netgen upstream baseline, the Netgen baseline metadata still
+requires the normal source-port updates:
 
 - `BASELINE_TAG` / `BASELINE_SHA` in all three platform workflows;
 - shared and static artifact names in `windows-netgen-sdk.yml`;
@@ -334,15 +330,9 @@ pins and embedded provenance rather than only changing artifact filenames:
   `linux-netgen-sdk/build-sdk.sh`;
 - the SDK-name version and `upstream` producer metadata in
   `macos-netgen-sdk/build-sdk.sh`;
-- Windows OCCT release/URL/size/SHA-256, extraction assumptions, manifest
-  contract, and producer metadata if OCCT changes;
-- Linux OCCT asset name, size, SHA-256, URL, release/source commit, and
-  build-script producer metadata if OCCT changes;
-- all macOS OCCT asset names, sizes, SHA-256s, release/source commit, and
-  build-script producer metadata if OCCT changes;
 - `cmake/SuperBuild.cmake` if upstream's source-built OCCT pin or integration
   changed;
-- this README's current/historical dependency table and reference release.
+- this README's historical/reference material when the Netgen baseline itself changes.
 
 Before pushing the coherent migration head, perform a stale-pin sweep for the
 old baseline tag, full SHA, and version string, for example:

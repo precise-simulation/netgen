@@ -15,7 +15,13 @@ library_type="${linkage^^}"
 : "${PRODUCER_IMAGE:?PRODUCER_IMAGE is required}"
 : "${PRODUCER_IMAGE_TAG:?PRODUCER_IMAGE_TAG is required}"
 : "${PRODUCER_IMAGE_DIGEST:?PRODUCER_IMAGE_DIGEST is required}"
+: "${OCCT_RELEASE:?OCCT_RELEASE is required}"
+: "${OCCT_VERSION:?OCCT_VERSION is required}"
+: "${OCCT_ASSET_ID:?OCCT_ASSET_ID is required}"
+: "${OCCT_ASSET:?OCCT_ASSET is required}"
+: "${OCCT_URL:?OCCT_URL is required}"
 : "${OCCT_SHA256:?OCCT_SHA256 is required}"
+: "${OCCT_SOURCE_PREFIX:?OCCT_SOURCE_PREFIX is required}"
 : "${ZLIB_SHA256:?ZLIB_SHA256 is required}"
 
 source_mount=/source
@@ -25,7 +31,7 @@ inputs_dir=/inputs
 occt_archive="$inputs_dir/occt.tar.gz"
 zlib_archive="$inputs_dir/zlib.tar.gz"
 short_sha="${SOURCE_SHA:0:12}"
-sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10"
+sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt${OCCT_VERSION}-linux-x86_64-glibc2.17-gcc10"
 if [[ "$linkage" == "static" ]]; then
   sdk_name="${sdk_name}-static"
 fi
@@ -82,17 +88,20 @@ mapfile -t occt_roots < <(find "$work_root/occt" -mindepth 1 -maxdepth 1 -type d
 occt_root="${occt_roots[0]}"
 occt_manifest="$occt_root/build-manifest.json"
 [[ -f "$occt_manifest" ]]
-"$python_bin" - "$occt_manifest" "$PRODUCER_IMAGE_DIGEST" "$linkage" <<'PY'
+OCCT_SOURCE_SHA="$("$python_bin" - "$occt_manifest" "$linkage" "$OCCT_VERSION" "$OCCT_SOURCE_PREFIX" <<'PY'
 import json, pathlib, sys
 data = json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert data["schema_version"] == 1
-assert data["occt"]["version"] == "8.0.1"
-assert data["occt"]["commit"] == "b8f597c677811d1f9f4d8a97f5ae2825c0353a42"
-assert data["linkage"] == sys.argv[3]
+assert data["occt"]["version"] == sys.argv[3]
+commit = data["occt"]["commit"].lower()
+assert len(commit) == 40 and commit.startswith(sys.argv[4].lower())
+assert data["linkage"] == sys.argv[2]
 assert data["producer"]["architecture"] == "x86_64"
 assert data["producer"]["glibc_baseline"] == "2.17"
-assert data["producer"]["image_digest"] == sys.argv[2]
+print(commit)
 PY
+)"
+export OCCT_SOURCE_SHA
 [[ -f "$occt_root/lib/cmake/opencascade/OpenCASCADEConfig.cmake" ]]
 [[ -f "$occt_root/include/opencascade/Standard.hxx" ]]
 
@@ -251,7 +260,12 @@ info = {
         "glibc_baseline": "2.17"
     },
     "netgen": {"configuration": "Release", "cxx_standard": 17, "linkage": linkage, "native_arch": False, "position_independent_code": True},
-    "occt": {"release": "occt-sdk-8.0.1-r3", "commit": "b8f597c677811d1f9f4d8a97f5ae2825c0353a42", "asset_sha256": sys.argv[5], "linkage": linkage},
+    "occt": {
+        "version": os.environ["OCCT_VERSION"], "release": os.environ["OCCT_RELEASE"],
+        "commit": os.environ["OCCT_SOURCE_SHA"], "asset_id": int(os.environ["OCCT_ASSET_ID"]),
+        "asset_name": os.environ["OCCT_ASSET"],
+        "asset_url": os.environ["OCCT_URL"], "sha256": sys.argv[5], "linkage": linkage
+    },
     "zlib": {"version": "1.3.1", "sha256": sys.argv[6], "linkage": "static", "pic": True},
     "symbol_versions": {"GLIBC": glibc, "GLIBCXX": symbol_max("GLIBCXX") if linkage == "shared" else None, "CXXABI": symbol_max("CXXABI") if linkage == "shared" else None},
     "artifact_hashes": {p.relative_to(sdk).as_posix(): sha(p) for p in sorted([*artifacts, *sorted((sdk / "cmake").glob("*.cmake"))])}

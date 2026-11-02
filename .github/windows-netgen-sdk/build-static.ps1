@@ -155,7 +155,7 @@ $info=[ordered]@{
   source=[ordered]@{repository=$env:GITHUB_REPOSITORY;ref=$env:GITHUB_REF;commit=$env:GITHUB_SHA;qualification_run_id=$env:QUALIFICATION_RUN_ID}
   toolchain=$toolchain
   netgen=[ordered]@{configuration="Release";cxx_standard=17;linkage="static";msvc_runtime="MultiThreadedDLL";native_arch=$false}
-  occt=[ordered]@{version="8.0.1";release=$env:OCCT_RELEASE;commit=$env:OCCT_SOURCE_SHA;asset_url=$env:OCCT_STATIC_URL;sha256=$env:OCCT_STATIC_SHA256;linkage="static";bundled=$true;profile="lean";toolkit_count=28}
+  occt=[ordered]@{version=$env:OCCT_VERSION;release=$env:OCCT_RELEASE;commit=$env:OCCT_SOURCE_SHA;asset_id=[int64]$env:OCCT_ASSET_ID;asset_name=$env:OCCT_ASSET;asset_url=$env:OCCT_URL;sha256=$env:OCCT_SHA256;linkage="static";bundled=$true;profile="lean";toolkit_count=28}
   zlib=[ordered]@{version="1.3.1";sha256=$env:ZLIB_SHA256;linkage="static";msvc_runtime="MultiThreadedDLL"}
   artifact_hashes=$hashes
 }

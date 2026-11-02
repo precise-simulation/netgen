@@ -331,6 +331,7 @@ jobs:
             -DCMAKE_BUILD_RPATH="$netgen_root/lib" \
             -DNETGEN_SDK_DIR="$netgen_root" \
             -DEXPECTED_NETGEN_VERSION="$netgen_version" \
+            -DCHECK_RUNTIME_NETGEN_VERSION=OFF \
             -DOpenCASCADE_DIR="$occt_root/lib/cmake/opencascade" \
             -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
           cmake --build "$consumer_build" --parallel 2

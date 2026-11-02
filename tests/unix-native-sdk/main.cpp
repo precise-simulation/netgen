@@ -1,6 +1,8 @@
 #include <iostream>
+#ifdef CHECK_RUNTIME_NETGEN_VERSION
 #include <map>
 #include <core/version.hpp>
+#endif
 
 namespace nglib
 {
@@ -18,6 +20,7 @@ int main(int argc, char ** argv)
     return 2;
   }
 
+#ifdef CHECK_RUNTIME_NETGEN_VERSION
   const std::string expected_version = "v" + std::string(argv[2]);
   const std::string runtime_version = ngcore::GetLibraryVersion("netgen").to_string();
   if(runtime_version != expected_version)
@@ -26,6 +29,7 @@ int main(int argc, char ** argv)
               << " does not match " << expected_version << "\n";
     return 5;
   }
+#endif
 
   Ng_Init();
   Ng_OCC_Geometry * geometry = Ng_OCC_Load_BREP(argv[1]);

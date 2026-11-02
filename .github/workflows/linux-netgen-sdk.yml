@@ -303,8 +303,10 @@ jobs:
           test "${#netgen_roots[@]}" -eq 1
           netgen_root="${netgen_roots[0]}"
           producer_info="$(cat "$netgen_root/producer-info.json")"
+          netgen_version="$(jq -r '.upstream.version' <<<"$producer_info")"
           occt_asset_id="$(jq -r '.occt.asset_id' <<<"$producer_info")"
           occt_sha256="$(jq -r '.occt.sha256' <<<"$producer_info")"
+          test "$netgen_version" != null
           [[ "$occt_asset_id" =~ ^[0-9]+$ ]]
           test "$occt_sha256" != null
           occt_archive="$RUNNER_TEMP/occt.tar.gz"
@@ -328,14 +330,15 @@ jobs:
             -B "$consumer_build" \
             -DCMAKE_BUILD_RPATH="$netgen_root/lib" \
             -DNETGEN_SDK_DIR="$netgen_root" \
+            -DEXPECTED_NETGEN_VERSION="$netgen_version" \
             -DOpenCASCADE_DIR="$occt_root/lib/cmake/opencascade" \
             -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
           cmake --build "$consumer_build" --parallel 2
           if [[ "${{ matrix.linkage }}" == shared ]]; then
             LD_LIBRARY_PATH="$occt_root/lib" \
-              "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep
+              "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep "$netgen_version"
           else
-            "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep
+            "$consumer_build/netgen_native_sdk_smoke" tests/unix-native-sdk/vertex.brep "$netgen_version"
             if readelf -d "$consumer_build/netgen_native_sdk_smoke" | grep -Eq 'NEEDED.*(libng|libTK)[^]]*\.so'; then
               echo "static consumer unexpectedly depends on shared Netgen/OCCT libraries" >&2
               readelf -d "$consumer_build/netgen_native_sdk_smoke" >&2

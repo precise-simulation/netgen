@@ -39,7 +39,7 @@ tags are the release record.
 | `workflows/linux-netgen-sdk.yml` | Build and qualify the Linux x86_64 SDK and external consumers | push to `netgen-featool`, manual dispatch, reusable workflow call |
 | `workflows/macos-netgen-sdk.yml` | Build and qualify thin arm64 and x86_64 macOS SDKs | push to `netgen-featool`, manual dispatch, reusable workflow call |
 | `workflows/release-netgen-sdk.yml` | Rebuild all platforms, verify the exact release inventory, and publish one combined GitHub release | `netgen-sdk-*` tag or manual dispatch |
-| `workflows/auto-occt-netgen-release.yml` | Detect a newer immutable OCCT SDK release, qualify the pin update, merge it, requalify the exact merge SHA, and dispatch the combined Netgen release | every six hours or manual dispatch |
+| `workflows/auto-occt-netgen-release.yml` | Detect a newer immutable OCCT SDK release, qualify the pin update branch, atomically merge it, requalify the exact merge SHA, and dispatch the combined Netgen release | every six hours or manual dispatch |
 
 The platform workflows are qualification workflows first. A normal branch push
 must succeed before a release tag is created. During a tagged release the
@@ -243,11 +243,11 @@ is newer than `.github/occt-sdk-release.txt`, the workflow:
 
 1. creates `automation/occt-sdk-update` from the current `netgen-featool`
    head and changes only the OCCT release pin;
-2. opens a PR and explicitly dispatches Windows, Linux, and macOS qualification
-   on the exact update-branch SHA;
-3. leaves the PR open without merging if any platform fails;
-4. constructs a merge commit from the checked target SHA and exact qualified PR
-   head, then pushes it non-force so Git atomically rejects the update if
+2. explicitly dispatches Windows, Linux, and macOS qualification on the exact
+   update-branch SHA;
+3. leaves the update branch unmerged for inspection if any platform fails;
+4. constructs a merge commit from the checked target SHA and exact qualified
+   update head, then pushes it non-force so Git atomically rejects the update if
    `netgen-featool` moved; after a successful merge it deletes the update
    branch, creates a temporary qualification ref pinned to the exact merge SHA,
    explicitly qualifies that immutable commit, then deletes the qualification
@@ -255,22 +255,24 @@ is newer than `.github/occt-sdk-release.txt`, the workflow:
 5. creates the next immutable `netgen-sdk-<sha12>-rN` tag and explicitly
    dispatches `release-netgen-sdk.yml` with `publish_release=true`.
 
-The repository settings are part of this contract: `netgen-featool` must be
-the default branch so GitHub can run the scheduled coordinator, and GitHub
-Actions must be allowed to create pull requests with the repository workflow
-token.
+The repository setting is part of this contract: `netgen-featool` must be the
+default branch so GitHub can run the scheduled coordinator.
 
-The explicit workflow dispatches are intentional. Commits, PR merges, and tags
+The explicit workflow dispatches are intentional. Commits, merges, and tags
 created with GitHub's workflow token do not recursively trigger ordinary push
 workflows. The release workflow therefore accepts a successful exact-SHA
 `workflow_dispatch` qualification from a temporary pinned ref in addition to
 an ordinary `netgen-featool` branch-push qualification. In both cases the
 release tag commit must still be reachable from `origin/netgen-featool`.
 
-An existing failed automation PR is not retried by the schedule. After correcting
-the branch or a transient runner problem, manually run the coordinator with
-`retry_existing=true`. The optional `occt_release` input selects an exact
-immutable OCCT SDK release for a manual run; downgrades are rejected.
+An existing failed automation update branch is not retried by the schedule.
+After correcting the branch or a transient runner problem, manually run the
+coordinator with `retry_existing=true`. The optional `occt_release` input
+selects an exact immutable OCCT SDK release for a manual run; downgrades are
+rejected. Before retrying an existing branch, the coordinator verifies that its
+head is exactly one generated `ci: update OCCT SDK to <release>` commit, that
+the commit changes only `.github/occt-sdk-release.txt`, and that its parent is
+already contained in `netgen-featool`.
 
 If the update has already merged but post-merge qualification failed before any
 release tag was created, later scheduled runs automatically resume that exact

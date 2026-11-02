@@ -122,7 +122,6 @@ qualify_ref() {
   local ref="$1"
   local sha="$2"
   local phase="$3"
-  local pr_number="${4:-}"
   declare -A before=()
   declare -A run_ids=()
 
@@ -172,9 +171,6 @@ qualify_ref() {
   done
 
   if [[ "$all_complete" != true ]]; then
-    if [[ -n "$pr_number" ]]; then
-      gh pr comment "$pr_number" --body "Automated $phase qualification timed out for $sha." || true
-    fi
     echo "$phase qualification timed out for $sha." >&2
     return 1
   fi
@@ -194,15 +190,8 @@ qualify_ref() {
   done
 
   if [[ "$failed" == true ]]; then
-    if [[ -n "$pr_number" ]]; then
-      gh pr comment "$pr_number" --body "$(printf 'Automated %s qualification failed for %s.\n\n%s' "$phase" "$sha" "$details")" || true
-    fi
     echo "$phase qualification failed for $sha." >&2
     return 1
-  fi
-
-  if [[ -n "$pr_number" ]]; then
-    gh pr comment "$pr_number" --body "$(printf 'Automated %s qualification passed for %s.\n\n%s' "$phase" "$sha" "$details")" || true
   fi
 }
 
@@ -217,7 +206,7 @@ qualify_commit() {
   git push origin "$sha:refs/heads/$ref"
 
   local rc=0
-  qualify_ref "$ref" "$sha" "$phase" "" || rc=$?
+  qualify_ref "$ref" "$sha" "$phase" || rc=$?
   git push origin --delete "$ref" || true
   return "$rc"
 }
@@ -397,18 +386,34 @@ if [[ "$candidate_release" == "$current_release" ]]; then
   exit 0
 fi
 
-existing_pr="$(gh pr list \
-  --base "$TARGET_BRANCH" \
-  --head "$UPDATE_BRANCH" \
-  --state open \
-  --json number,headRefOid,url \
-  --jq '.[0] // empty')"
-
-pr_number=""
 head_sha=""
-if [[ -n "$existing_pr" ]]; then
-  pr_number="$(jq -r '.number' <<<"$existing_pr")"
-  head_sha="$(jq -r '.headRefOid' <<<"$existing_pr")"
+if git ls-remote --exit-code --heads origin "$UPDATE_BRANCH" >/dev/null 2>&1; then
+  git fetch origin "$UPDATE_BRANCH:refs/remotes/origin/$UPDATE_BRANCH"
+  git fetch origin "$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+  head_sha="$(git rev-parse "origin/$UPDATE_BRANCH")"
+  update_subject="$(git show -s --format=%s "$head_sha")"
+  if [[ "$update_subject" != "ci: update OCCT SDK to $candidate_release" ]]; then
+    echo "Existing automation branch has unexpected head subject: $update_subject" >&2
+    exit 1
+  fi
+
+  read -r -a update_commit_fields <<<"$(git rev-list --parents -n 1 "$head_sha")"
+  if (( ${#update_commit_fields[@]} != 2 )); then
+    echo "Existing automation branch head must be a single-parent generated pin commit." >&2
+    exit 1
+  fi
+  update_parent="${update_commit_fields[1]}"
+  if ! git merge-base --is-ancestor "$update_parent" "origin/$TARGET_BRANCH"; then
+    echo "Existing automation branch parent is not contained in $TARGET_BRANCH." >&2
+    exit 1
+  fi
+
+  mapfile -t update_paths < <(git diff-tree --no-commit-id --name-only -r "$head_sha")
+  if (( ${#update_paths[@]} != 1 )) || [[ "${update_paths[0]}" != "$PIN_FILE" ]]; then
+    echo "Existing automation branch is not a pin-only generated update." >&2
+    exit 1
+  fi
+
   branch_pin="$(
     gh api --method GET "repos/$GITHUB_REPOSITORY/contents/$PIN_FILE" -f ref="$UPDATE_BRANCH" |
       jq -r '.content' |
@@ -417,21 +422,17 @@ if [[ -n "$existing_pr" ]]; then
       tr -d '\r\n'
   )"
   if [[ "$branch_pin" != "$candidate_release" ]]; then
-    echo "Existing automation PR #$pr_number pins $branch_pin, not $candidate_release. Resolve it before a newer update can proceed." >&2
+    echo "Existing automation branch $UPDATE_BRANCH pins $branch_pin, not $candidate_release. Resolve or delete it before a newer update can proceed." >&2
     exit 1
   fi
   if [[ "$RETRY_EXISTING" != "true" ]]; then
-    summary "- Existing update PR: #$pr_number"
-    summary "- Result: existing update is left for inspection; use manual dispatch with retry_existing=true to re-run qualification."
+    summary "- Existing update branch: $UPDATE_BRANCH"
+    summary "- Result: existing failed/incomplete update is left for inspection; use manual dispatch with retry_existing=true to re-run qualification."
     exit 0
   fi
 else
   git fetch origin "$TARGET_BRANCH"
   base_sha="$(git rev-parse FETCH_HEAD)"
-
-  if git ls-remote --exit-code --heads origin "$UPDATE_BRANCH" >/dev/null 2>&1; then
-    git push origin --delete "$UPDATE_BRANCH"
-  fi
 
   git checkout -B "$UPDATE_BRANCH" "$base_sha"
   printf '%s\n' "$candidate_release" > "$PIN_FILE"
@@ -441,28 +442,15 @@ else
   git commit -m "ci: update OCCT SDK to $candidate_release"
   head_sha="$(git rev-parse HEAD)"
   git push origin "HEAD:refs/heads/$UPDATE_BRANCH"
-
-  pr_url="$(gh pr create \
-    --base "$TARGET_BRANCH" \
-    --head "$UPDATE_BRANCH" \
-    --title "ci: update OCCT SDK to $candidate_release" \
-    --body "$(cat <<EOF
-Automated OCCT SDK update from $current_release to immutable release $candidate_release.
-
-This PR changes only $PIN_FILE. The automation explicitly dispatches Windows, Linux, and macOS qualification on this exact head before merging. If compatibility fails, this PR remains open and no Netgen SDK release is created.
-EOF
-)")"
-  pr_number="$(gh pr view "$pr_url" --json number --jq '.number')"
 fi
 
-qualify_ref "$UPDATE_BRANCH" "$head_sha" "pre-merge OCCT update" "$pr_number"
+qualify_ref "$UPDATE_BRANCH" "$head_sha" "pre-merge OCCT update"
 
 git fetch origin "$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
 target_sha="$(git rev-parse "origin/$TARGET_BRANCH")"
 merge_base="$(git merge-base "$head_sha" "$target_sha")"
 if [[ "$merge_base" != "$target_sha" ]]; then
-  gh pr comment "$pr_number" --body "The target branch advanced after this update branch was prepared. Update the PR branch, then manually dispatch the coordinator with retry_existing=true." || true
-  echo "Refusing to merge stale OCCT update branch; target is no longer an ancestor." >&2
+  echo "The target branch advanced after the update branch was prepared. Recreate the automation branch, then manually dispatch with retry_existing=true." >&2
   exit 1
 fi
 
@@ -470,13 +458,12 @@ git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git checkout --detach "$target_sha"
 git merge --no-ff "$head_sha" \
-  -m "Merge pull request #$pr_number from ${GITHUB_REPOSITORY%%/*}/$UPDATE_BRANCH" \
+  -m "Merge automated OCCT SDK update $candidate_release" \
   -m "ci: update OCCT SDK to $candidate_release"
 merge_sha="$(git rev-parse HEAD)"
 
 if ! git push origin "$merge_sha:refs/heads/$TARGET_BRANCH"; then
-  gh pr comment "$pr_number" --body "The target branch moved or rejected the atomic merge update after qualification. The PR was not merged; update it and manually dispatch the coordinator with retry_existing=true." || true
-  echo "Atomic push of qualified merge commit was rejected." >&2
+  echo "Atomic push of qualified merge commit was rejected because the target moved or rejected the update. Recreate the update branch and retry." >&2
   exit 1
 fi
 
@@ -484,7 +471,6 @@ git push origin --delete "$UPDATE_BRANCH" || true
 summary ""
 summary "### Merge"
 summary ""
-summary "- PR: #$pr_number"
 summary "- Merge commit: $merge_sha"
 
 publish_merge_sha "$merge_sha"

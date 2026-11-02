@@ -9,6 +9,8 @@
 *.tcl   text
 *.cmake text
 CMakeLists.txt text
+patches/netgen/*.patch text eol=lf
+patches/netgen/series text eol=lf
 
 # keep CRLF in the working tree for Windows-only files
 *.rc          text eol=crlf

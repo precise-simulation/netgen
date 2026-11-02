@@ -29,8 +29,6 @@ permissions:
   actions: read
 
 env:
-  BASELINE_TAG: v6.2.2608
-  BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
   ZLIB_URL: https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
   ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
@@ -49,7 +47,21 @@ jobs:
       - name: Check out exact producer commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+
+      - name: Reconstruct pinned Netgen source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $source = "$env:RUNNER_TEMP\netgen-source"
+          $provenance = "$env:RUNNER_TEMP\source-provenance.json"
+          python scripts/prepare-netgen-source.py --destination $source --provenance $provenance
+          if($LASTEXITCODE -ne 0) { throw "Netgen source reconstruction failed." }
+          $identity = Get-Content -LiteralPath $provenance -Raw | ConvertFrom-Json
+          "NETGEN_SOURCE_DIR=$source" >> $env:GITHUB_ENV
+          "SOURCE_PROVENANCE=$provenance" >> $env:GITHUB_ENV
+          "NETGEN_VERSION=$($identity.upstream.version)" >> $env:GITHUB_ENV
+          "NETGEN_VERSION_GIT=$($identity.upstream.version_git)" >> $env:GITHUB_ENV
 
       - name: Resolve immutable OCCT shared SDK
         id: occt
@@ -63,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           $prefix = $env:GITHUB_SHA.Substring(0, 12)
-          $archive = "netgen-featool-v6.2.2608-$prefix-occt$env:OCCT_VERSION-win64-msvc.zip"
+          $archive = "netgen-featool-v$env:NETGEN_VERSION-$prefix-occt$env:OCCT_VERSION-win64-msvc.zip"
           "source_prefix=$prefix" >> $env:GITHUB_OUTPUT
           "archive_name=$archive" >> $env:GITHUB_OUTPUT
           "checksum_name=$archive.sha256" >> $env:GITHUB_OUTPUT
@@ -78,35 +90,6 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $sha = $env:GITHUB_SHA.ToLowerInvariant()
-          $baseline = $env:BASELINE_SHA.ToLowerInvariant()
-
-          git cat-file -e "$baseline^{commit}"
-          if($LASTEXITCODE -ne 0) {
-            throw "Pinned upstream baseline $baseline is not present in the checkout."
-          }
-          $baselineTagCommit = (git rev-parse "$env:BASELINE_TAG^{commit}").Trim().ToLowerInvariant()
-          if($LASTEXITCODE -ne 0 -or $baselineTagCommit -ne $baseline) {
-            throw "Pinned baseline tag $env:BASELINE_TAG does not resolve to $baseline."
-          }
-          git merge-base --is-ancestor $baseline $sha
-          if($LASTEXITCODE -ne 0) {
-            throw "Pinned upstream baseline $baseline is not an ancestor of $sha."
-          }
-
-          $registration = Select-String -Path "tests/catch/CMakeLists.txt" -Pattern 'add_unit_test\(refinement refinement\.cpp\)' -Quiet
-          $fullQuad = Select-String -Path "tests/catch/refinement.cpp" -Pattern 'Uniform refinement can convert a triangle to three quads' -Quiet
-          $baselineQuad = Select-String -Path "tests/catch/refinement.cpp" -Pattern 'Uniform refinement still refines a quad to four quads' -Quiet
-          if(-not ($registration -and $fullQuad -and $baselineQuad)) {
-            throw "Committed refinement regression source or CTest registration is missing."
-          }
-
-          $commits = @(git log --reverse --format="%H%x09%s" "$baseline..$sha")
-          if($LASTEXITCODE -ne 0) {
-            throw "Could not enumerate commits after the pinned baseline."
-          }
-          $commits | Set-Content -LiteralPath "$env:RUNNER_TEMP\post-baseline-commits.txt"
-          Write-Host "Commits after ${baseline}:"
-          $commits | ForEach-Object { Write-Host "  $_" }
 
           $qualificationRunId = ""
           $isTagPush = $env:GITHUB_REF.StartsWith("refs/tags/")
@@ -135,34 +118,13 @@ jobs:
               throw "Release tag source prefix $tagPrefix does not match GITHUB_SHA $sha."
             }
 
-            git fetch origin netgen-featool:refs/remotes/origin/netgen-featool
-            if($LASTEXITCODE -ne 0) {
-              throw "Could not fetch origin/netgen-featool."
+            $qualificationRunId = (& python scripts/check-release-qualification.py `
+              --repository $env:GITHUB_REPOSITORY `
+              --workflow windows-netgen-sdk.yml `
+              --producer-sha $sha).Trim()
+            if($LASTEXITCODE -ne 0 -or -not $qualificationRunId) {
+              throw "No accepted exact-SHA Windows qualification exists for $sha."
             }
-            git merge-base --is-ancestor $sha origin/netgen-featool
-            if($LASTEXITCODE -ne 0) {
-              throw "Tagged commit $sha is not reachable from origin/netgen-featool."
-            }
-
-            $headers = @{
-              Authorization = "Bearer $env:GH_TOKEN"
-              Accept = "application/vnd.github+json"
-              "X-GitHub-Api-Version" = "2022-11-28"
-            }
-            $url = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/workflows/windows-netgen-sdk.yml/runs?status=completed&head_sha=$sha&per_page=100"
-            $runs = Invoke-RestMethod -Uri $url -Headers $headers
-            $qualified = @($runs.workflow_runs | Where-Object {
-              $_.head_sha.ToLowerInvariant() -eq $sha -and
-              (
-                ($_.event -eq "push" -and $_.head_branch -eq "netgen-featool") -or
-                $_.event -eq "workflow_dispatch"
-              ) -and
-              $_.conclusion -eq "success"
-            } | Sort-Object -Property run_number -Descending)
-            if($qualified.Count -eq 0) {
-              throw "No successful netgen-featool branch-push qualification exists for exact commit $sha."
-            }
-            $qualificationRunId = [string]$qualified[0].id
             Write-Host "Using prior branch qualification run $qualificationRunId for $sha."
           }
           else {
@@ -436,7 +398,7 @@ jobs:
           }
           $zlibLib = "$env:ZLIB_STAGE\lib\zlibstatic.lib"
           $netgenConfigure = @(
-            "-S", $env:GITHUB_WORKSPACE,
+            "-S", $env:NETGEN_SOURCE_DIR,
             "-B", $build,
             "-G", "Visual Studio 17 2022",
             "-A", "x64",
@@ -462,6 +424,7 @@ jobs:
             "-DNGCORE_LIBRARY_TYPE=SHARED",
             "-DNETGEN_NATIVE_SDK=ON",
             "-DENABLE_UNIT_TESTS=ON",
+            "-DNETGEN_VERSION_GIT=$env:NETGEN_VERSION_GIT",
             "-DOpenCascade_DIR=$env:OCCT_ROOT\cmake",
             "-DZLIB_INCLUDE_DIRS=$env:ZLIB_STAGE\include",
             "-DZLIB_LIBRARIES=$zlibLib",
@@ -590,7 +553,7 @@ jobs:
           }
 
           $cmakeFiles = @(Get-ChildItem -LiteralPath "$sdk\cmake" -File -Filter "*.cmake")
-          $forbiddenPaths = @($env:GITHUB_WORKSPACE, $env:NETGEN_BUILD, $env:NETGEN_INSTALL, $env:OCCT_ROOT, $env:ZLIB_STAGE)
+          $forbiddenPaths = @($env:GITHUB_WORKSPACE, $env:NETGEN_SOURCE_DIR, $env:NETGEN_BUILD, $env:NETGEN_INSTALL, $env:OCCT_ROOT, $env:ZLIB_STAGE)
           foreach($file in $cmakeFiles) {
             $text = Get-Content -LiteralPath $file.FullName -Raw
             foreach($path in $forbiddenPaths) {
@@ -681,7 +644,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $sdk = $env:SDK_ROOT
-          $patchCommits = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\post-baseline-commits.txt")
+          $sourceProvenance = Get-Content -LiteralPath $env:SOURCE_PROVENANCE -Raw | ConvertFrom-Json
           $toolchain = Get-Content -LiteralPath "$env:RUNNER_TEMP\toolchain.json" -Raw | ConvertFrom-Json
           $occtEvidence = Get-Content -LiteralPath "$env:RUNNER_TEMP\occt-runtime.json" -Raw | ConvertFrom-Json
           $occtClosure = Get-Content -LiteralPath "$env:RUNNER_TEMP\occt-closure.json" -Raw | ConvertFrom-Json
@@ -702,16 +665,13 @@ jobs:
           }
 
           $info = [ordered]@{
-            schema_version = 1
-            upstream = [ordered]@{
-              tag = $env:BASELINE_TAG
-              commit = $env:BASELINE_SHA
-            }
+            schema_version = 2
+            upstream = $sourceProvenance.upstream
             source = [ordered]@{
               repository = $env:GITHUB_REPOSITORY
               ref = $env:GITHUB_REF
               commit = $env:GITHUB_SHA
-              commits_after_baseline = $patchCommits
+              patches = @($sourceProvenance.patches)
               workflow_run_id = $env:GITHUB_RUN_ID
               workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
               qualification_run_id = $env:QUALIFICATION_RUN_ID
@@ -720,6 +680,7 @@ jobs:
             netgen = [ordered]@{
               configuration = "Release"
               cxx_standard = 17
+              linkage = "shared"
               msvc_runtime = "MultiThreadedDLL"
               options = [ordered]@{
                 USE_SUPERBUILD = $false
@@ -772,6 +733,7 @@ jobs:
             "-G", "Visual Studio 17 2022",
             "-A", "x64",
             "-DNETGEN_SDK_DIR=$env:SDK_ROOT",
+            "-DEXPECTED_NETGEN_VERSION=$env:NETGEN_VERSION",
             "-DOCCT_INCLUDE_DIR=$env:OCCT_ROOT\inc"
           )
           & cmake @consumerConfigure
@@ -783,7 +745,7 @@ jobs:
           if(-not (Test-Path -LiteralPath $exe)) { throw "Staged SDK consumer executable is missing." }
           $runtimeDirs = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\occt-runtime-dirs.txt")
           $env:PATH = (@("$env:SDK_ROOT\bin") + $runtimeDirs + @("$env:SystemRoot\System32", "$env:SystemRoot")) -join ";"
-          & $exe "$env:GITHUB_WORKSPACE\tests\windows-native-sdk\vertex.brep"
+          & $exe "$env:GITHUB_WORKSPACE\tests\windows-native-sdk\vertex.brep" $env:NETGEN_VERSION
           if($LASTEXITCODE -ne 0) { throw "Staged SDK OCC-backed runtime smoke test failed." }
 
       - name: Archive, relocate, and requalify SDK
@@ -863,6 +825,7 @@ jobs:
             "-G", "Visual Studio 17 2022",
             "-A", "x64",
             "-DNETGEN_SDK_DIR=$relocated",
+            "-DEXPECTED_NETGEN_VERSION=$env:NETGEN_VERSION",
             "-DOCCT_INCLUDE_DIR=$env:OCCT_ROOT\inc"
           )
           & cmake @consumerConfigure
@@ -873,7 +836,7 @@ jobs:
           $exe = "$consumerBuild\Release\netgen_native_sdk_smoke.exe"
           $runtimeDirs = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\occt-runtime-dirs.txt")
           $env:PATH = (@("$relocated\bin") + $runtimeDirs + @("$env:SystemRoot\System32", "$env:SystemRoot")) -join ";"
-          & $exe "$env:GITHUB_WORKSPACE\tests\windows-native-sdk\vertex.brep"
+          & $exe "$env:GITHUB_WORKSPACE\tests\windows-native-sdk\vertex.brep" $env:NETGEN_VERSION
           if($LASTEXITCODE -ne 0) { throw "Relocated SDK OCC-backed runtime smoke test failed." }
 
           $sidecarHash = ((Get-Content -LiteralPath $sidecar -Raw) -split '\s+')[0].ToLowerInvariant()
@@ -905,6 +868,20 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
+
+      - name: Reconstruct pinned Netgen source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $source = "$env:RUNNER_TEMP\netgen-source"
+          $provenance = "$env:RUNNER_TEMP\source-provenance.json"
+          python scripts/prepare-netgen-source.py --destination $source --provenance $provenance
+          if($LASTEXITCODE -ne 0) { throw "Netgen source reconstruction failed." }
+          $identity = Get-Content -LiteralPath $provenance -Raw | ConvertFrom-Json
+          "NETGEN_SOURCE_DIR=$source" >> $env:GITHUB_ENV
+          "SOURCE_PROVENANCE=$provenance" >> $env:GITHUB_ENV
+          "NETGEN_VERSION=$($identity.upstream.version)" >> $env:GITHUB_ENV
+          "NETGEN_VERSION_GIT=$($identity.upstream.version_git)" >> $env:GITHUB_ENV
 
       - name: Resolve immutable OCCT static SDK
         id: occt
@@ -964,7 +941,7 @@ jobs:
         shell: pwsh
         run: |
           $prefix = $env:GITHUB_SHA.Substring(0, 12)
-          $archive = "netgen-featool-v6.2.2608-$prefix-occt$env:OCCT_VERSION-win64-msvc-static.zip"
+          $archive = "netgen-featool-v$env:NETGEN_VERSION-$prefix-occt$env:OCCT_VERSION-win64-msvc-static.zip"
           "archive_name=$archive" >> $env:GITHUB_OUTPUT
           "checksum_name=$archive.sha256" >> $env:GITHUB_OUTPUT
           "artifact_name=windows-netgen-sdk-static-$prefix" >> $env:GITHUB_OUTPUT

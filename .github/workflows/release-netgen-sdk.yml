@@ -20,10 +20,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-env:
-  NETGEN_BASELINE_TAG: v6.2.2608
-  NETGEN_BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
-
 jobs:
   windows:
     name: Windows SDK
@@ -53,8 +49,7 @@ jobs:
       bundle_release: ${{ startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
 
   publish:
-    name: Publish combined Netgen SDK release
-    if: startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release))
+    name: Verify and publish combined Netgen SDK release
     needs:
       - windows
       - linux
@@ -93,7 +88,28 @@ jobs:
           path: ${{ runner.temp }}/release-assets/macos
           merge-multiple: true
 
-      - name: Verify tag and exact release asset inventory
+      - name: Verify exact release asset inventory and provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          occt_release="$(tr -d '\r\n' < .github/occt-sdk-release.txt)"
+          python3 scripts/verify-netgen-sdk-release.py \
+            --assets-root "$RUNNER_TEMP/release-assets" \
+            --producer-sha "$GITHUB_SHA" \
+            --producer-repository "$GITHUB_REPOSITORY" \
+            --occt-release "$occt_release" \
+            > "$RUNNER_TEMP/release-summary.json"
+
+          echo "OCCT_RELEASE=$occt_release" >> "$GITHUB_ENV"
+          echo "NETGEN_TAG=$(jq -r .netgen_tag "$RUNNER_TEMP/release-summary.json")" >> "$GITHUB_ENV"
+          echo "NETGEN_VERSION=$(jq -r .netgen_version "$RUNNER_TEMP/release-summary.json")" >> "$GITHUB_ENV"
+          echo "NETGEN_UPSTREAM_SHA=$(jq -r .upstream_commit "$RUNNER_TEMP/release-summary.json")" >> "$GITHUB_ENV"
+          echo "OCCT_SOURCE_SHA=$(jq -r .occt_source_sha "$RUNNER_TEMP/release-summary.json")" >> "$GITHUB_ENV"
+
+      - name: Verify publication tag
+        if: startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release))
         shell: bash
         run: |
           set -euo pipefail
@@ -103,117 +119,8 @@ jobs:
             exit 1
           fi
           test "${BASH_REMATCH[1],,}" = "$short_sha"
-
-          occt_release="$(tr -d '\r\n' < .github/occt-sdk-release.txt)"
-          if [[ ! "$occt_release" =~ ^occt-sdk-([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?$ ]]; then
-            echo "invalid OCCT SDK release tag: $occt_release" >&2
-            exit 1
-          fi
-          occt_version="${BASH_REMATCH[1]}"
-          echo "OCCT_RELEASE=$occt_release" >> "$GITHUB_ENV"
-          echo "OCCT_VERSION=$occt_version" >> "$GITHUB_ENV"
-
-          root="$RUNNER_TEMP/release-assets"
-          windows="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-win64-msvc.zip"
-          windows_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-win64-msvc-static.zip"
-          linux_shared="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-linux-x86_64-glibc2.17-gcc10.tar.gz"
-          linux_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-linux-x86_64-glibc2.17-gcc10-static.tar.gz"
-          mac_x86_shared="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-x86_64-clang.tar.gz"
-          mac_x86_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-x86_64-clang-static.tar.gz"
-          mac_arm_shared="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-arm64-clang.tar.gz"
-          mac_arm_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-arm64-clang-static.tar.gz"
-
-          test -f "$root/windows/$windows"
-          test -f "$root/windows/$windows.sha256"
-          test -f "$root/windows/$windows_static"
-          test -f "$root/windows/$windows_static.sha256"
-          for archive in "$linux_shared" "$linux_static"; do
-            test -f "$root/linux/$archive"
-            test -f "$root/linux/$archive.sha256"
-          done
-          for archive in "$mac_x86_shared" "$mac_x86_static" "$mac_arm_shared" "$mac_arm_static"; do
-            test -f "$root/macos/$archive"
-            test -f "$root/macos/$archive.sha256"
-          done
-
-          count="$(find "$root" -type f | wc -l | tr -d ' ')"
-          test "$count" = 16
-
-          verify_checksum() {
-            local archive="$1"
-            local sidecar="$archive.sha256"
-            local expected actual
-            expected="$(awk '{print $1}' "$sidecar" | tr -d '\r')"
-            actual="$(sha256sum "$archive" | awk '{print $1}')"
-            test "$expected" = "$actual"
-          }
-          verify_checksum "$root/windows/$windows"
-          verify_checksum "$root/windows/$windows_static"
-          verify_checksum "$root/linux/$linux_shared"
-          verify_checksum "$root/linux/$linux_static"
-          verify_checksum "$root/macos/$mac_x86_shared"
-          verify_checksum "$root/macos/$mac_x86_static"
-          verify_checksum "$root/macos/$mac_arm_shared"
-          verify_checksum "$root/macos/$mac_arm_static"
-
-          occt_release_json="$(gh api -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "repos/precise-simulation/OCCT/releases/tags/$occt_release")"
-          test "$(jq -r '.tag_name' <<<"$occt_release_json")" = "$occt_release"
-          test "$(jq -r '.draft' <<<"$occt_release_json")" = false
-          test "$(jq -r '.immutable' <<<"$occt_release_json")" = true
-
-          verify_occt_info() {
-            local info="$1"
-            local linkage="$2"
-            local asset_id asset_name asset_url sha256 asset count
-            test "$(jq -r '.occt.release' <<<"$info")" = "$occt_release"
-            test "$(jq -r '.occt.version' <<<"$info")" = "$occt_version"
-            test "$(jq -r '.occt.linkage' <<<"$info")" = "$linkage"
-            asset_id="$(jq -r '.occt.asset_id' <<<"$info")"
-            asset_name="$(jq -r '.occt.asset_name' <<<"$info")"
-            asset_url="$(jq -r '.occt.asset_url' <<<"$info")"
-            sha256="$(jq -r '.occt.sha256' <<<"$info")"
-            [[ "$asset_id" =~ ^[0-9]+$ ]]
-            test -n "$asset_name"
-            test -n "$asset_url"
-            [[ "$sha256" =~ ^[0-9a-f]{64}$ ]]
-            count="$(jq --arg id "$asset_id" --arg name "$asset_name" '[.assets[] | select((.id | tostring) == $id and .name == $name)] | length' <<<"$occt_release_json")"
-            test "$count" -eq 1
-            asset="$(jq -c --arg id "$asset_id" '.assets[] | select((.id | tostring) == $id)' <<<"$occt_release_json")"
-            test "$(jq -r '.browser_download_url' <<<"$asset")" = "$asset_url"
-            test "$(jq -r '.digest' <<<"$asset")" = "sha256:$sha256"
-          }
-
-          windows_info="$(unzip -p "$root/windows/$windows" producer-info.json)"
-          test "$(jq -r '.source.commit' <<<"$windows_info")" = "$GITHUB_SHA"
-          verify_occt_info "$windows_info" shared
-          occt_source_sha="$(jq -r '.occt.commit' <<<"$windows_info")"
-          [[ "$occt_source_sha" =~ ^[0-9a-f]{40}$ ]]
-          windows_static_info="$(unzip -p "$root/windows/$windows_static" producer-info.json)"
-          test "$(jq -r '.source.commit' <<<"$windows_static_info")" = "$GITHUB_SHA"
-          test "$(jq -r '.netgen.linkage' <<<"$windows_static_info")" = static
-          verify_occt_info "$windows_static_info" static
-          test "$(jq -r '.occt.commit' <<<"$windows_static_info")" = "$occt_source_sha"
-          test "$(jq -r '.occt.bundled' <<<"$windows_static_info")" = true
-          verify_unix_archive() {
-            local archive="$1"
-            local linkage="$2"
-            local info
-            info="$(tar -xOzf "$archive" --wildcards '*/producer-info.json')"
-            test "$(jq -r '.source.commit' <<<"$info")" = "$GITHUB_SHA"
-            test "$(jq -r '.netgen.linkage' <<<"$info")" = "$linkage"
-            verify_occt_info "$info" "$linkage"
-            test "$(jq -r '.occt.commit' <<<"$info")" = "$occt_source_sha"
-          }
-          verify_unix_archive "$root/linux/$linux_shared" shared
-          verify_unix_archive "$root/linux/$linux_static" static
-          verify_unix_archive "$root/macos/$mac_x86_shared" shared
-          verify_unix_archive "$root/macos/$mac_x86_static" static
-          verify_unix_archive "$root/macos/$mac_arm_shared" shared
-          verify_unix_archive "$root/macos/$mac_arm_static" static
-          echo "OCCT_SOURCE_SHA=$occt_source_sha" >> "$GITHUB_ENV"
-
       - name: Create, verify and publish combined release
+        if: startsWith(github.ref, 'refs/tags/netgen-sdk-') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release))
         shell: bash
         run: |
           set -euo pipefail
@@ -265,7 +172,7 @@ jobs:
 
           mapfile -t assets < <(find "$RUNNER_TEMP/release-assets" -type f -print | sort)
           test "${#assets[@]}" -eq 16
-          notes="Netgen native SDK bundle built from source $GITHUB_SHA (upstream baseline $NETGEN_BASELINE_TAG / $NETGEN_BASELINE_SHA)."
+          notes="Netgen native SDK bundle built from producer source $GITHUB_SHA (upstream $NETGEN_TAG / $NETGEN_UPSTREAM_SHA)."
           notes="$notes"$'\n\n'"OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA. Each producer records and verifies its exact immutable release asset and SHA-256 digest."
           notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD, shared and static SDKs."
           notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
@@ -277,7 +184,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --draft \
-            --title "Netgen v6.2.2608 SDKs - Windows, Linux, macOS" \
+            --title "Netgen v$NETGEN_VERSION SDKs - Windows, Linux, macOS" \
             --notes "$notes"
 
           draft_id="$(find_draft_id)"

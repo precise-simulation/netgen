@@ -20,8 +20,6 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
-  BASELINE_TAG: v6.2.2608
-  BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
   ZLIB_URL: https://zlib.net/fossils/zlib-1.3.1.tar.gz
   ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
@@ -36,7 +34,7 @@ jobs:
       - name: Check out exact producer commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Verify source and publication provenance
         id: provenance
@@ -47,11 +45,6 @@ jobs:
         run: |
           set -euo pipefail
           sha="$GITHUB_SHA"
-          test "$(git rev-parse "$BASELINE_TAG^{commit}")" = "$BASELINE_SHA"
-          git merge-base --is-ancestor "$BASELINE_SHA" "$sha"
-          grep -Fq 'add_unit_test(refinement refinement.cpp)' tests/catch/CMakeLists.txt
-          grep -Fq 'Uniform refinement can convert a triangle to three quads' tests/catch/refinement.cpp
-          grep -Fq 'Uniform refinement still refines a quad to four quads' tests/catch/refinement.cpp
 
           qualification_run_id="$GITHUB_RUN_ID"
           if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/* ]]; then
@@ -63,12 +56,10 @@ jobs:
               exit 1
             fi
             test "${BASH_REMATCH[1],,}" = "${sha:0:12}"
-            git fetch origin netgen-featool:refs/remotes/origin/netgen-featool
-            git merge-base --is-ancestor "$sha" origin/netgen-featool
-            api="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/macos-netgen-sdk.yml/runs?status=completed&head_sha=$sha&per_page=100"
-            runs="$(curl --fail --silent --show-error --location -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api")"
-            qualification_run_id="$(jq -r --arg sha "$sha" '[.workflow_runs[] | select(.head_sha == $sha and (((.event == "push") and .head_branch == "netgen-featool") or .event == "workflow_dispatch") and .conclusion == "success")] | sort_by(.run_number) | reverse | .[0].id // empty' <<<"$runs")"
-            test -n "$qualification_run_id"
+            qualification_run_id="$(python3 scripts/check-release-qualification.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --workflow macos-netgen-sdk.yml \
+              --producer-sha "$sha")"
           fi
           echo "source_date_epoch=$(git show -s --format=%ct "$sha")" >> "$GITHUB_OUTPUT"
           echo "qualification_run_id=$qualification_run_id" >> "$GITHUB_OUTPUT"
@@ -98,6 +89,16 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
+
+      - name: Reconstruct pinned Netgen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare-netgen-source.py \
+            --destination "$RUNNER_TEMP/netgen-source" \
+            --provenance "$RUNNER_TEMP/source-provenance.json"
+          echo "NETGEN_SOURCE_DIR=$RUNNER_TEMP/netgen-source" >> "$GITHUB_ENV"
+          echo "SOURCE_PROVENANCE=$RUNNER_TEMP/source-provenance.json" >> "$GITHUB_ENV"
 
       - name: Resolve immutable OCCT SDK
         id: occt

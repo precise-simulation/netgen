@@ -23,24 +23,12 @@ library_type="${linkage^^}"
 : "${OCCT_SHA256:?OCCT_SHA256 is required}"
 : "${OCCT_SOURCE_PREFIX:?OCCT_SOURCE_PREFIX is required}"
 : "${ZLIB_SHA256:?ZLIB_SHA256 is required}"
-
-source_mount=/source
-source_dir=/work/src
-work_root=/work
-inputs_dir=/inputs
-occt_archive="$inputs_dir/occt.tar.gz"
-zlib_archive="$inputs_dir/zlib.tar.gz"
-short_sha="${SOURCE_SHA:0:12}"
-sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt${OCCT_VERSION}-linux-x86_64-glibc2.17-gcc10"
-if [[ "$linkage" == "static" ]]; then
-  sdk_name="${sdk_name}-static"
-fi
-build_dir="$work_root/netgen-build"
-install_dir="$work_root/netgen-install"
-sdk_dir="$work_root/$sdk_name"
-out_dir="$work_root/out"
-consumer_dir="$work_root/consumer"
-relocated_dir="$work_root/relocated"
+: "${SOURCE_PROVENANCE:?SOURCE_PROVENANCE is required}"
+: "${PRODUCER_ROOT:?PRODUCER_ROOT is required}"
+: "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+: "${GITHUB_REF:?GITHUB_REF is required}"
+: "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
+: "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
 
 find_python() {
   local candidate
@@ -54,6 +42,38 @@ find_python() {
 }
 
 python_bin="$(find_python)"
+mapfile -t source_identity < <("$python_bin" - "$SOURCE_PROVENANCE" <<'PY'
+import json, pathlib, sys
+data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(data["upstream"]["tag"])
+print(data["upstream"]["version"])
+print(data["upstream"]["version_git"])
+PY
+)
+NETGEN_TAG="${source_identity[0]}"
+NETGEN_VERSION="${source_identity[1]}"
+NETGEN_VERSION_GIT="${source_identity[2]}"
+export NETGEN_TAG NETGEN_VERSION NETGEN_VERSION_GIT
+
+source_mount=/source
+source_dir=/work/src
+producer_root="$PRODUCER_ROOT"
+work_root=/work
+inputs_dir=/inputs
+occt_archive="$inputs_dir/occt.tar.gz"
+zlib_archive="$inputs_dir/zlib.tar.gz"
+short_sha="${SOURCE_SHA:0:12}"
+sdk_name="netgen-featool-v${NETGEN_VERSION}-${short_sha}-occt${OCCT_VERSION}-linux-x86_64-glibc2.17-gcc10"
+if [[ "$linkage" == "static" ]]; then
+  sdk_name="${sdk_name}-static"
+fi
+build_dir="$work_root/netgen-build"
+install_dir="$work_root/netgen-install"
+sdk_dir="$work_root/$sdk_name"
+out_dir="$work_root/out"
+consumer_dir="$work_root/consumer"
+relocated_dir="$work_root/relocated"
+
 cmake_version=3.31.6
 tools_dir="$work_root/tools/cmake-$cmake_version"
 cmake_bin=""
@@ -146,6 +166,7 @@ configure_options=(
   -DNGCORE_LIBRARY_TYPE="$library_type"
   -DNETGEN_NATIVE_SDK=ON
   -DENABLE_UNIT_TESTS=ON
+  -DNETGEN_VERSION_GIT="$NETGEN_VERSION_GIT"
   -DOpenCascade_DIR="$occt_root/lib/cmake/opencascade"
   -DZLIB_INCLUDE_DIRS="$work_root/zlib-stage/include"
   -DZLIB_LIBRARIES="$zlib_library"
@@ -249,10 +270,19 @@ suffix = ".so" if linkage == "shared" else ".a"
 artifacts = [sdk / f"lib/libngcore{suffix}", sdk / f"lib/libnglib{suffix}"]
 if linkage == "static":
     artifacts.append(sdk / "lib/libz.a")
+provenance = json.loads(pathlib.Path(os.environ["SOURCE_PROVENANCE"]).read_text(encoding="utf-8"))
 info = {
-    "schema_version": 1,
-    "upstream": {"tag": "v6.2.2608", "commit": "96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e"},
-    "source": {"commit": os.environ["SOURCE_SHA"], "qualification_run_id": sys.argv[7]},
+    "schema_version": 2,
+    "upstream": provenance["upstream"],
+    "source": {
+        "repository": os.environ["GITHUB_REPOSITORY"],
+        "ref": os.environ["GITHUB_REF"],
+        "commit": os.environ["SOURCE_SHA"],
+        "patches": provenance["patches"],
+        "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+        "workflow_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+        "qualification_run_id": sys.argv[7],
+    },
     "producer": {
         "image": sys.argv[2], "image_tag": sys.argv[3], "image_digest": sys.argv[4],
         "architecture": run("uname", "-m"), "gcc": run("gcc", "--version").splitlines()[0],
@@ -278,18 +308,19 @@ configure_consumer() {
   local build="$2"
   rm -rf "$build"
   LDFLAGS="-Wl,-rpath-link,$occt_root/lib" cmake \
-    -S "$source_dir/tests/unix-native-sdk" \
+    -S "$producer_root/tests/unix-native-sdk" \
     -B "$build" \
     -DCMAKE_BUILD_RPATH="$root/lib" \
     -DNETGEN_SDK_DIR="$root" \
+    -DEXPECTED_NETGEN_VERSION="$NETGEN_VERSION" \
     -DOpenCASCADE_DIR="$occt_root/lib/cmake/opencascade" \
     -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
   cmake --build "$build" --parallel 4
   if [[ "$linkage" == "shared" ]]; then
     LD_LIBRARY_PATH="$occt_root/lib" \
-      "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
+      "$build/netgen_native_sdk_smoke" "$producer_root/tests/unix-native-sdk/vertex.brep" "$NETGEN_VERSION"
   else
-    "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
+    "$build/netgen_native_sdk_smoke" "$producer_root/tests/unix-native-sdk/vertex.brep" "$NETGEN_VERSION"
     if readelf -d "$build/netgen_native_sdk_smoke" | grep -Eq 'NEEDED.*(libng|libTK)[^]]*\.so'; then
       echo "static consumer unexpectedly depends on shared Netgen/OCCT libraries" >&2
       readelf -d "$build/netgen_native_sdk_smoke" >&2

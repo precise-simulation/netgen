@@ -1,4 +1,5 @@
 #include <iostream>
+#include <core/version.hpp>
 
 namespace nglib
 {
@@ -10,10 +11,19 @@ using namespace nglib;
 
 int main(int argc, char ** argv)
 {
-  if(argc != 2)
+  if(argc != 3)
   {
-    std::cerr << "usage: netgen_native_sdk_smoke <fixture.brep>\n";
+    std::cerr << "usage: netgen_native_sdk_smoke <fixture.brep> <expected-version>\n";
     return 2;
+  }
+
+  const std::string expected_version = "v" + std::string(argv[2]);
+  const std::string runtime_version = ngcore::GetLibraryVersion("netgen").to_string();
+  if(runtime_version != expected_version)
+  {
+    std::cerr << "runtime Netgen version " << runtime_version
+              << " does not match " << expected_version << "\n";
+    return 5;
   }
 
   Ng_Init();

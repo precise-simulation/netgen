@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(NETGEN_SDK_DIR "" CACHE PATH "Root of the extracted Netgen native SDK")
 set(OCCT_INCLUDE_DIR "" CACHE PATH "Include directory of the pinned OCCT SDK")
+set(EXPECTED_NETGEN_VERSION "" CACHE STRING "Expected semantic Netgen version")
 
 if(NOT EXISTS "${NETGEN_SDK_DIR}/cmake/NetgenConfig.cmake")
   message(FATAL_ERROR "NETGEN_SDK_DIR does not contain cmake/NetgenConfig.cmake")
@@ -13,10 +14,16 @@ endif()
 if(NOT EXISTS "${OCCT_INCLUDE_DIR}/Standard.hxx")
   message(FATAL_ERROR "OCCT_INCLUDE_DIR does not contain Standard.hxx")
 endif()
+if(NOT EXPECTED_NETGEN_VERSION)
+  message(FATAL_ERROR "EXPECTED_NETGEN_VERSION is required")
+endif()
 
 find_package(Netgen CONFIG REQUIRED
   PATHS "${NETGEN_SDK_DIR}/cmake"
   NO_DEFAULT_PATH)
+if(NOT NETGEN_VERSION STREQUAL EXPECTED_NETGEN_VERSION)
+  message(FATAL_ERROR "Netgen CMake version ${NETGEN_VERSION} does not match ${EXPECTED_NETGEN_VERSION}")
+endif()
 
 get_filename_component(_netgen_sdk_root "${NETGEN_SDK_DIR}" REALPATH)
 file(TO_CMAKE_PATH "${_netgen_sdk_root}/" _netgen_sdk_prefix)

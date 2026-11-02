@@ -20,7 +20,9 @@ jobs:
           fetch-depth: 1
 
       - name: Run source preparation negative cases
-        run: python3 tests/thin-repo/test_prepare_netgen_source.py
+        run: |
+          python3 tests/thin-repo/test_prepare_netgen_source.py
+          python3 tests/thin-repo/test_release_contract.py
 
   parity:
     name: Compare reconstructed source with fork tree

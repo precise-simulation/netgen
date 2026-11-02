@@ -32,14 +32,24 @@ esac
 : "${NETGEN_MACOS_SDK:?NETGEN_MACOS_SDK is required}"
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 : "${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
+: "${NETGEN_SOURCE_DIR:?NETGEN_SOURCE_DIR is required}"
+: "${SOURCE_PROVENANCE:?SOURCE_PROVENANCE is required}"
+: "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+: "${GITHUB_REF:?GITHUB_REF is required}"
+: "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
+: "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
 
 deployment_target=13.0
 short_sha="${SOURCE_SHA:0:12}"
-sdk_name="netgen-featool-v6.2.2608-${short_sha}-occt${OCCT_VERSION}-macos13-${architecture}-clang"
+NETGEN_VERSION="$(python3 -c 'import json, os; print(json.load(open(os.environ["SOURCE_PROVENANCE"], encoding="utf-8"))["upstream"]["version"])')"
+NETGEN_VERSION_GIT="$(python3 -c 'import json, os; print(json.load(open(os.environ["SOURCE_PROVENANCE"], encoding="utf-8"))["upstream"]["version_git"])')"
+export NETGEN_VERSION NETGEN_VERSION_GIT
+sdk_name="netgen-featool-v${NETGEN_VERSION}-${short_sha}-occt${OCCT_VERSION}-macos13-${architecture}-clang"
 if [[ "$linkage" == "static" ]]; then
   sdk_name="${sdk_name}-static"
 fi
-source_dir="$GITHUB_WORKSPACE"
+source_dir="$NETGEN_SOURCE_DIR"
+producer_root="$GITHUB_WORKSPACE"
 work_root="$RUNNER_TEMP/netgen-macos-sdk/$architecture/$linkage"
 inputs_dir="$RUNNER_TEMP/netgen-sdk-inputs"
 occt_archive="$inputs_dir/occt.tar.gz"
@@ -135,6 +145,7 @@ configure_options=(
   -DNGCORE_LIBRARY_TYPE="$library_type"
   -DNETGEN_NATIVE_SDK=ON
   -DENABLE_UNIT_TESTS=ON
+  -DNETGEN_VERSION_GIT="$NETGEN_VERSION_GIT"
   -DOpenCascade_DIR="$occt_root/lib/cmake/opencascade"
   -DZLIB_INCLUDE_DIRS="$work_root/zlib-stage/include"
   -DZLIB_LIBRARIES="$zlib_library"
@@ -240,10 +251,19 @@ suffix = ".dylib" if linkage == "shared" else ".a"
 artifacts = [sdk / f"lib/libngcore{suffix}", sdk / f"lib/libnglib{suffix}"]
 if linkage == "static":
     artifacts.append(sdk / "lib/libz.a")
+provenance = json.loads(pathlib.Path(os.environ["SOURCE_PROVENANCE"]).read_text(encoding="utf-8"))
 info = {
-    "schema_version": 1,
-    "upstream": {"tag": "v6.2.2608", "commit": "96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e"},
-    "source": {"commit": os.environ["SOURCE_SHA"], "qualification_run_id": sys.argv[7]},
+    "schema_version": 2,
+    "upstream": provenance["upstream"],
+    "source": {
+        "repository": os.environ["GITHUB_REPOSITORY"],
+        "ref": os.environ["GITHUB_REF"],
+        "commit": os.environ["SOURCE_SHA"],
+        "patches": provenance["patches"],
+        "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+        "workflow_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+        "qualification_run_id": sys.argv[7],
+    },
     "producer": {
         "runner_label": sys.argv[2], "architecture": sys.argv[3], "deployment_target": sys.argv[4],
         "image_os": os.environ.get("ImageOS", ""), "image_version": os.environ.get("ImageVersion", ""),
@@ -268,7 +288,7 @@ configure_consumer() {
   local build="$2"
   rm -rf "$build"
   cmake -G "Unix Makefiles" \
-    -S "$source_dir/tests/unix-native-sdk" \
+    -S "$producer_root/tests/unix-native-sdk" \
     -B "$build" \
     -DCMAKE_OSX_ARCHITECTURES="$architecture" \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="$deployment_target" \
@@ -277,10 +297,11 @@ configure_consumer() {
     -DCMAKE_CXX_COMPILER="$NETGEN_CLANGXX" \
     -DCMAKE_BUILD_RPATH="$root/lib;$occt_root/lib" \
     -DNETGEN_SDK_DIR="$root" \
+    -DEXPECTED_NETGEN_VERSION="$NETGEN_VERSION" \
     -DOpenCASCADE_DIR="$occt_root/lib/cmake/opencascade" \
     -DOCCT_INCLUDE_DIR="$occt_root/include/opencascade"
   cmake --build "$build" --parallel "$(sysctl -n hw.logicalcpu)"
-  "$build/netgen_native_sdk_smoke" "$source_dir/tests/unix-native-sdk/vertex.brep"
+  "$build/netgen_native_sdk_smoke" "$producer_root/tests/unix-native-sdk/vertex.brep" "$NETGEN_VERSION"
   if [[ "$linkage" == "static" ]]; then
     if otool -L "$build/netgen_native_sdk_smoke" | grep -Eq '/lib(ng|TK)[^/]*\.dylib'; then
       echo "static consumer unexpectedly depends on shared Netgen/OCCT libraries" >&2

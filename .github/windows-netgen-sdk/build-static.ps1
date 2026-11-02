@@ -25,7 +25,11 @@ foreach($line in $devEnvironment) {
 $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
 $cl = (Get-Command cl.exe -ErrorAction Stop).Source
 
-$source = $env:GITHUB_WORKSPACE
+$source = $env:NETGEN_SOURCE_DIR
+$producerRoot = $env:GITHUB_WORKSPACE
+if(-not $source -or -not (Test-Path -LiteralPath $source)){throw "NETGEN_SOURCE_DIR is missing."}
+if(-not $env:SOURCE_PROVENANCE -or -not (Test-Path -LiteralPath $env:SOURCE_PROVENANCE)){throw "SOURCE_PROVENANCE is missing."}
+$sourceProvenance = Get-Content -LiteralPath $env:SOURCE_PROVENANCE -Raw | ConvertFrom-Json
 $work = Join-Path $env:RUNNER_TEMP "netgen-windows-static"
 $zlibSrcParent = Join-Path $work "zlib-src"
 $zlibBuild = Join-Path $work "zlib-build"
@@ -92,7 +96,7 @@ $netgenConfigure=@(
   "-DUSE_SUPERBUILD=OFF","-DUSE_GUI=OFF","-DUSE_PYTHON=OFF","-DUSE_MPI=OFF","-DUSE_CGNS=OFF",
   "-DUSE_JPEG=OFF","-DUSE_MPEG=OFF","-DUSE_STLGEOM=ON","-DUSE_INTERFACE=ON","-DUSE_CSG=ON","-DUSE_GEOM2D=ON",
   "-DUSE_NATIVE_ARCH=OFF","-DUSE_OCC=ON","-DNGLIB_LIBRARY_TYPE=STATIC","-DNGCORE_LIBRARY_TYPE=STATIC",
-  "-DNETGEN_NATIVE_SDK=ON","-DENABLE_UNIT_TESTS=ON",
+  "-DNETGEN_NATIVE_SDK=ON","-DENABLE_UNIT_TESTS=ON","-DNETGEN_VERSION_GIT=$env:NETGEN_VERSION_GIT",
   "-DOpenCascade_DIR=$OcctRoot\cmake","-DZLIB_INCLUDE_DIRS=$zlibStage\include",
   "-DZLIB_LIBRARIES=$zlibPath","-DZLIB_LIBRARY_RELEASE=$zlibPath"
 )
@@ -130,7 +134,7 @@ foreach($f in @("$sdk\lib\ngcore.lib","$sdk\lib\nglib.lib","$sdk\lib\zlibstatic.
 }
 foreach($f in Get-ChildItem -LiteralPath "$sdk\cmake" -File -Filter "*.cmake"){
   $t=Get-Content -LiteralPath $f.FullName -Raw
-  foreach($p in @($source,$work,$OcctRoot,$zlibStage,$netgenBuild,$netgenInstall)){
+  foreach($p in @($source,$producerRoot,$work,$OcctRoot,$zlibStage,$netgenBuild,$netgenInstall)){
     foreach($form in @($p,($p -replace '\\','/'))){
       if($form -and $t -match [regex]::Escape($form)){throw "$($f.Name) contains producer path $form"}
     }
@@ -150,9 +154,9 @@ foreach($p in @("lib/ngcore.lib","lib/nglib.lib","lib/zlibstatic.lib","cmake/Net
   $hashes[$p]=(Get-FileHash -LiteralPath (Join-Path $sdk ($p -replace '/','\')) -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 $info=[ordered]@{
-  schema_version=1
-  upstream=[ordered]@{tag=$env:BASELINE_TAG;commit=$env:BASELINE_SHA}
-  source=[ordered]@{repository=$env:GITHUB_REPOSITORY;ref=$env:GITHUB_REF;commit=$env:GITHUB_SHA;qualification_run_id=$env:QUALIFICATION_RUN_ID}
+  schema_version=2
+  upstream=$sourceProvenance.upstream
+  source=[ordered]@{repository=$env:GITHUB_REPOSITORY;ref=$env:GITHUB_REF;commit=$env:GITHUB_SHA;patches=@($sourceProvenance.patches);workflow_run_id=$env:GITHUB_RUN_ID;workflow_run_attempt=$env:GITHUB_RUN_ATTEMPT;qualification_run_id=$env:QUALIFICATION_RUN_ID}
   toolchain=$toolchain
   netgen=[ordered]@{configuration="Release";cxx_standard=17;linkage="static";msvc_runtime="MultiThreadedDLL";native_arch=$false}
   occt=[ordered]@{version=$env:OCCT_VERSION;release=$env:OCCT_RELEASE;commit=$env:OCCT_SOURCE_SHA;asset_id=[int64]$env:OCCT_ASSET_ID;asset_name=$env:OCCT_ASSET;asset_url=$env:OCCT_URL;sha256=$env:OCCT_SHA256;linkage="static";bundled=$true;profile="lean";toolkit_count=28}
@@ -163,7 +167,7 @@ $info | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath "$sdk\producer-info.
 
 function Test-Consumer([string]$Root,[string]$BuildDir){
   if(Test-Path -LiteralPath $BuildDir){Remove-Item -LiteralPath $BuildDir -Recurse -Force}
-  & cmake -S "$source\tests\windows-native-sdk" -B $BuildDir -G "Visual Studio 17 2022" -A x64 "-DNETGEN_SDK_DIR=$Root" "-DOCCT_INCLUDE_DIR=$Root\occt\inc"
+  & cmake -S "$producerRoot\tests\windows-native-sdk" -B $BuildDir -G "Visual Studio 17 2022" -A x64 "-DNETGEN_SDK_DIR=$Root" "-DEXPECTED_NETGEN_VERSION=$env:NETGEN_VERSION" "-DOCCT_INCLUDE_DIR=$Root\occt\inc"
   if($LASTEXITCODE -ne 0){throw "Static SDK consumer configure failed."}
   cmake --build $BuildDir --config Release
   if($LASTEXITCODE -ne 0){throw "Static SDK consumer build failed."}
@@ -171,7 +175,7 @@ function Test-Consumer([string]$Root,[string]$BuildDir){
   $savedPath=$env:PATH
   try {
     $env:PATH="$env:SystemRoot\System32;$env:SystemRoot"
-    & $exe "$source\tests\windows-native-sdk\vertex.brep"
+    & $exe "$producerRoot\tests\windows-native-sdk\vertex.brep" $env:NETGEN_VERSION
     if($LASTEXITCODE -ne 0){throw "Static SDK OCC smoke failed."}
   }
   finally { $env:PATH=$savedPath }

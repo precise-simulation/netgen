@@ -389,7 +389,31 @@ fi
 head_sha=""
 if git ls-remote --exit-code --heads origin "$UPDATE_BRANCH" >/dev/null 2>&1; then
   git fetch origin "$UPDATE_BRANCH:refs/remotes/origin/$UPDATE_BRANCH"
+  git fetch origin "$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
   head_sha="$(git rev-parse "origin/$UPDATE_BRANCH")"
+  update_subject="$(git show -s --format=%s "$head_sha")"
+  if [[ "$update_subject" != "ci: update OCCT SDK to $candidate_release" ]]; then
+    echo "Existing automation branch has unexpected head subject: $update_subject" >&2
+    exit 1
+  fi
+
+  read -r -a update_commit_fields <<<"$(git rev-list --parents -n 1 "$head_sha")"
+  if (( ${#update_commit_fields[@]} != 2 )); then
+    echo "Existing automation branch head must be a single-parent generated pin commit." >&2
+    exit 1
+  fi
+  update_parent="${update_commit_fields[1]}"
+  if ! git merge-base --is-ancestor "$update_parent" "origin/$TARGET_BRANCH"; then
+    echo "Existing automation branch parent is not contained in $TARGET_BRANCH." >&2
+    exit 1
+  fi
+
+  mapfile -t update_paths < <(git diff-tree --no-commit-id --name-only -r "$head_sha")
+  if (( ${#update_paths[@]} != 1 )) || [[ "${update_paths[0]}" != "$PIN_FILE" ]]; then
+    echo "Existing automation branch is not a pin-only generated update." >&2
+    exit 1
+  fi
+
   branch_pin="$(
     gh api --method GET "repos/$GITHUB_REPOSITORY/contents/$PIN_FILE" -f ref="$UPDATE_BRANCH" |
       jq -r '.content' |

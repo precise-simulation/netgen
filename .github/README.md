@@ -269,7 +269,10 @@ An existing failed automation update branch is not retried by the schedule.
 After correcting the branch or a transient runner problem, manually run the
 coordinator with `retry_existing=true`. The optional `occt_release` input
 selects an exact immutable OCCT SDK release for a manual run; downgrades are
-rejected.
+rejected. Before retrying an existing branch, the coordinator verifies that its
+head is exactly one generated `ci: update OCCT SDK to <release>` commit, that
+the commit changes only `.github/occt-sdk-release.txt`, and that its parent is
+already contained in `netgen-featool`.
 
 If the update has already merged but post-merge qualification failed before any
 release tag was created, later scheduled runs automatically resume that exact

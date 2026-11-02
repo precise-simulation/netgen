@@ -1,0 +1,54 @@
+name: Auto-update Netgen for OCCT SDK releases
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      occt_release:
+        description: Optional exact immutable OCCT SDK release tag; empty selects the newest release
+        required: false
+        type: string
+      retry_existing:
+        description: Re-run qualification for the existing automation update PR
+        required: false
+        type: boolean
+        default: false
+      retry_release:
+        description: Retry publishing an automated OCCT merge after a prior release tag/attempt exists
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: auto-occt-netgen-release
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Detect, qualify, merge, and release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OCCT_REPOSITORY: precise-simulation/OCCT
+      TARGET_BRANCH: netgen-featool
+      UPDATE_BRANCH: automation/occt-sdk-update
+      REQUESTED_RELEASE: ${{ inputs.occt_release || '' }}
+      RETRY_EXISTING: ${{ inputs.retry_existing || false }}
+      RETRY_RELEASE: ${{ inputs.retry_release || false }}
+    steps:
+      - name: Check out maintained Netgen branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: netgen-featool
+          fetch-depth: 0
+
+      - name: Process newest immutable OCCT SDK release
+        shell: bash
+        run: bash .github/auto-occt-netgen-release.sh

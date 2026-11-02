@@ -79,7 +79,7 @@ jobs:
           qualification_run_id="$GITHUB_RUN_ID"
           if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/* ]]; then
             test "$GITHUB_REF" = refs/heads/netgen-featool
-          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/* ]]; then
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             test "${BUNDLE_RELEASE:-false}" = true
             if [[ ! "$GITHUB_REF" =~ ^refs/tags/netgen-sdk-([0-9a-fA-F]{12})-r([0-9]+)$ ]]; then
               echo "combined release tag must match netgen-sdk-<12-char-source-sha>-rN" >&2
@@ -88,9 +88,9 @@ jobs:
             test "${BASH_REMATCH[1],,}" = "${sha:0:12}"
             git fetch origin netgen-featool:refs/remotes/origin/netgen-featool
             git merge-base --is-ancestor "$sha" origin/netgen-featool
-            api="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/linux-netgen-sdk.yml/runs?branch=netgen-featool&event=push&status=completed&head_sha=$sha&per_page=100"
+            api="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/linux-netgen-sdk.yml/runs?status=completed&head_sha=$sha&per_page=100"
             runs="$(curl --fail --silent --show-error --location -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api")"
-            qualification_run_id="$(jq -r --arg sha "$sha" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "netgen-featool" and .event == "push" and .conclusion == "success")] | sort_by(.run_number) | reverse | .[0].id // empty' <<<"$runs")"
+            qualification_run_id="$(jq -r --arg sha "$sha" '[.workflow_runs[] | select(.head_sha == $sha and (((.event == "push") and .head_branch == "netgen-featool") or .event == "workflow_dispatch") and .conclusion == "success")] | sort_by(.run_number) | reverse | .[0].id // empty' <<<"$runs")"
             test -n "$qualification_run_id"
           fi
           short_sha="${sha:0:12}"

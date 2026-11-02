@@ -17,6 +17,21 @@ Earlier SDK releases used Netgen `v6.2.2604` with OCCT `7.9.3`; the historical
 values are recorded below because future dependency upgrades should follow the
 same migration pattern rather than changing only one workflow.
 
+## Repository branch policy
+
+This fork intentionally keeps only two long-lived branches:
+
+- `master` is the repository default branch and follows the upstream Netgen
+  development/release history;
+- `netgen-featool` is the only maintained fork branch and contains the FEATool
+  SDK integration.
+
+SDK baseline updates must come from exact upstream release tags on the canonical
+NGSolve Netgen history. Topic or integration branches may be used temporarily,
+but should be deleted after they are merged. Do not retain upstream development
+branches or old maintenance branches in this fork as release references; Git
+tags are the release record.
+
 ## Workflow map
 
 | Workflow | Purpose | Normal trigger |
@@ -179,11 +194,17 @@ After a combined release has been published and independently verified:
 - routine artifact cleanup must not delete or replace published release assets
   or move an existing release tag.
 
-The platform workflows currently retain Actions artifacts for 30 days, so
-periodic cleanup is optional storage hygiene rather than part of release
-correctness.
+All platform workflows retain Actions artifacts for 30 days. Periodic cleanup
+is therefore optional storage hygiene rather than part of release correctness.
 
 ## Normal qualification and release procedure
+
+A successful qualification does not by itself require a new SDK release. If a
+commit changes only workflow implementation, documentation, retention settings,
+or other repository maintenance while leaving Netgen source, dependency pins,
+and the qualified SDK build contract unchanged, keep the current published SDK
+release and defer the next `netgen-sdk-*` tag until an SDK-relevant change is
+made.
 
 1. Make and commit the source/workflow changes on `netgen-featool`.
 2. Push `netgen-featool` to `origin`. This automatically starts Windows, Linux,

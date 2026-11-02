@@ -887,6 +887,7 @@ jobs:
           path: ${{ runner.temp }}/qualified-assets/*
           compression-level: 0
           if-no-files-found: error
+          retention-days: 30
 
   static:
     name: Build and qualify static SDK
@@ -982,4 +983,5 @@ jobs:
           path: ${{ runner.temp }}/qualified-static-assets/*
           compression-level: 0
           if-no-files-found: error
+          retention-days: 30
 

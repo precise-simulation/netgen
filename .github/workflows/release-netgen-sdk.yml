@@ -17,12 +17,6 @@ concurrency:
 env:
   NETGEN_BASELINE_TAG: v6.2.2608
   NETGEN_BASELINE_SHA: 96e5682f6ea43ba77ba3bb2ae4bb4bd1791f506e
-  WINDOWS_OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/opencascade-8.0.1-windows-x86_64-vc143-shared-lean-b8f597c67781.zip
-  WINDOWS_OCCT_SHA256: f42f29e67c681c75ecd5387dcc95167ef7209b3d54e746c74b08b470b62d8e19
-  WINDOWS_STATIC_OCCT_URL: https://github.com/precise-simulation/OCCT/releases/download/occt-sdk-8.0.1-r3/opencascade-8.0.1-windows-x86_64-vc143-static-lean-b8f597c67781.zip
-  WINDOWS_STATIC_OCCT_SHA256: 156f3eccf70a9a2bef6b33fa004f3da783a34c67f3e4636b36ac2c7ecee9bd3f
-  OCCT_RELEASE: occt-sdk-8.0.1-r3
-  OCCT_SOURCE_SHA: b8f597c677811d1f9f4d8a97f5ae2825c0353a42
 
 jobs:
   windows:
@@ -104,15 +98,24 @@ jobs:
           fi
           test "${BASH_REMATCH[1],,}" = "$short_sha"
 
+          occt_release="$(tr -d '\r\n' < .github/occt-sdk-release.txt)"
+          if [[ ! "$occt_release" =~ ^occt-sdk-([0-9]+\.[0-9]+\.[0-9]+)(-r[0-9]+)?$ ]]; then
+            echo "invalid OCCT SDK release tag: $occt_release" >&2
+            exit 1
+          fi
+          occt_version="${BASH_REMATCH[1]}"
+          echo "OCCT_RELEASE=$occt_release" >> "$GITHUB_ENV"
+          echo "OCCT_VERSION=$occt_version" >> "$GITHUB_ENV"
+
           root="$RUNNER_TEMP/release-assets"
-          windows="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-win64-msvc.zip"
-          windows_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-win64-msvc-static.zip"
-          linux_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10.tar.gz"
-          linux_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-linux-x86_64-glibc2.17-gcc10-static.tar.gz"
-          mac_x86_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang.tar.gz"
-          mac_x86_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-x86_64-clang-static.tar.gz"
-          mac_arm_shared="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-arm64-clang.tar.gz"
-          mac_arm_static="netgen-featool-v6.2.2608-${short_sha}-occt8.0.1-macos13-arm64-clang-static.tar.gz"
+          windows="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-win64-msvc.zip"
+          windows_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-win64-msvc-static.zip"
+          linux_shared="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-linux-x86_64-glibc2.17-gcc10.tar.gz"
+          linux_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-linux-x86_64-glibc2.17-gcc10-static.tar.gz"
+          mac_x86_shared="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-x86_64-clang.tar.gz"
+          mac_x86_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-x86_64-clang-static.tar.gz"
+          mac_arm_shared="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-arm64-clang.tar.gz"
+          mac_arm_static="netgen-featool-v6.2.2608-${short_sha}-occt${occt_version}-macos13-arm64-clang-static.tar.gz"
 
           test -f "$root/windows/$windows"
           test -f "$root/windows/$windows.sha256"
@@ -147,21 +150,44 @@ jobs:
           verify_checksum "$root/macos/$mac_arm_shared"
           verify_checksum "$root/macos/$mac_arm_static"
 
+          occt_release_json="$(gh api -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/precise-simulation/OCCT/releases/tags/$occt_release")"
+          test "$(jq -r '.tag_name' <<<"$occt_release_json")" = "$occt_release"
+          test "$(jq -r '.draft' <<<"$occt_release_json")" = false
+          test "$(jq -r '.immutable' <<<"$occt_release_json")" = true
+
+          verify_occt_info() {
+            local info="$1"
+            local linkage="$2"
+            local asset_id asset_name asset_url sha256 asset count
+            test "$(jq -r '.occt.release' <<<"$info")" = "$occt_release"
+            test "$(jq -r '.occt.version' <<<"$info")" = "$occt_version"
+            test "$(jq -r '.occt.linkage' <<<"$info")" = "$linkage"
+            asset_id="$(jq -r '.occt.asset_id' <<<"$info")"
+            asset_name="$(jq -r '.occt.asset_name' <<<"$info")"
+            asset_url="$(jq -r '.occt.asset_url' <<<"$info")"
+            sha256="$(jq -r '.occt.sha256' <<<"$info")"
+            [[ "$asset_id" =~ ^[0-9]+$ ]]
+            test -n "$asset_name"
+            test -n "$asset_url"
+            [[ "$sha256" =~ ^[0-9a-f]{64}$ ]]
+            count="$(jq --arg id "$asset_id" --arg name "$asset_name" '[.assets[] | select((.id | tostring) == $id and .name == $name)] | length' <<<"$occt_release_json")"
+            test "$count" -eq 1
+            asset="$(jq -c --arg id "$asset_id" '.assets[] | select((.id | tostring) == $id)' <<<"$occt_release_json")"
+            test "$(jq -r '.browser_download_url' <<<"$asset")" = "$asset_url"
+            test "$(jq -r '.digest' <<<"$asset")" = "sha256:$sha256"
+          }
+
           windows_info="$(unzip -p "$root/windows/$windows" producer-info.json)"
           test "$(jq -r '.source.commit' <<<"$windows_info")" = "$GITHUB_SHA"
-          test "$(jq -r '.occt.release' <<<"$windows_info")" = "$OCCT_RELEASE"
-          test "$(jq -r '.occt.commit' <<<"$windows_info")" = "$OCCT_SOURCE_SHA"
-          test "$(jq -r '.occt.linkage' <<<"$windows_info")" = shared
-          test "$(jq -r '.occt.asset_url' <<<"$windows_info")" = "$WINDOWS_OCCT_URL"
-          test "$(jq -r '.occt.sha256' <<<"$windows_info")" = "$WINDOWS_OCCT_SHA256"
+          verify_occt_info "$windows_info" shared
+          occt_source_sha="$(jq -r '.occt.commit' <<<"$windows_info")"
+          [[ "$occt_source_sha" =~ ^[0-9a-f]{40}$ ]]
           windows_static_info="$(unzip -p "$root/windows/$windows_static" producer-info.json)"
           test "$(jq -r '.source.commit' <<<"$windows_static_info")" = "$GITHUB_SHA"
           test "$(jq -r '.netgen.linkage' <<<"$windows_static_info")" = static
-          test "$(jq -r '.occt.release' <<<"$windows_static_info")" = "$OCCT_RELEASE"
-          test "$(jq -r '.occt.commit' <<<"$windows_static_info")" = "$OCCT_SOURCE_SHA"
-          test "$(jq -r '.occt.asset_url' <<<"$windows_static_info")" = "$WINDOWS_STATIC_OCCT_URL"
-          test "$(jq -r '.occt.sha256' <<<"$windows_static_info")" = "$WINDOWS_STATIC_OCCT_SHA256"
-          test "$(jq -r '.occt.linkage' <<<"$windows_static_info")" = static
+          verify_occt_info "$windows_static_info" static
+          test "$(jq -r '.occt.commit' <<<"$windows_static_info")" = "$occt_source_sha"
           test "$(jq -r '.occt.bundled' <<<"$windows_static_info")" = true
           verify_unix_archive() {
             local archive="$1"
@@ -169,10 +195,9 @@ jobs:
             local info
             info="$(tar -xOzf "$archive" --wildcards '*/producer-info.json')"
             test "$(jq -r '.source.commit' <<<"$info")" = "$GITHUB_SHA"
-            test "$(jq -r '.occt.release' <<<"$info")" = "$OCCT_RELEASE"
-            test "$(jq -r '.occt.commit' <<<"$info")" = "$OCCT_SOURCE_SHA"
             test "$(jq -r '.netgen.linkage' <<<"$info")" = "$linkage"
-            test "$(jq -r '.occt.linkage' <<<"$info")" = "$linkage"
+            verify_occt_info "$info" "$linkage"
+            test "$(jq -r '.occt.commit' <<<"$info")" = "$occt_source_sha"
           }
           verify_unix_archive "$root/linux/$linux_shared" shared
           verify_unix_archive "$root/linux/$linux_static" static
@@ -180,6 +205,7 @@ jobs:
           verify_unix_archive "$root/macos/$mac_x86_static" static
           verify_unix_archive "$root/macos/$mac_arm_shared" shared
           verify_unix_archive "$root/macos/$mac_arm_static" static
+          echo "OCCT_SOURCE_SHA=$occt_source_sha" >> "$GITHUB_ENV"
 
       - name: Create, verify and publish combined release
         shell: bash
@@ -234,9 +260,7 @@ jobs:
           mapfile -t assets < <(find "$RUNNER_TEMP/release-assets" -type f -print | sort)
           test "${#assets[@]}" -eq 16
           notes="Netgen native SDK bundle built from source $GITHUB_SHA (upstream baseline $NETGEN_BASELINE_TAG / $NETGEN_BASELINE_SHA)."
-          notes="$notes"$'\n\n'"Windows shared OCCT input: precise-simulation/OCCT $OCCT_RELEASE lean vc143 shared /MD archive, SHA-256 $WINDOWS_OCCT_SHA256."
-          notes="$notes"$'\n'"Windows static OCCT input: precise-simulation/OCCT $OCCT_RELEASE lean vc143 static /MD archive, SHA-256 $WINDOWS_STATIC_OCCT_SHA256."
-          notes="$notes"$'\n'"Linux/macOS OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA."
+          notes="$notes"$'\n\n'"OCCT input: precise-simulation/OCCT $OCCT_RELEASE, source $OCCT_SOURCE_SHA. Each producer records and verifies its exact immutable release asset and SHA-256 digest."
           notes="$notes"$'\n\n'"Windows: x64 VS2022 Release /MD, shared and static SDKs."
           notes="$notes"$'\n'"Linux: x86_64 shared and static SDKs, manylinux2014 / glibc 2.17 / GCC 10 baseline."
           notes="$notes"$'\n'"macOS: thin x86_64 and arm64 shared and static SDKs targeting macOS 13.0 with Xcode 16.4."

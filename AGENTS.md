@@ -1,3 +1,12 @@
+This is a local copy of the
+https://github.com/precise-simulation/netgen fork for building release
+artifacts.
+
+No local/host compilation is allowed unless explicitly asked.
+
+All building, compilation, and implementation should be performed on the
+remote GitHub Actions workflows/runners.
+
 # Development instructions
 
 These instructions apply to the entire repository unless a nested

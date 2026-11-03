@@ -62,27 +62,27 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out exact release workflow revision
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
       - name: Download Windows SDK
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           pattern: windows-netgen-sdk-*
           path: ${{ runner.temp }}/release-assets/windows
           merge-multiple: true
 
       - name: Download Linux SDK
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           pattern: netgen-linux-sdk-*
           path: ${{ runner.temp }}/release-assets/linux
           merge-multiple: true
 
       - name: Download macOS SDKs
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           pattern: netgen-macos-sdk-*
           path: ${{ runner.temp }}/release-assets/macos

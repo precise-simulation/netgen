@@ -32,7 +32,7 @@ jobs:
       qualification_run_id: ${{ steps.provenance.outputs.qualification_run_id }}
     steps:
       - name: Check out exact producer commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           fetch-depth: 1
 
@@ -86,7 +86,7 @@ jobs:
             runner: macos-15-intel
     steps:
       - name: Check out exact producer commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           fetch-depth: 1
 
@@ -161,7 +161,7 @@ jobs:
           bash .github/macos-netgen-sdk/build-sdk.sh "${{ matrix.architecture }}" "${{ matrix.linkage }}" "${{ matrix.runner }}"
 
       - name: Upload qualified macOS SDK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: ${{ matrix.linkage == 'shared' && format('netgen-macos-sdk-{0}-{1}', matrix.architecture, github.sha) || format('netgen-macos-sdk-{0}-static-{1}', matrix.architecture, github.sha) }}
           path: ${{ runner.temp }}/netgen-macos-sdk-out/${{ matrix.architecture }}/${{ matrix.linkage }}/*

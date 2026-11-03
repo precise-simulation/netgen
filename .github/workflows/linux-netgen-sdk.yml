@@ -55,7 +55,7 @@ jobs:
       static_artifact_name: ${{ steps.provenance.outputs.static_artifact_name }}
     steps:
       - name: Check out exact producer commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           fetch-depth: 1
 
@@ -117,7 +117,7 @@ jobs:
           - static
     steps:
       - name: Check out exact producer commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           fetch-depth: 1
 
@@ -203,7 +203,7 @@ jobs:
             bash /producer/.github/linux-netgen-sdk/build-sdk.sh "${{ matrix.linkage }}"
 
       - name: Upload qualified Linux SDK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: ${{ matrix.linkage == 'shared' && needs.metadata.outputs.shared_artifact_name || needs.metadata.outputs.static_artifact_name }}
           path: ${{ runner.temp }}/netgen-linux-sdk/out/*
@@ -267,12 +267,12 @@ jobs:
           "$CXX" --version
 
       - name: Check out consumer fixture
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           fetch-depth: 1
 
       - name: Download qualified Netgen SDK
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: ${{ matrix.linkage == 'shared' && needs.metadata.outputs.shared_artifact_name || needs.metadata.outputs.static_artifact_name }}
           path: ${{ runner.temp }}/netgen-artifact

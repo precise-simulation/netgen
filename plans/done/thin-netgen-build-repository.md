@@ -678,17 +678,132 @@ non-publishing release path, provenance tamper fixtures, qualification negative
 fixtures, and installed/runtime SDK version assertions. Final review found that
 the separate Linux compatibility matrix also needed the required semantic version
 at CMake configure and runtime invocation. That correction was moved before the
-thin-tree deletion, producing the full-source transition qualification target
+thin-tree deletion, producing initial full-source transition candidate
 `105081a09141ea8cb5698bb9ca92f3e205ce26b2`. Local non-build checks passed both
 Python contract suites, Bash syntax checks, PowerShell parsing, YAML loading,
 `git diff --check`, a complete native-consumer invocation sweep, and a stale
 executable baseline/version sweep.
 
-The final active-tree deletion and documentation rewrite are committed locally
-after that corrected transition target, but the ordered migration requires
-`105081a09141ea8cb5698bb9ca92f3e205ce26b2` to pass the complete remote GitHub
-Actions branch qualification matrix before the deletion commit is published. The
-same remote phase must also
-exercise the non-publishing combined release workflow and the positive temporary-
-ref exact-SHA dispatch path. Until those GitHub-run results are recorded here,
-producer/runtime acceptance and the plan's final `done` state remain pending.
+The first remote qualification attempt at `105081a09141ea8cb5698bb9ca92f3e205ce26b2`
+proved that source reconstruction itself was working but exposed a retained
+consumer-boundary defect. Thin-source validation run `41419295577` succeeded.
+Linux run `41419295505` failed in both shared and static staged consumers because
+`core/version.hpp` declares `std::map` without including `<map>` and the expanded
+runtime-version smoke consumer included that header directly. Windows run
+`41419295499` likewise reached the staged SDK consumer after its build,
+refinement, Catch, install, audit, and metadata steps had passed, then failed at
+that consumer step. The consumer fixtures now include `<map>` before
+`core/version.hpp`; the exact Windows compiler message from the superseded run was
+not retained and is not inferred here.
+
+That fix produced second full-source transition candidate
+`65517caa5974454f65225fa1666f61516a9706fc`. Its thin-source validation run
+`41420297382` succeeded, and Linux run `41420297413` proved both shared and static
+producer jobs successful, including source reconstruction and the in-producer SDK
+qualification. The subsequent Ubuntu compatibility-consumer matrix then exposed
+a second retained-fixture issue: the new call to `ngcore::GetLibraryVersion`
+failed to link from an external consumer. Explicitly linking exported target
+`ngcore` in addition to `nglib` produced third transition candidate
+`2cc1c15a8b04ac4edd70ae2c7d5c54e98448dd6f`; its Thin Netgen source validation
+run `41421548232` succeeded and both Linux producer jobs in run `41421548401`
+succeeded, but Ubuntu 20.04 and 24.04 shared compatibility consumers still failed
+with the same undefined `GetLibraryVersion` reference. Direct inspection of the
+produced shared SDK showed that `nglib` already transitively links `ngcore`, while
+`libngcore.so` exports `GetLibraryVersion(std::string const&)` using the old
+libstdc++ string ABI and the Ubuntu consumers compiled the call with the new
+`std::__cxx11::basic_string` ABI. This was therefore an ABI-crossing test defect,
+not a missing library dependency. The producer/relocated consumer still checks
+the runtime version in its ABI-matched producer environment; only the cross-distro
+Linux compatibility matrix disables that C++ runtime-version call while retaining
+the installed CMake version assertion and C API build/run smoke. The superseded
+Windows run `41421548228` was cancelled; Linux run `41421548401` completed with
+failure from its compatibility matrix and macOS run `41421548217` was cancelled.
+
+The current full-source transition qualification target is therefore
+`ef3d4e2bfee116a0346e40f6c163b6174bbce4c0`. Its push-triggered qualification
+runs are Windows `41423168236`, Linux `41423168157`, macOS `41423168204`, and
+Thin Netgen source validation `41423168143`. Windows completed successfully with
+both shared and static producer/consumer qualification jobs green. Linux completed
+successfully with shared/static producers plus all Ubuntu 20.04, 22.04, and 24.04
+shared/static compatibility-consumer jobs green. Thin-source validation also
+succeeded. The first macOS attempt completed both x86_64 shared/static jobs but a
+queued arm64 job was cancelled by GitHub with the annotation that no hosted runner
+acquired it after multiple attempts and that macOS arm64 capacity was constrained;
+this was runner-capacity evidence, not a source/build failure. GitHub reruns of the
+same push run eventually completed as attempt 4, with all four x86_64/arm64
+shared/static jobs successful. The transition branch qualification matrix is
+therefore fully green at the exact `ef3d4e2b` producer commit.
+The rebased unpublished thin-tree commit on top is
+`b939fba93d8d911e79f3c9e96a686ce10888715b`.
+
+Local non-build validation of that committed thin tree passes the 12 focused
+Python contract fixtures, `git diff --check`, Bash syntax checks, and workflow
+YAML parsing. The active tree contains 44 files; under `tests/` only the two
+repository-owned native SDK consumer fixtures remain. The removed upstream source,
+build, Python, GUI, tutorial, upstream-test, and settled root-only paths are absent.
+The manifest and patch inputs are not ignored, every patch/series file resolves to
+`eol: lf`, and the only retained `fetch-depth: 0` is the OCCT automation checkout
+whose full producer-branch history is still required for its merge-safety logic.
+A fresh non-build source preparation from the committed thin tree also succeeded,
+resolving semantic version `6.2.2608`, deterministic version identity
+`v6.2.2608-0-g96e5682f6ea4`, and the ordered patch SHA-256 values recorded by the
+preparation script; its disposable reconstructed checkout was removed afterward.
+An independent read-only review of exact thin-tree HEAD `b939fba9` found no
+material acceptance defect in the active-tree disposition, manifest/version
+single-source contract, producer reconstruction paths, retained SDK consumers,
+qualification lookup, or combined-release verifier. The pending remote gates were
+left as validation work rather than treated as implementation defects.
+
+The positive exact-SHA automation path also succeeded against the same transition
+commit using temporary ref `automation/occt-qualify-ef3d4e2bfee1`. Its
+workflow-dispatch runs are Windows `41471922388`, Linux `41471929802`, and macOS
+`41471936777`. Windows completed shared/static qualification successfully. Linux
+completed shared/static production plus every Ubuntu 20.04, 22.04, and 24.04
+shared/static compatibility consumer successfully. macOS completed both x86_64
+linkages and both arm64 linkages successfully on attempt 9. Earlier failed-only
+reruns were cancelled after 15 minutes when GitHub never assigned a hosted arm64
+runner; those attempts executed no failing build/test step and were annotated as
+macOS arm64 capacity constraints. The temporary ref was then deleted. Running the
+real release-eligibility lookup after deletion accepted the exact-SHA dispatches
+and returned Windows `41471922388`, Linux `41471929802`, and macOS `41471936777`,
+establishing that eligibility is bound to the immutable producer SHA and successful
+workflow results rather than continued existence of the temporary ref.
+
+The final active-tree deletion was initially unpublished. Non-publishing combined
+release workflow-dispatch run `41493354033` at exact transition SHA
+`ef3d4e2bfee116a0346e40f6c163b6174bbce4c0` initially completed with failure
+because the macOS arm64 static producer never acquired a hosted runner and was
+cancelled before executing any step; all jobs that did execute were successful,
+and the dependent combined verifier was skipped. A failed-job rerun on the same
+workflow run and exact SHA completed as attempt 5. The macOS arm64 static producer
+then built, qualified, and uploaded successfully, after which the combined job
+downloaded all eight SDK archives and passed the exact inventory/provenance
+verification. Its publication-tag and release-creation steps were skipped as
+required by `publish_release=false`. The non-publishing combined release gate is
+therefore satisfied.
+
+Thin-tree commit `b939fba93d8d911e79f3c9e96a686ce10888715b` was then pushed
+to `origin/netgen-featool`. Its push-triggered Thin Netgen source validation run
+`41553064999` succeeded, and Windows qualification run `41553064992` succeeded
+on its first attempt with both shared and static producer/consumer qualification
+green. Starting the required non-publishing combined release run while the
+push-triggered Linux and macOS runs were still active caused those two branch-ref
+concurrency groups to cancel their original attempts. This was a workflow
+sequencing interaction rather than a build failure. After the combined run's
+reusable Linux/macOS jobs had completed, the cancelled push runs were rerun.
+Linux run `41553064987` attempt 2 succeeded with shared/static production and all
+Ubuntu 20.04, 22.04, and 24.04 shared/static compatibility consumers green.
+macOS run `41553064996` attempt 2 succeeded with all x86_64/arm64 shared/static
+jobs green.
+
+Non-publishing combined release workflow-dispatch run `41553132397` at exact
+thin-tree SHA `b939fba93d8d911e79f3c9e96a686ce10888715b` also succeeded. Its
+Windows shared/static, Linux shared/static plus compatibility consumers, and all
+four macOS architecture/linkage producer jobs succeeded; the final combined job
+downloaded and verified the complete eight-archive inventory and provenance, while
+publication-tag and release-creation steps were skipped as required by
+`publish_release=false`. A final local non-build check of the published thin tree
+passed the 12 focused Python contract fixtures, `git diff --check`, Bash syntax
+checks, PowerShell parsing, and workflow YAML loading. The implementation,
+producer/runtime qualification, release-verification acceptance, and plan review
+requirements are therefore complete.
